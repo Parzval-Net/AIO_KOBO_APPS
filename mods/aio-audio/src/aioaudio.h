@@ -105,6 +105,7 @@ public Q_SLOTS:
     void onDuration();
     void flashSender();
     void unflash();
+    void applyPlayState();
     void volumeDown();
     void volumeUp();
 
@@ -125,6 +126,10 @@ private:
     QPointer<QLabel> cover, playPause, chapter, book, elapsed, total, footer, sleepText, speed;
     QPointer<AioSlider> slider, bookBar;
     QPointer<QLabel> volumeLabel;
+    QTimer *stateTimer;
+    int wantPlaying = -1;
+    bool iconSet = false;
+    QElapsedTimer volClock, saveClock;
     QTimer *timer, *flashTimer, *sleepTimer;
     QList<QPointer<QLabel> > flashed;
     QPixmap playIcon, pauseIcon;

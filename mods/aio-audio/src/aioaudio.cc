@@ -752,6 +752,10 @@ AioAudio::AioAudio(QWidget *r)
 
     timer->setInterval(5000);                    // e-ink: one short update every 5 s, only while playing
     connect(timer, SIGNAL(timeout()), this, SLOT(tick()));
+    stateTimer = new QTimer(this);
+    stateTimer->setSingleShot(true);
+    stateTimer->setInterval(400);                // play/pause flips settle for 0.4 s before anything repaints
+    connect(stateTimer, SIGNAL(timeout()), this, SLOT(applyPlayState()));
     flashTimer->setSingleShot(true);
     flashTimer->setInterval(150);
     connect(flashTimer, SIGNAL(timeout()), this, SLOT(unflash()));
@@ -1274,13 +1278,28 @@ void AioAudio::onDuration() {
 bool AioAudio::playPauseText(QLabel *label, const QString &text) {
     if (!playPause || label != playPause.data())
         return false;
-    bool now;
     if (text == QLatin1String("Pause"))
-        now = true;
+        wantPlaying = 1;
     else if (text == QLatin1String("Play"))
-        now = false;
+        wantPlaying = 0;
     else
         return true; // anything else: keep the icon
+    // GStreamer can flip Playing/Paused many times per second when the Bluetooth sink stalls. Each flip used to
+    // repaint (colour e-ink), query Bluetooth and write positions.ini, which froze the whole device: settle first.
+    if (!stateTimer->isActive())
+        stateTimer->start();
+    return true;
+}
+
+void AioAudio::applyPlayState() {
+    if (wantPlaying < 0 || !playPause)
+        return;
+    const bool now = wantPlaying == 1;
+    wantPlaying = -1;
+    if (now == playing && iconSet)
+        return;
+    iconSet = true;
+    QLabel *label = playPause.data();
     setIcon(label, now ? pauseIcon : playIcon, playBox);
     const bool was = playing;
     playing = now;
@@ -1549,6 +1568,9 @@ void AioAudio::stepVolume(int delta) {
 }
 
 void AioAudio::syncVolume() {
+    if (volClock.isValid() && volClock.elapsed() < 20000)
+        return; // at most every 20 s: libnickel's Bluetooth calls go over D-Bus on the GUI thread
+    volClock.start();
     applyVolumeTo(player.data());
 }
 
