@@ -13,6 +13,7 @@ If KCC is installed (kcc-c2e), `use_kcc` delegates to it with the matching Kobo 
 from __future__ import annotations
 
 import io
+import os
 import re
 import shutil
 import subprocess
@@ -24,6 +25,8 @@ from html import escape
 from pathlib import Path
 
 from PIL import Image, ImageEnhance, ImageOps
+
+from .core import host_os, install_hint
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 ARCHIVE_EXTS = {".cbz", ".zip", ".cbr", ".rar", ".cb7", ".7z", ".cbt", ".tar", ".pdf", ".epub"}
@@ -108,6 +111,17 @@ def _epub_pages(zf: zipfile.ZipFile) -> list[tuple[str, bytes]]:
     return [(n, zf.read(n)) for n in order]
 
 
+def archive_tool() -> str | None:
+    """unar or 7-Zip on PATH, or 7-Zip in its default Windows folder."""
+    found = shutil.which("unar") or shutil.which("7z") or shutil.which("7zz")
+    if not found and host_os() == "windows":
+        for env in ("ProgramFiles", "ProgramFiles(x86)"):
+            exe = Path(os.environ.get(env, "")) / "7-Zip" / "7z.exe"
+            if os.environ.get(env) and exe.is_file():
+                return str(exe)
+    return found
+
+
 def read_pages(src: Path) -> list[tuple[str, bytes]]:
     src = Path(src)
     if src.is_file() and src.suffix.lower() in IMG_EXTS:
@@ -133,7 +147,7 @@ def read_pages(src: Path) -> list[tuple[str, bytes]]:
         try:
             import fitz  # PyMuPDF
         except ImportError as exc:
-            raise RuntimeError("Para PDF instala PyMuPDF: pip3 install pymupdf") from exc
+            raise RuntimeError(f"Para PDF hace falta PyMuPDF (ya viene en la app de escritorio): {install_hint('pymupdf')}") from exc
         doc = fitz.open(src)
         pages = []
         for i, page in enumerate(doc):
@@ -141,11 +155,11 @@ def read_pages(src: Path) -> list[tuple[str, bytes]]:
             pages.append((f"{i:04d}.png", pix.tobytes("png")))
         return pages
     if ext in (".cbr", ".rar", ".cb7", ".7z"):
-        tool = shutil.which("unar") or shutil.which("7z") or shutil.which("7zz")
+        tool = archive_tool()
         if not tool:
-            raise RuntimeError("Para CBR/CB7 instala unar: brew install unar")
+            raise RuntimeError(f"Para abrir CBR, RAR, CB7 o 7Z hace falta un descompresor: {install_hint('unar')}")
         with tempfile.TemporaryDirectory() as tmp:
-            cmd = [tool, "-q", "-o", tmp, str(src)] if tool.endswith("unar") else [tool, "x", "-y", f"-o{tmp}", str(src)]
+            cmd = [tool, "-q", "-o", tmp, str(src)] if Path(tool).stem == "unar" else [tool, "x", "-y", f"-o{tmp}", str(src)]
             subprocess.run(cmd, check=True, capture_output=True)
             return read_pages(Path(tmp))
     raise RuntimeError(f"Formato no soportado: {src.name}. Acepta {SUPPORTED_HELP}.")

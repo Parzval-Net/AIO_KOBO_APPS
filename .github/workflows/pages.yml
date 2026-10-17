@@ -2,7 +2,7 @@ name: pages
 on:
   push:
     branches: [main]
-    paths: ["web/**", ".github/workflows/pages.yml"]
+    paths: ["web/**", "tools/kobo_aio/**", "tools/build_site.py", ".github/workflows/pages.yml"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -19,9 +19,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Pinned downloads (Pyodide + mods) are re-verified by SHA-256 on every build; the cache only saves bandwidth.
+      - uses: actions/cache@v4
+        with:
+          path: ~/Kobo-AIO/cache
+          key: site-${{ hashFiles('tools/build_site.py', 'tools/kobo_aio/modules/*.py') }}
+          restore-keys: site-
+      - run: python tools/build_site.py --out _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web
+          path: _site
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -1,5 +1,5 @@
 {
- "version": "1.1.1",
+ "version": "1.2.0",
  "device": null,
  "modules": [
   {
@@ -172,7 +172,9 @@
    "license": "MIT",
    "reboot": false,
    "can_uninstall": true,
-   "persistent": true
+   "persistent": true,
+   "engine_only": true,
+   "engine_reason": "el emulador se compila en tu computador"
   },
   {
    "id": "app.koreader_plugins",
@@ -334,7 +336,9 @@
    "license": "MIT (kobopatch)",
    "reboot": true,
    "can_uninstall": false,
-   "persistent": true
+   "persistent": true,
+   "engine_only": true,
+   "engine_reason": "usa kobopatch y el firmware oficial"
   },
   {
    "id": "fonts.ebook",
@@ -957,7 +961,9 @@
    "license": "MIT",
    "reboot": false,
    "can_uninstall": false,
-   "persistent": false
+   "persistent": false,
+   "engine_only": true,
+   "engine_reason": "la conversión a KEPUB usa kepubify"
   },
   {
    "id": "lib.dictionaries",
@@ -1082,7 +1088,9 @@
    "license": "AGPL-3.0",
    "reboot": false,
    "can_uninstall": true,
-   "persistent": true
+   "persistent": true,
+   "engine_only": true,
+   "engine_reason": "el paquete pesa 173 MB"
   },
   {
    "id": "lib.audiobooks",
@@ -1244,7 +1252,9 @@
    "license": "",
    "reboot": false,
    "can_uninstall": false,
-   "persistent": false
+   "persistent": false,
+   "engine_only": true,
+   "engine_reason": "copia toda la biblioteca a tu computador"
   },
   {
    "id": "nm.menu",
@@ -1437,9 +1447,92 @@
     },
     {
      "id": "tab_label",
-     "label": "Nombre de la pestaña NickelMenu (máx. 12)",
+     "label": "Nombre de la pestaña (máx. 12 letras)",
      "type": "text",
      "default": "Kobo AIO",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "tab_icon",
+     "label": "Ícono de la pestaña",
+     "type": "choice",
+     "default": "aio",
+     "choices": [
+      {
+       "value": "aio",
+       "label": "Lector (Kobo AIO)"
+      },
+      {
+       "value": "star",
+       "label": "Estrella"
+      },
+      {
+       "value": "bolt",
+       "label": "Rayo"
+      },
+      {
+       "value": "grid",
+       "label": "Cuadrícula"
+      },
+      {
+       "value": "heart",
+       "label": "Corazón"
+      },
+      {
+       "value": "bookmark",
+       "label": "Marcador"
+      },
+      {
+       "value": "sliders",
+       "label": "Ajustes"
+      },
+      {
+       "value": "moon",
+       "label": "Luna"
+      }
+     ],
+     "help": "Mismo tamaño y estilo que los íconos de Kobo: contorno en reposo, relleno al tocarla.",
+     "icons": {
+      "aio": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><rect x=\"13\" y=\"4\" width=\"24\" height=\"42\" rx=\"4.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><line x1=\"18.5\" y1=\"13.5\" x2=\"31.5\" y2=\"13.5\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke=\"currentColor\"/><line x1=\"18.5\" y1=\"20\" x2=\"31.5\" y2=\"20\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke=\"currentColor\"/><line x1=\"18.5\" y1=\"26.5\" x2=\"27\" y2=\"26.5\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke=\"currentColor\"/></g></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><mask id=\"m-aio-1\"><rect width=\"50\" height=\"50\" fill=\"#fff\"/><line x1=\"18.5\" y1=\"13.5\" x2=\"31.5\" y2=\"13.5\" stroke-width=\"3.68\" stroke-linecap=\"round\" stroke=\"#000\"/><line x1=\"18.5\" y1=\"20\" x2=\"31.5\" y2=\"20\" stroke-width=\"3.68\" stroke-linecap=\"round\" stroke=\"#000\"/><line x1=\"18.5\" y1=\"26.5\" x2=\"27\" y2=\"26.5\" stroke-width=\"3.68\" stroke-linecap=\"round\" stroke=\"#000\"/></mask><g mask=\"url(#m-aio-1)\"><rect x=\"13\" y=\"4\" width=\"24\" height=\"42\" rx=\"4.5\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "star": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"25,6.5 30,19.62 44.02,20.32 33.08,29.13 36.76,42.68 25,35 13.24,42.68 16.92,29.13 5.98,20.32 20,19.62\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\" stroke-linejoin=\"round\"/></g></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"25,6.5 30,19.62 44.02,20.32 33.08,29.13 36.76,42.68 25,35 13.24,42.68 16.92,29.13 5.98,20.32 20,19.62\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "bolt": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"29,3.5 11,28 23,28 19.5,46.5 39,20 27,20 31,3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\" stroke-linejoin=\"round\"/></g></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"29,3.5 11,28 23,28 19.5,46.5 39,20 27,20 31,3.5\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "grid": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><rect x=\"6\" y=\"6\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><rect x=\"28\" y=\"6\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><rect x=\"6\" y=\"28\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><rect x=\"28\" y=\"28\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/></g></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><rect x=\"6\" y=\"6\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"currentColor\"/><rect x=\"28\" y=\"6\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"currentColor\"/><rect x=\"6\" y=\"28\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"currentColor\"/><rect x=\"28\" y=\"28\" width=\"16\" height=\"16\" rx=\"3.5\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "heart": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"25,17.9 25.04,17.48 25.34,16.3 26.09,14.59 27.44,12.7 29.4,11.01 31.9,9.84 34.75,9.46 37.68,9.97 40.39,11.36 42.59,13.5 44.02,16.16 44.52,19.12 44.02,22.17 42.59,25.16 40.39,28.01 37.68,30.71 34.75,33.27 31.9,35.72 29.4,38.04 27.44,40.18 26.09,42.03 25.34,43.49 25.04,44.42 25,44.74 24.96,44.42 24.66,43.49 23.91,42.03 22.56,40.18 20.6,38.04 18.1,35.72 15.25,33.27 12.32,30.71 9.61,28.01 7.41,25.16 5.98,22.17 5.48,19.12 5.98,16.16 7.41,13.5 9.61,11.36 12.32,9.97 15.25,9.46 18.1,9.84 20.6,11.01 22.56,12.7 23.91,14.59 24.66,16.3 24.96,17.48\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\" stroke-linejoin=\"round\"/></g></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"25,17.9 25.04,17.48 25.34,16.3 26.09,14.59 27.44,12.7 29.4,11.01 31.9,9.84 34.75,9.46 37.68,9.97 40.39,11.36 42.59,13.5 44.02,16.16 44.52,19.12 44.02,22.17 42.59,25.16 40.39,28.01 37.68,30.71 34.75,33.27 31.9,35.72 29.4,38.04 27.44,40.18 26.09,42.03 25.34,43.49 25.04,44.42 25,44.74 24.96,44.42 24.66,43.49 23.91,42.03 22.56,40.18 20.6,38.04 18.1,35.72 15.25,33.27 12.32,30.71 9.61,28.01 7.41,25.16 5.98,22.17 5.48,19.12 5.98,16.16 7.41,13.5 9.61,11.36 12.32,9.97 15.25,9.46 18.1,9.84 20.6,11.01 22.56,12.7 23.91,14.59 24.66,16.3 24.96,17.48\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "bookmark": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"13,4.5 37,4.5 37,46 25,36 13,46\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\" stroke-linejoin=\"round\"/></g></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><polygon points=\"13,4.5 37,4.5 37,46 25,36 13,46\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "sliders": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><mask id=\"m-sliders-0\"><rect width=\"50\" height=\"50\" fill=\"#fff\"/><circle cx=\"31\" cy=\"13\" r=\"5\" fill=\"#000\"/><circle cx=\"17\" cy=\"25\" r=\"5\" fill=\"#000\"/><circle cx=\"34\" cy=\"37\" r=\"5\" fill=\"#000\"/></mask><g mask=\"url(#m-sliders-0)\"><line x1=\"6\" y1=\"13\" x2=\"44\" y2=\"13\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke=\"currentColor\"/><line x1=\"6\" y1=\"25\" x2=\"44\" y2=\"25\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke=\"currentColor\"/><line x1=\"6\" y1=\"37\" x2=\"44\" y2=\"37\" stroke-width=\"3.2\" stroke-linecap=\"round\" stroke=\"currentColor\"/></g><circle cx=\"31\" cy=\"13\" r=\"5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><circle cx=\"17\" cy=\"25\" r=\"5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><circle cx=\"34\" cy=\"37\" r=\"5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g><line x1=\"6\" y1=\"13\" x2=\"44\" y2=\"13\" stroke-width=\"4.16\" stroke-linecap=\"round\" stroke=\"currentColor\"/><line x1=\"6\" y1=\"25\" x2=\"44\" y2=\"25\" stroke-width=\"4.16\" stroke-linecap=\"round\" stroke=\"currentColor\"/><line x1=\"6\" y1=\"37\" x2=\"44\" y2=\"37\" stroke-width=\"4.16\" stroke-linecap=\"round\" stroke=\"currentColor\"/><circle cx=\"31\" cy=\"13\" r=\"5\" fill=\"currentColor\"/><circle cx=\"17\" cy=\"25\" r=\"5\" fill=\"currentColor\"/><circle cx=\"34\" cy=\"37\" r=\"5\" fill=\"currentColor\"/></g></svg>"
+      ],
+      "moon": [
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><mask id=\"m-moon-0\"><rect width=\"50\" height=\"50\" fill=\"#fff\"/><circle cx=\"33.5\" cy=\"17\" r=\"15.5\" fill=\"#000\"/></mask><g mask=\"url(#m-moon-0)\"></g><circle cx=\"25\" cy=\"25\" r=\"18.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\"/><clipPath id=\"c-moon\"><circle cx=\"25\" cy=\"25\" r=\"18.5\"/></clipPath><circle cx=\"33.5\" cy=\"17\" r=\"15.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3.2\" clip-path=\"url(#c-moon)\"/></svg>",
+       "<svg viewBox=\"0 0 50 50\" width=\"50\" height=\"50\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><mask id=\"m-moon-1\"><rect width=\"50\" height=\"50\" fill=\"#fff\"/><circle cx=\"33.5\" cy=\"17\" r=\"15.5\" fill=\"#000\"/></mask><g mask=\"url(#m-moon-1)\"><circle cx=\"25\" cy=\"25\" r=\"18.5\" fill=\"currentColor\"/></g></svg>"
+      ]
+     }
+    },
+    {
+     "id": "tab_icon_file",
+     "label": "O usa tu propia imagen (PNG o JPG, opcional)",
+     "type": "files",
+     "default": [],
      "choices": [],
      "help": ""
     },

@@ -6,12 +6,13 @@
 <meta name="color-scheme" content="light dark">
 <title>Kobo AIO</title>
 <meta name="description" content="Mejora tu Kobo en minutos: menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros, diccionarios y más. Con respaldo y vuelta atrás.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='2' width='20' height='28' rx='4' fill='%231E1C18'/%3E%3Crect x='9' y='5' width='14' height='19' rx='1.5' fill='%23F3EFE6'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='1.5' width='22' height='29' rx='5' fill='%231E1C18'/%3E%3Crect x='8' y='4.5' width='16' height='20' rx='1.8' fill='%23F3EFE6'/%3E%3Cpath d='M18.5 4.5h4v9l-2-1.6-2 1.6z' fill='%23C2553E'/%3E%3C/svg%3E">
 <style>
 /* Design tokens: "paper & ink" palette. Every text/background pair verified >= 4.5:1 (WCAG 2.2 AA) in both themes. */
 :root{
   --paper:#F3EFE6;--surface:#FBF9F4;--sunk:#ECE7DC;--ink:#1E1C18;--ink2:#47433B;--ink3:#6A655B;
   --rule:#DCD5C6;--rule2:#B9B1A1;--accent:#1F4E6E;--accent-2:#2C6690;--accent-ink:#FFFFFF;--accent-soft:#E2EAF0;
+  --fill:#1F4E6E;--fill-2:#2C6690;--fill-ink:#FFFFFF;--logo-body:#1E1C18;
   --ok:#2E6544;--warn:#80530F;--err:#9E2F27;--ok-bg:#E1EDE3;--warn-bg:#F5E8CF;--err-bg:#F6DFDB;--info-bg:#E2EAF0;
   --c1:#3E6A57;--c2:#7A5A2E;--c3:#3F5F86;--c4:#7A4A5E;--c5:#5C5A8A;--c6:#3E6E72;
   --r:16px;--r2:10px;--shadow:0 1px 0 rgba(30,28,24,.04),0 10px 30px -18px rgba(30,28,24,.35);
@@ -20,15 +21,9 @@
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#141412;--surface:#1C1B18;--sunk:#24231F;--ink:#EDE9E0;--ink2:#C9C4B8;--ink3:#A29C90;--rule:#2F2D28;
-  --rule2:#4A473F;--accent:#9CC4E4;--accent-2:#B8D6EE;--accent-ink:#0E1A24;--accent-soft:#18232D;--ok:#8FCBA2;
-  --warn:#E3B867;--err:#F09C92;--ok-bg:#1C2A21;--warn-bg:#2C2416;--err-bg:#2E1D1B;--info-bg:#18232D;
-  --c1:#9CCBB5;--c2:#E0BE8A;--c3:#A9C3E6;--c4:#E2A9C0;--c5:#BDBBEB;--c6:#9ED1D4;--shadow:0 10px 30px -18px rgba(0,0,0,.8)}}
-:root[data-theme="dark"]{--paper:#141412;--surface:#1C1B18;--sunk:#24231F;--ink:#EDE9E0;--ink2:#C9C4B8;--ink3:#A29C90;
-  --rule:#2F2D28;--rule2:#4A473F;--accent:#9CC4E4;--accent-2:#B8D6EE;--accent-ink:#0E1A24;--accent-soft:#18232D;
-  --ok:#8FCBA2;--warn:#E3B867;--err:#F09C92;--ok-bg:#1C2A21;--warn-bg:#2C2416;--err-bg:#2E1D1B;--info-bg:#18232D;
-  --c1:#9CCBB5;--c2:#E0BE8A;--c3:#A9C3E6;--c4:#E2A9C0;--c5:#BDBBEB;--c6:#9ED1D4;--shadow:0 10px 30px -18px rgba(0,0,0,.8)}
+/* Dark: warm "night reading" greys (like an e-reader at night), cards lifted from the page, deep blue fills. */
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#15130F;--surface:#1F1C17;--sunk:#29251F;--ink:#EEE8DC;--ink2:#D2CABB;--ink3:#AEA595;--rule:#38332B;--rule2:#524B41;--accent:#93C2E6;--accent-2:#B3D4EE;--accent-ink:#0E1A24;--accent-soft:#1D2A35;--fill:#3C6F96;--fill-2:#33607F;--fill-ink:#FFFFFF;--logo-body:#3B362F;--ok:#93CDA5;--warn:#E6BD6E;--err:#F2A097;--ok-bg:#1D2B21;--warn-bg:#2E2617;--err-bg:#311F1C;--info-bg:#1B2731;--c1:#9CCBB5;--c2:#E3C18F;--c3:#A9C6EA;--c4:#E6AFC5;--c5:#C2C0EE;--c6:#A0D3D6;--shadow:inset 0 1px 0 rgba(255,255,255,.035),0 12px 32px -20px rgba(0,0,0,.9)}}
+:root[data-theme="dark"]{--paper:#15130F;--surface:#1F1C17;--sunk:#29251F;--ink:#EEE8DC;--ink2:#D2CABB;--ink3:#AEA595;--rule:#38332B;--rule2:#524B41;--accent:#93C2E6;--accent-2:#B3D4EE;--accent-ink:#0E1A24;--accent-soft:#1D2A35;--fill:#3C6F96;--fill-2:#33607F;--fill-ink:#FFFFFF;--logo-body:#3B362F;--ok:#93CDA5;--warn:#E6BD6E;--err:#F2A097;--ok-bg:#1D2B21;--warn-bg:#2E2617;--err-bg:#311F1C;--info-bg:#1B2731;--c1:#9CCBB5;--c2:#E3C18F;--c3:#A9C6EA;--c4:#E6AFC5;--c5:#C2C0EE;--c6:#A0D3D6;--shadow:inset 0 1px 0 rgba(255,255,255,.035),0 12px 32px -20px rgba(0,0,0,.9)}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
 a{color:var(--accent);text-underline-offset:2px}
@@ -46,8 +41,8 @@ h1{font-size:21px}h2{font-size:22px;line-height:1.25}h3{font-size:17px}
 header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
 header .bar{max-width:1120px;margin:0 auto;padding:12px 16px 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .brand{display:flex;align-items:center;gap:10px;margin-right:auto;text-decoration:none;color:inherit}
-.logo{width:34px;height:34px;border-radius:9px;background:var(--ink);display:grid;place-items:center}
-.logo i{display:block;width:16px;height:21px;border-radius:2px;background:var(--paper)}
+.logo{width:34px;height:34px;display:grid;place-items:center}
+
 .chip-st{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);font-size:14px;white-space:nowrap}
 .dot{width:9px;height:9px;border-radius:50%;background:var(--ink3);flex:none}
 .dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
@@ -62,8 +57,8 @@ nav.main button[aria-current="page"]{color:var(--ink);border-bottom-color:var(--
 .spread{justify-content:space-between}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;border-radius:12px;border:1px solid var(--rule2);background:var(--surface);cursor:pointer;font-weight:500;text-decoration:none;color:var(--ink)}
 .btn:hover{border-color:var(--ink3);background:var(--sunk)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
-.btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+.btn.primary{background:var(--fill);border-color:var(--fill);color:var(--fill-ink)}
+.btn.primary:hover{background:var(--fill-2);border-color:var(--fill-2)}
 .btn.ghost{border-color:transparent;background:none}
 .btn.danger{color:var(--err);border-color:currentColor;background:none}
 .btn.sm{min-height:36px;padding:6px 12px;font-size:14px;border-radius:10px}
@@ -81,6 +76,17 @@ nav.main button[aria-current="page"]{color:var(--ink);border-bottom-color:var(--
 code,kbd{font-family:var(--mono);font-size:.88em;background:var(--sunk);padding:1px 6px;border-radius:5px}
 
 .hero{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center}
+.heroart{width:300px;max-width:100%;height:auto;flex:none}
+.trust{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;font-size:13.5px;color:var(--ink3)}
+.trust span{display:inline-flex;align-items:center;gap:6px}
+.trust span::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.tile:not(.primary) .badge,.benefit .badge,.task .badge,.mrow .badge,.modlist .badge{background:color-mix(in srgb,currentColor 15%,var(--surface))!important}
+.tile .badge .ic,.benefit .badge .ic{width:22px;height:22px}
+.benefit{transition:border-color .15s}.benefit:hover{border-color:var(--rule2)}
+.mgroup{border:1px solid var(--rule);border-radius:12px;padding:8px 12px;margin-top:8px;background:var(--surface)}
+.mgroup summary{cursor:pointer;font-weight:600;font-size:14.5px;min-height:28px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.mgroup summary .muted{font-weight:400;font-size:13px}
+.mgroup .chips{margin-top:8px}
 .ereader{width:132px;height:178px;border-radius:16px;background:linear-gradient(160deg,#2a2824,#141310);padding:12px 12px 22px;box-shadow:0 18px 30px -16px rgba(0,0,0,.55);position:relative}
 .ereader .screen{height:100%;border-radius:4px;background:#ECE7DA;color:#2B2925;padding:10px;display:flex;flex-direction:column;gap:5px;font:10px/1.3 var(--serif)}
 .ereader .screen b{font-size:12px}
@@ -102,7 +108,18 @@ code,kbd{font-family:var(--mono);font-size:.88em;background:var(--sunk);padding:
 .previews figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
 .previews figcaption{font-size:13px;color:var(--ink3)}
 .pv-bar{position:absolute;left:0;right:0;bottom:0;height:12%;display:flex;justify-content:space-around;align-items:center;border-top:1px solid #bcb5a6;background:#e6e0d2;font:7px var(--sans)}
-.pv-bar b{background:#22201C;color:#ECE7DA;padding:1px 3px;border-radius:2px;font-weight:600}
+.pv-bar b{display:flex;flex-direction:column;align-items:center;gap:1px;color:#22201C;font-weight:700}
+.pv-bar b svg{width:13px;height:13px;color:#22201C}
+.tabchip{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:8px;background:var(--sunk)}.tabchip svg{width:16px;height:16px}
+.pshot{display:flex;justify-content:center;margin:2px 0 10px}.pshot .mini{pointer-events:none}
+.iconpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:8px;margin-top:6px}
+.iconpick label{cursor:pointer}
+.iconpick input{position:absolute;opacity:0;pointer-events:none}
+.iconpick span{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 4px 8px;border:1px solid var(--rule);border-radius:12px;background:var(--surface);color:var(--ink);text-align:center}
+.iconpick span svg{width:30px;height:30px}
+.iconpick small{font-size:12px;color:var(--ink3);line-height:1.2}
+.iconpick input:checked+span{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset;background:var(--accent-soft)}
+.iconpick input:focus-visible+span{box-shadow:var(--focus)}
 .pv-row{position:absolute;left:6%;right:6%;border-radius:3px}
 .pv-txt{position:absolute;left:8%;right:8%}
 .pv-txt i{display:block;height:3px;border-radius:2px;background:#8d8676;margin:0 0 4px}
@@ -126,13 +143,19 @@ code,kbd{font-family:var(--mono);font-size:.88em;background:var(--sunk);padding:
 .steps li.now b{color:var(--accent)}
 .explore{display:flex;gap:10px;align-items:flex-start;margin:16px 0 0;padding:12px 16px;border-radius:12px;background:var(--info-bg);font-size:15px}
 .explore .ic{margin-top:2px;color:var(--accent)}
+.ways{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-top:12px}
+@media (max-width:700px){.ways{grid-template-columns:1fr}}
+.way{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding:16px;border-radius:14px;border:1px solid var(--rule);background:var(--surface)}
+.way.rec{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.way b{font-family:var(--serif);font-size:16.5px}.way p{margin:0}
+.pill.desk{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 @media (max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:480px){.tiles{grid-template-columns:1fr}}
 .tile{display:flex;flex-direction:column;gap:6px;text-align:left;padding:16px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);cursor:pointer;min-height:118px}
 .tile:hover{border-color:var(--ink3)}
 .tile .badge{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--sunk);color:var(--ink)}
 .tile b{font-family:var(--serif);font-size:16.5px}
-.tile.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tile.primary{background:var(--fill);border-color:var(--fill);color:var(--fill-ink)}
 .tile.primary .badge{background:rgba(255,255,255,.16);color:inherit}
 .tile.primary .muted{color:inherit;opacity:.88}
 .finding{display:flex;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--rule);background:var(--surface);align-items:flex-start;flex-wrap:wrap}
@@ -162,7 +185,8 @@ details.tech summary{cursor:pointer;width:max-content;max-width:100%}
 .profile{position:relative;text-align:left;padding:18px;border-radius:14px;border:1.5px solid var(--rule);background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:8px}
 .profile:hover{border-color:var(--ink3)}
 .profile[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:var(--accent-soft)}
-.profile .tag{position:absolute;top:14px;right:14px}
+.profile .tag{position:absolute;top:10px;right:10px;z-index:1}
+.profile .pshot{margin-top:16px}
 .profile ul{margin:4px 0 0;padding-left:18px;font-size:14px;color:var(--ink2)}
 .group{margin-top:22px}
 .group>h3{display:flex;align-items:center;gap:8px;margin-bottom:8px}
@@ -177,7 +201,7 @@ details.tech summary{cursor:pointer;width:max-content;max-width:100%}
 .switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
 .switch span{position:absolute;inset:0;border-radius:999px;background:var(--rule2);transition:background .15s}
 .switch span::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
-.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span{background:var(--fill)}
 .switch input:checked+span::after{transform:translateX(18px)}
 .switch input:focus-visible+span{box-shadow:var(--focus)}
 .switch input:disabled{cursor:not-allowed}
@@ -216,7 +240,7 @@ details.tech summary{cursor:pointer;width:max-content;max-width:100%}
 .chg b{min-width:78px;font-weight:600}.chg .write{color:var(--ok)}.chg .delete{color:var(--err)}
 .log{font:12.5px/1.55 var(--mono);background:var(--sunk);border-radius:10px;padding:12px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:var(--ink2)}
 .progress{height:8px;border-radius:999px;background:var(--sunk);overflow:hidden}
-.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.progress i{display:block;height:100%;width:0;background:var(--fill);transition:width .3s}
 
 .task{display:flex;flex-direction:column;gap:12px}
 .task .head{display:flex;gap:12px;align-items:flex-start}
@@ -246,10 +270,14 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
 .faq details:last-child{border-bottom:0}
 .faq summary{cursor:pointer;font-weight:600;min-height:28px}
 @media (max-width:700px){
-  .hero{grid-template-columns:1fr}.ereader{display:none}
+  .hero{grid-template-columns:1fr;gap:14px}.ereader{display:none}.heroart{width:240px;margin:0 auto;order:2}
   .mrow{grid-template-columns:auto 1fr auto}.mrow .badge{display:none}.opts{grid-column:1/4}
   h2{font-size:20px}.card{padding:16px}.chip-st .lbl{display:none}
   .actionbar .sum{flex-basis:100%}
+}
+@media (max-width:480px){
+  header .bar{flex-wrap:nowrap;gap:6px}.brand h1{font-size:18px}.brand{gap:8px}
+  .chip-st{padding:4px 9px;min-height:34px}#devTxt{max-width:92px;overflow:hidden;text-overflow:ellipsis}
 }
 </style>
 </head>
@@ -261,7 +289,9 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
     <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></symbol>
+    <symbol id="i-upgrade" viewBox="0 0 24 24"><rect x="4.5" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 16V8.5M7.6 11.4l2.9-2.9 2.9 2.9M8 19h5"/><path d="M19.5 3v4.5M17.25 5.25h4.5"/></symbol>
     <symbol id="i-wand" viewBox="0 0 24 24"><path d="m4 20 11-11M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2ZM19 11l.6 1.4L21 13l-1.4.6L19 15l-.6-1.4L17 13l1.4-.6L19 11Z"/></symbol>
     <symbol id="i-books" viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="m16 5 3.5-1 2.5 15-3.5 1z"/></symbol>
     <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
@@ -301,14 +331,14 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
 <a class="sr skip" href="#main">Saltar al contenido</a>
 <header class="top">
   <div class="bar">
-    <a class="brand" href="#" data-go="home" aria-label="Kobo AIO, inicio"><span class="logo" aria-hidden="true"><i></i></span><h1>Kobo AIO</h1></a>
+    <a class="brand" href="#" data-go="home" aria-label="Kobo AIO, inicio"><span class="logo"><svg viewBox="0 0 32 32" width="34" height="34" aria-hidden="true"><rect x="5" y="1.5" width="22" height="29" rx="5" fill="var(--logo-body)"/><rect x="8" y="4.5" width="16" height="20" rx="1.8" fill="#F3EFE6"/><path d="M18.5 4.5h4v9l-2-1.6-2 1.6z" fill="#C2553E"/><rect x="10.5" y="9" width="6" height="1.6" rx=".8" fill="#8A8476"/><rect x="10.5" y="13" width="10" height="1.6" rx=".8" fill="#8A8476"/><rect x="10.5" y="17" width="8" height="1.6" rx=".8" fill="#8A8476"/><circle cx="16" cy="27.5" r="1.1" fill="#F3EFE6"/></svg></span><h1>Kobo AIO</h1></a>
     <span class="chip-st" id="helperChip" title="Motor local"><span class="dot" id="helperDot"></span><span class="lbl" id="helperTxt">Buscando motor…</span></span>
     <span class="chip-st" id="devChip"><span class="dot" id="devDot"></span><span id="devTxt">Sin Kobo</span></span>
     <button class="iconbtn" id="themeBtn" aria-label="Cambiar a modo oscuro"></button>
   </div>
   <nav class="main" aria-label="Secciones">
     <button data-go="home" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Inicio</button>
-    <button data-go="wizard"><svg class="ic" aria-hidden="true"><use href="#i-wand"/></svg>Mejorar mi Kobo</button>
+    <button data-go="wizard"><svg class="ic" aria-hidden="true"><use href="#i-upgrade"/></svg>Mejorar mi Kobo</button>
     <button data-go="library"><svg class="ic" aria-hidden="true"><use href="#i-books"/></svg>Biblioteca</button>
     <button data-go="expert"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg>Todos los módulos</button>
     <button data-go="backups"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg>Respaldos</button>
@@ -321,28 +351,49 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
 
   <section class="view" data-view="home" aria-labelledby="hHome">
     <div class="card hero">
-      <div class="ereader off" id="ereader" aria-hidden="true"><div class="screen"><b id="eModel">Kobo</b><span id="eFw"></span><i></i><i></i><i></i><i></i><i></i></div></div>
+      <svg class="heroart" id="heroArt" viewBox="0 0 340 250" role="img" aria-label="Ilustración: un Kobo con la pestaña nueva de atajos y las mejoras que suma">
+        <defs><linearGradient id="hg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2d2b27"/><stop offset="1" stop-color="#141310"/></linearGradient></defs>
+        <rect x="102" y="8" width="136" height="234" rx="18" fill="url(#hg)"/>
+        <rect x="113" y="19" width="114" height="196" rx="4" fill="#F3EFE6"/>
+        <g fill="#C9C2B2"><rect x="124" y="32" width="70" height="6" rx="3" fill="#22201C"/><rect x="124" y="48" width="92" height="4" rx="2"/><rect x="124" y="57" width="86" height="4" rx="2"/><rect x="124" y="66" width="92" height="4" rx="2"/><rect x="124" y="75" width="78" height="4" rx="2"/><rect x="124" y="84" width="90" height="4" rx="2"/></g>
+        <rect x="124" y="98" width="92" height="62" rx="5" fill="#fff" stroke="#22201C" stroke-width="1.2"/>
+        <g font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="7.5" fill="#22201C"><text x="131" y="112">Suspender</text><text x="131" y="124">Importar libros</text><text x="131" y="136">Modo oscuro</text><text x="131" y="148">WiFi</text></g>
+        <rect x="113" y="190" width="114" height="25" fill="#E6E0D2"/>
+        <g fill="none" stroke="#6A655B" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M126 203l5-4.5 5 4.5M127.5 202v6h7v-6"/><path d="M151 198.5h2.5v9H151zM155 198.5h2.5v9H155zM159 199l2.5-.6 1.6 8.6-2.5.6z"/><path d="M207 199.5h9M207 203h9M207 206.5h9"/></g>
+        <path d="M184.5 196.5l-5.2 7.1h3.6l-1 6 5.6-7.6h-3.5l1.4-5.5z" fill="var(--accent)"/>
+        <rect x="174" y="211.5" width="20" height="1.8" rx=".9" fill="var(--accent)"/>
+        <g font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif" font-size="10.5" font-weight="600">
+          <g transform="translate(8 34)"><rect width="86" height="28" rx="14" fill="var(--surface)" stroke="var(--rule)"/><circle cx="15" cy="14" r="5" fill="var(--c4)"/><text x="27" y="18" fill="var(--ink)">Tipografía</text></g>
+          <g transform="translate(4 112)"><rect width="88" height="28" rx="14" fill="var(--surface)" stroke="var(--rule)"/><circle cx="15" cy="14" r="5" fill="var(--c5)"/><text x="27" y="18" fill="var(--ink)">Audiolibros</text></g>
+          <g transform="translate(246 62)"><rect width="88" height="28" rx="14" fill="var(--surface)" stroke="var(--rule)"/><circle cx="15" cy="14" r="5" fill="var(--c3)"/><text x="27" y="18" fill="var(--ink)">Cómics</text></g>
+          <g transform="translate(244 148)"><rect width="92" height="28" rx="14" fill="var(--surface)" stroke="var(--rule)"/><circle cx="15" cy="14" r="5" fill="var(--c1)"/><text x="27" y="18" fill="var(--ink)">Respaldo</text></g>
+        </g>
+      </svg>
+      <div class="ereader off hidden" id="ereader" aria-hidden="true"><div class="screen"><b id="eModel">Kobo</b><span id="eFw"></span><i></i><i></i><i></i><i></i><i></i></div></div>
       <div>
         <p class="eyebrow" id="homeEyebrow">Todo en uno para lectores Kobo</p>
         <h2 id="hHome">Saca más provecho a tu Kobo, sin riesgo</h2>
         <div class="muted" id="homeSub" style="margin:6px 0 0">Kobo AIO instala desde tu computador las mejoras que más usa la comunidad: lectura más cómoda, inicio sin publicidad, cómics, audiolibros, diccionarios, apps y juegos. Antes de cambiar algo guarda una copia, y todo se puede deshacer.</div>
+        <div class="row" id="heroCta" style="margin-top:16px"></div>
+        <div class="trust" id="heroTrust"><span>Gratis y de código abierto</span><span>Respaldo automático</span><span>Nada se sube a internet</span></div>
         <div class="health hidden" id="health" role="status" aria-live="polite"></div>
       </div>
     </div>
 
     <div id="pitch">
+      <div class="card" id="start" style="margin-top:16px" aria-labelledby="hStart"><h3 id="hStart">Cómo empezar</h3><div class="row muted" style="margin-top:12px"><span class="spinner"></span>Buscando Kobo AIO en tu computador…</div></div>
       <div class="benefits">
         <div class="benefit"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-type"/></svg></span><div><b>Lee más cómodo</b><p class="small muted">Tipografía con mejor espaciado y justificado, fuentes pensadas para tinta electrónica, reloj y batería mientras lees.</p></div></div>
         <div class="benefit"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><div><b>Más contenido</b><p class="small muted">Cómics y manga de cualquier formato ajustados a tu pantalla, audiolibros con portada, diccionarios y libros que abren más rápido.</p></div></div>
         <div class="benefit"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></span><div><b>Tu Kobo a tu manera</b><p class="small muted">Inicio sin publicidad, menú de atajos (modo oscuro, WiFi, suspender), KOReader y juegos de Game Boy.</p></div></div>
         <div class="benefit"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><div><b>Sin riesgo</b><p class="small muted">Ves cada cambio antes de aplicarlo, se respalda todo y puedes volver atrás. Nunca toca tus libros ni tu progreso.</p></div></div>
       </div>
-      <div class="card" id="start" style="margin-top:16px" aria-labelledby="hStart"><h3 id="hStart">Cómo empezar</h3><div class="row muted" style="margin-top:12px"><span class="spinner"></span>Buscando Kobo AIO en tu computador…</div></div>
     </div>
 
     <h3 class="sect">¿Qué quieres hacer?</h3>
     <div class="tiles" style="margin-top:10px">
-      <button class="tile primary" data-go="wizard"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-wand"/></svg></span><b>Mejorar mi Kobo</b><span class="small muted">Asistente en 3 pasos con lo recomendado</span></button>
+      <button class="tile primary" data-go="wizard"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-upgrade"/></svg></span><b>Mejorar mi Kobo</b><span class="small muted">Asistente en 3 pasos con lo recomendado</span></button>
       <button class="tile" data-lib="lib.comics"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><b>Cómics y manga</b><span class="small muted">Convierte para tu pantalla</span></button>
       <button class="tile" data-lib="lib.books"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-book-plus"/></svg></span><b>Agregar libros</b><span class="small muted">EPUB a KEPUB, más rápido</span></button>
       <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">En el lector stock, con portada</span></button>
@@ -400,7 +451,9 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
   <section class="view hidden" data-view="help" aria-labelledby="hHelp">
     <h2 id="hHelp">Ayuda</h2>
     <div class="card faq" style="margin-top:14px">
-      <details open><summary>¿Es seguro?</summary><p class="muted">Kobo AIO nunca modifica tus libros ni tu progreso de lectura. Antes de escribir te muestra exactamente qué va a cambiar, guarda una copia de cada archivo que toca y puedes revertir desde «Respaldos». Las descargas se verifican con su huella digital (SHA-256).</p></details>
+      <details open><summary>¿Tengo que instalar algo?</summary><p class="muted">No para lo principal: desde esta página, con Chrome o Edge, puedes instalar el menú de atajos, el inicio sin publicidad, fuentes, cómics, audiolibros y más. Para funciones avanzadas (ajustes del sistema, KEPUB, cómics CBR y PDF, respaldo de toda la biblioteca) descarga la app de escritorio: trae todo incluido y no necesitas Python. La página te avisa en cada función que la necesita.</p></details>
+      <details><summary>¿Qué navegador uso?</summary><p class="muted">Chrome o Edge en tu computador: escriben directo en el Kobo. Safari y Firefox no permiten escribir en una unidad USB, así que Kobo AIO te entrega un archivo (KoboRoot.tgz) para copiar en el Kobo, con instrucciones paso a paso. Desde el celular solo puedes explorar.</p></details>
+      <details><summary>¿Es seguro?</summary><p class="muted">Kobo AIO nunca modifica tus libros ni tu progreso de lectura. Antes de escribir te muestra exactamente qué va a cambiar, guarda una copia de cada archivo que toca y puedes revertir desde «Respaldos». Las descargas se verifican con su huella digital (SHA-256).</p></details>
       <details><summary>¿Qué pasa al expulsar el Kobo?</summary><p class="muted">Algunas mejoras (menú, inicio, tipografía, reloj) se instalan solas al expulsar: el Kobo se reinicia en 1 o 2 minutos. No lo desconectes mientras ves la barra de progreso en su pantalla.</p></details>
       <details><summary>¿Dónde está el menú nuevo?</summary><p class="muted">Después del reinicio aparece una pestaña nueva en la barra inferior del Kobo (por defecto «Kobo AIO») con tus atajos: suspender, importar libros, modo oscuro, WiFi y más.</p></details>
       <details><summary>¿Cómo deshago todo?</summary><p class="muted">En «Respaldos», elige la instalación y toca «Revertir». Para quitar un módulo, búscalo en «Todos los módulos» y marca «Desinstalar».</p></details>
@@ -445,6 +498,143 @@ const SEVS = new Set(["critical", "warn", "info", "ok"]);
 const sevOf = s => SEVS.has(s) ? s : "info";
 const state = { helper: false, device: null, modules: [], installed: {}, selection: {}, uninstall: new Set(), open: new Set(),
                 lib: {}, doctor: null, view: "home", step: 1, profile: null, scope: "wizard", filter: "Todas", query: "" };
+
+// -- Browser mode: the same engine runs in a worker (aio-worker.js + Pyodide). Nothing to install. ----------
+// Chrome/Edge write to the Kobo folder the user grants (File System Access API); other browsers read it and get
+// every change in one KoboRoot.tgz. The page answers the same /api/* calls the local engine serves.
+const BR = { worker: null, seq: 0, pending: new Map(), jobs: new Map(), backup: null, version: "", onProgress: null };
+const CAN_WRITE = typeof window.showDirectoryPicker === "function";
+function wcall(cmd, args, onProgress) {
+  if (!BR.worker) {
+    BR.worker = new Worker("aio-worker.js");
+    BR.worker.onmessage = ({ data }) => {
+      if (data.progress !== undefined) { BR.onProgress && BR.onProgress(data.progress); return; }
+      const p = BR.pending.get(data.id); if (!p) return;
+      BR.pending.delete(data.id);
+      data.ok ? p.resolve(data.result) : p.reject(new Error(data.error));
+    };
+    BR.worker.onerror = e => { BR.pending.forEach(p => p.reject(new Error(e.message || "El motor del navegador se detuvo"))); BR.pending.clear(); };
+  }
+  if (onProgress) BR.onProgress = onProgress;
+  const id = ++BR.seq;
+  return new Promise((resolve, reject) => { BR.pending.set(id, { resolve, reject }); BR.worker.postMessage({ id, cmd, args }); });
+}
+function idb(op, key, val) {
+  return new Promise((resolve, reject) => {
+    const r = indexedDB.open("kobo-aio", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("kv");
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => {
+      const st = r.result.transaction("kv", op === "get" ? "readonly" : "readwrite").objectStore("kv");
+      const q = op === "get" ? st.get(key) : st.put(val, key);
+      q.onsuccess = () => resolve(q.result); q.onerror = () => reject(q.error);
+    };
+  });
+}
+async function backupHandle(prompt) {   // folder of the computer where browser-mode backups are kept
+  if (!CAN_WRITE) return null;
+  let h = BR.backup;
+  if (!h) { try { h = await idb("get", "backups"); } catch (_) { h = null; } }
+  if (h) {
+    let perm = await h.queryPermission({ mode: "readwrite" });
+    if (perm !== "granted" && prompt) perm = await h.requestPermission({ mode: "readwrite" });
+    if (perm === "granted") { BR.backup = h; return h; }
+  }
+  if (!prompt) return null;
+  toast("Elige una carpeta de tu computador para guardar los respaldos (por ejemplo, Documentos).");
+  try { h = await window.showDirectoryPicker({ id: "kobo-aio-backups", mode: "readwrite", startIn: "documents" }); }
+  catch (e) { throw new Error(e.name === "AbortError" ? "No elegiste una carpeta para los respaldos: no se cambió nada." : e.message); }
+  BR.backup = h;
+  try { await idb("put", "backups", h); } catch (_) {}
+  return h;
+}
+const EJECT_WEB = "En el modo navegador expulsa el Kobo desde tu sistema: en Mac, el botón ⏏ junto a KOBOeReader en Finder; en Windows, «Quitar hardware de forma segura». Si había mejoras pendientes, se instala y se reinicia solo.";
+async function webApi(path, opts = {}) {
+  const body = opts.json || {};
+  if (path === "/api/status") return { version: BR.version };
+  if (path === "/api/devices") return state.device ? [state.device] : [];
+  if (path === "/api/catalog") { const c = await wcall("catalog"); BR.version = c.version; return c; }
+  if (path === "/api/doctor") return wcall("doctor");
+  if (path === "/api/backups") return wcall("backups", { backupHandle: await backupHandle(false) });
+  if (path === "/api/upload") return wcall("upload", { name: decodeURIComponent((opts.headers || {})["X-Filename"] || "archivo"), file: opts.body });
+  if (path === "/api/eject") return { ok: false, web: true, output: EJECT_WEB };
+  if (path.startsWith("/api/jobs/")) { const j = BR.jobs.get(path.slice(10)); if (!j) throw new Error("Tarea no encontrada"); return j; }
+  let run;
+  if (path === "/api/plan") run = () => wcall("plan", body);
+  else if (path === "/api/apply") { const bh = state.web === "rw" ? await backupHandle(true) : null; run = () => wcall("apply", { ...body, backupHandle: bh }); }
+  else if (path === "/api/rollback") { const bh = await backupHandle(true); run = () => wcall("rollback", { manifest: body.manifest, dryRun: !!body.dry_run, backupHandle: bh }); }
+  else throw new Error("No disponible en el modo navegador");
+  const jid = `w${++BR.seq}`, job = { state: "running", log: [] };
+  BR.jobs.set(jid, job);
+  BR.onProgress = m => job.log.push(m);
+  run().then(r => { job.state = "done"; job.result = r; }, e => { job.state = "error"; job.error = e.message; });
+  return { job: jid };
+}
+// -- Desktop app: Python included, one file per OS (built by .github/workflows/release.yml) -------------------
+const DESKTOP_URL = "https://github.com/Parzval-Net/AIO_KOBO_APPS/releases/latest/download/";
+const DESKTOP = {
+  windows: { name: "Windows", files: [["Descargar para Windows", "Kobo-AIO-windows-x64.exe"]],
+    open: "Abre el archivo descargado. Si aparece «Windows protegió tu PC», toca «Más información» y luego «Ejecutar de todas formas» (solo la primera vez)." },
+  macos: { name: "Mac", files: [["Mac con chip Apple (M1 o posterior)", "Kobo-AIO-macos-arm64.zip"], ["Mac con Intel", "Kobo-AIO-macos-x64.zip"]],
+    open: "Abre el ZIP descargado y haz doble clic en «Kobo AIO». Si macOS dice que no puede comprobar el desarrollador, ve a Ajustes del Sistema > Privacidad y seguridad y toca «Abrir igualmente» (solo la primera vez)." },
+  linux: { name: "Linux", files: [["Descargar para Linux (x64)", "Kobo-AIO-linux-x64.tar.gz"]],
+    open: "Descomprime el archivo y ábrelo: en una terminal, ./Kobo-AIO dentro de esa carpeta." },
+};
+const HOST_OS = /Android|iPhone|iPad/i.test(navigator.userAgent) ? "mobile"
+  : /Win/i.test(navigator.platform || navigator.userAgent) ? "windows" : /Mac/i.test(navigator.platform || navigator.userAgent) ? "macos" : "linux";
+const desktopButtons = (os, cls = "btn primary") => (DESKTOP[os] || DESKTOP.windows).files.map(([label, f], i) =>
+  `<a class="${i ? "btn" : cls}" href="${DESKTOP_URL}${f}" download>${icon("upload")}${esc(label)}</a>`).join("");
+function desktopDialog(reason) {
+  const os = HOST_OS === "mobile" ? null : HOST_OS, d = os && DESKTOP[os];
+  dialog(reason ? "Esta función usa la app de escritorio" : "Kobo AIO de escritorio", reason ? `Motivo: ${reason}` : "Todas las funciones, sin instalar Python ni nada más",
+    `${d ? `<p class="small" style="margin-top:0">Es una app gratuita que trae todo incluido. Descárgala, ábrela y vuelve a esta página: <b>se conecta sola</b>.</p>
+      <div class="row">${desktopButtons(os)}</div>
+      <ol class="steps"><li><b>Descarga</b> la app para ${esc(d.name)}.</li><li><b>Ábrela.</b> ${esc(d.open)}</li><li><b>Listo.</b> Se abre Kobo AIO con todas las funciones. Deja su ventana abierta mientras lo usas.</li></ol>`
+      : '<p class="small" style="margin-top:0">La app de escritorio funciona en computadores con Windows, macOS o Linux. Abre esta página en tu computador para descargarla.</p>'}
+     <details class="small"><summary>Otros sistemas</summary><div class="row" style="margin-top:8px">${["windows", "macos", "linux"].filter(o => o !== os).map(o => desktopButtons(o, "btn")).join("")}</div></details>
+     <details class="small"><summary>¿Por qué mi sistema me avisa al abrirla?</summary><p class="muted" style="margin:6px 0 0">La app no está firmada con un certificado pagado de Apple o Microsoft, así que el sistema pide confirmar la primera vez. El código es abierto en GitHub y cada versión publica sus huellas SHA-256 (SHA256SUMS.txt) para que puedas verificarla.</p></details>`,
+    [["Cerrar", "", () => dlg.close()]]);
+}
+
+function pickFolderReadOnly() {
+  return new Promise((resolve, reject) => {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.webkitdirectory = true; inp.multiple = true;
+    inp.onchange = () => {
+      const list = [...inp.files].map(f => ({ rel: f.webkitRelativePath.split("/").slice(1).join("/"), file: f })).filter(x => x.rel);
+      list.length ? resolve(list) : reject(Object.assign(new Error("Carpeta vacía"), { name: "AbortError" }));
+    };
+    inp.click();
+  });
+}
+async function connectBrowser(given) {
+  let handle = given && given.handle, list = given && given.list;
+  try {
+    if (!handle && !list) {
+      if (CAN_WRITE) handle = await window.showDirectoryPicker({ id: "kobo-device", mode: "readwrite" });
+      else list = await pickFolderReadOnly();
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") toast(e.name === "SecurityError" || e.name === "NotAllowedError"
+      ? "El navegador no permitió abrir esa carpeta. Elige la unidad KOBOeReader completa (no una carpeta de tu computador)." : e.message);
+    return;
+  }
+  dialog("Conectando desde el navegador", "Todavía no se escribe nada en tu Kobo",
+    `<div class="row"><span class="spinner"></span><span id="brStep">Preparando…</span></div>
+     <p class="tiny muted" style="margin:12px 0 0">El motor de Kobo AIO corre dentro de esta página. Tus libros no se suben a internet.</p>`, []);
+  const step = m => { const el = $("#brStep"); if (el) el.textContent = m; };
+  try {
+    await wcall("boot", { base: new URL(".", location.href).href }, step);
+    const dev = handle ? await wcall("connectHandle", { handle }, step) : await wcall("connectFiles", { list }, step);
+    state.web = handle ? "rw" : "zip"; state.helper = true;
+    setChip("#helperDot", "#helperTxt", "ok", state.web === "rw" ? "Motor en el navegador" : "Navegador · solo lectura");
+    dlg.close();
+    await refresh();
+    toast(`${dev.name} conectado desde el navegador`);
+  } catch (e) {
+    dialog("No se pudo conectar", "", `<div class="finding critical">${icon("x-circle")}<div class="body">${esc(e.message)}</div></div>`, [["Cerrar", "primary", () => dlg.close()]]);
+  }
+}
 
 // Friendly names, icons and one-line benefits (technical name stays visible in expert mode).
 const META = {
@@ -496,6 +686,7 @@ const PROFILES = [
 ];
 
 async function api(path, opts = {}) {
+  if (state.web) return webApi(path, opts);
   const init = { ...opts, headers: { ...(opts.headers || {}) } };
   if (init.method === "POST") init.headers["X-Kobo-AIO"] = "1";
   if (init.json !== undefined) { init.body = JSON.stringify(init.json); init.headers["Content-Type"] = "application/json"; delete init.json; }
@@ -582,7 +773,7 @@ async function connect() {
   } catch (_) {
     const changed = state.helper !== false;
     state.helper = false;
-    setChip("#helperDot", "#helperTxt", "err", "Motor local no encontrado");
+    setChip("#helperDot", "#helperTxt", "", "Modo exploración");
     if (!state.modules.length) {   // explore mode: same catalog the engine ships, without a device
       try { const c = await (await fetch("catalog.json", { cache: "no-cache" })).json(); state.modules = c.modules || []; } catch (_) {}
       renderHome(); go(state.view);
@@ -613,40 +804,84 @@ function renderHome() {
     deviceArt(d, $("#ereader"));
     $("#eModel").textContent = d.name.replace(/^Kobo /, "");
     $("#eFw").textContent = d.firmware || "";
-    $("#ereader").classList.remove("off");
+    $("#ereader").classList.remove("off", "hidden");
+    $("#heroArt").classList.add("hidden");
   } else {
     setChip("#devDot", "#devTxt", "", "Sin Kobo");
     $("#homeEyebrow").textContent = "Todo en uno para lectores Kobo";
     $("#hHome").textContent = "Saca más provecho a tu Kobo, sin riesgo";
     $("#homeSub").textContent = "Kobo AIO instala desde tu computador las mejoras que más usa la comunidad: lectura más cómoda, inicio sin publicidad, cómics, audiolibros, diccionarios, apps y juegos. Antes de cambiar algo guarda una copia, y todo se puede deshacer.";
     deviceArt(null, $("#ereader"));
-    $("#ereader").classList.add("off");
+    $("#ereader").classList.add("off", "hidden");
+    $("#heroArt").classList.remove("hidden");
     $("#health").classList.add("hidden");
     $("#findings").innerHTML = '<div class="empty">Esperando un Kobo…</div>';
   }
   renderStart();
+  renderHeroCta();
+}
+
+// One obvious next step on the home screen (NN/g: visibility of system status + a single primary action).
+function renderHeroCta() {
+  const el = $("#heroCta"), d = state.device;
+  $("#heroTrust").classList.toggle("hidden", !!d);
+  if (d) {
+    el.innerHTML = `<button class="btn primary" data-go="wizard">${icon("upgrade")}Mejorar mi Kobo</button>
+      <button class="btn" id="heroReview">${icon("shield")}Ver la revisión</button>`;
+    $("#heroReview").onclick = () => $("#reviewCard").scrollIntoView({ behavior: "smooth", block: "start" });
+  } else if (state.helper) {
+    el.innerHTML = `<span class="pill info" style="min-height:36px;padding:6px 14px"><span class="spinner"></span>Conecta tu Kobo por USB y toca «Conectar» en su pantalla</span>`;
+  } else {
+    el.innerHTML = `<button class="btn primary" id="heroStart">${icon("usb")}Empezar</button>
+      <button class="btn ghost" data-go="wizard">${icon("eye")}Ver qué incluye</button>`;
+    $("#heroStart").onclick = () => { $("#start").scrollIntoView({ behavior: "smooth", block: "start" }); setTimeout(() => $("#browserBtn") && $("#browserBtn").focus({ preventScroll: true }), 450); };
+  }
 }
 
 function renderStart() {
   const h = state.helper;
-  const st = (done, now) => done ? ' class="done"' : now ? ' class="now"' : "";
+  if (h) {
+    $("#start").innerHTML = `<h3 id="hStart">Cómo empezar</h3>
+      <ol class="steps">
+        <li class="done"><b>${state.web ? "El motor de Kobo AIO está listo en este navegador" : "Kobo AIO está abierto en tu computador"}</b></li>
+        <li class="now"><b>Conecta tu Kobo por USB</b><div class="small muted">Toca «Conectar» en la pantalla del Kobo. Se detecta solo y verás qué es compatible con tu modelo.</div></li>
+        <li><b>Elige y aplica</b><div class="small muted">Usa el asistente o elige cada mejora. Al expulsar, el Kobo se reinicia con todo listo (1 a 2 minutos).</div></li>
+      </ol>
+      <div class="row"><button class="btn ghost" data-go="wizard">${icon("upgrade")}Explorar las mejoras</button></div>`;
+    return;
+  }
   $("#start").innerHTML = `<h3 id="hStart">Cómo empezar</h3>
-    <ol class="steps">
-      <li${st(h, !h)}><b>${h ? "Kobo AIO está abierto en tu computador" : "Abre Kobo AIO en tu computador"}</b>${h ? "" : `<div class="small muted">Descarga el <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">ZIP</a>. En Mac, doble clic en <code>Kobo AIO.command</code> (la primera vez: clic derecho, Abrir). En Windows o Linux: <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code>.</div>
-        <details class="small" style="margin-top:6px"><summary>¿Qué necesito?</summary><p class="muted" style="margin:6px 0 0">Python 3.9 o superior, el programa que hace el trabajo en tu computador: detecta tu modelo, respalda, descarga y verifica cada mejora y convierte cómics y audiolibros. Una página web no puede escribir en el Kobo por sí sola. En Mac, si falta, el sistema ofrece instalarlo. En Windows descárgalo de python.org. No se instala nada más en tu computador ni se sube nada a internet.</p></details>`}</li>
-      <li${st(false, h)}><b>Conecta tu Kobo por USB</b><div class="small muted">Toca «Conectar» en la pantalla del Kobo. Se detecta solo y verás qué es compatible con tu modelo.</div></li>
-      <li><b>Elige y aplica</b><div class="small muted">Usa el asistente o elige cada mejora. Al expulsar, el Kobo se reinicia con todo listo (1 a 2 minutos).</div></li>
-    </ol>
-    <div class="row">${h ? "" : `<button class="btn primary" id="retryBtn">${icon("usb")}Ya lo abrí, buscar de nuevo</button><a class="btn" href="http://127.0.0.1:8765/">Abrir la versión local</a>`}
-      <button class="btn ghost" data-go="wizard">${icon("wand")}Explorar las mejoras</button></div>
-    ${h ? "" : '<p class="tiny muted" style="margin:10px 0 0">Si tu navegador bloquea la conexión desde esta página, usa «Abrir la versión local».</p>'}`;
-  const rb = $("#retryBtn"); if (rb) rb.onclick = connect;
+    <p class="small muted" style="margin:6px 0 0">Conecta tu Kobo por USB y toca «Conectar» en su pantalla. Luego elige una de estas dos formas:</p>
+    <div class="ways">
+      <div class="way rec">
+        <span class="pill info">Sin instalar nada</span>
+        <b>Desde este navegador</b>
+        <p class="small muted">Elige la unidad <b>KOBOeReader</b> y listo. ${CAN_WRITE
+          ? "Este navegador escribe directo en el Kobo, con respaldo en una carpeta de tu computador."
+          : "En este navegador recibirás un archivo para copiar al Kobo. Chrome o Edge lo hacen solos."}</p>
+        <button class="btn primary" id="browserBtn">${icon("usb")}Conectar desde el navegador</button>
+        <p class="tiny muted">${CAN_WRITE ? "Se abrirá una ventana: elige la unidad KOBOeReader y acepta cuando el navegador pida permiso para editar sus archivos."
+          : "Se abrirá una ventana: elige la unidad KOBOeReader. El navegador puede preguntar si quieres «subir» los archivos: no se suben, solo se leen aquí."}</p>
+      </div>
+      <div class="way">
+        <span class="pill">Todas las funciones</span>
+        <b>App de escritorio</b>
+        <p class="small muted">Suma ajustes avanzados del sistema, conversión a KEPUB, cómics CBR y PDF, respaldo de toda la biblioteca y descarga de diccionarios. Trae todo incluido: no necesitas instalar Python.</p>
+        ${HOST_OS === "mobile" ? '<p class="small muted">Disponible para Windows, macOS y Linux: abre esta página en tu computador.</p>'
+          : `<button class="btn" id="desktopBtn">${icon("upload")}Descargar para ${esc(DESKTOP[HOST_OS].name)}</button>`}
+        <details class="small"><summary>¿Prefieres usar Python?</summary><p class="muted" style="margin:6px 0 0">Descarga el <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">código</a> y ejecuta <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code> (Python 3.9 o superior). En Mac también sirve el doble clic en <code>Kobo AIO.command</code>.</p></details>
+        <div class="row" style="margin-top:4px"><button class="btn sm ghost" id="retryBtn">Ya la abrí, buscar de nuevo</button></div>
+      </div>
+    </div>`;
+  $("#retryBtn").onclick = connect;
+  $("#browserBtn").onclick = () => connectBrowser();
+  const db = $("#desktopBtn"); if (db) db.onclick = () => desktopDialog();
 }
 
 function renderExplore() {
   const el = $("#explore"), show = !state.device && state.view !== "home";
   el.classList.toggle("hidden", !show);
-  if (show) el.innerHTML = `${icon("info")}<div><b>Estás explorando.</b> Puedes ver todo, pero para instalar ${state.helper ? "conecta tu Kobo por USB" : 'abre Kobo AIO en tu computador y conecta tu Kobo (<a href="#" data-go="home">cómo empezar</a>)'}. Al conectarlo se ocultará lo que tu modelo no admite.</div>`;
+  if (show) el.innerHTML = `${icon("info")}<div><b>Estás explorando.</b> Puedes ver todo, pero para instalar ${state.helper ? "conecta tu Kobo por USB" : 'conecta tu Kobo desde el navegador o con Kobo AIO en tu computador (<a href="#" data-go="home">cómo empezar</a>)'}. Al conectarlo se ocultará lo que tu modelo no admite.</div>`;
 }
 
 const SEVICON = { critical: "x-circle", warn: "alert", info: "info", ok: "check-circle" };
@@ -711,7 +946,19 @@ function optionHtml(m, op) {
   const v = (store()[m.id] || {})[op.id] ?? op.default;
   const nm = esc(`${m.id}::${op.id}`);
   if (op.type === "bool") return `<div class="opt"><label class="check"><input type="checkbox" data-opt="${nm}" ${v ? "checked" : ""}> ${esc(op.label)}</label></div>`;
+  if (op.type === "choice" && op.icons) return `<fieldset class="opt" style="border:0;margin:0;padding:0"><legend class="l">${esc(op.label)}</legend>
+    <div class="iconpick">${op.choices.map(c => `<label><input type="radio" name="o-${nm}" data-opt="${nm}" value="${esc(c.value)}" ${String(c.value) === String(v) ? "checked" : ""}><span>${(op.icons[c.value] || [""])[0]}<small>${esc(c.label)}</small></span></label>`).join("")}</div>
+    ${op.help ? `<p class="tiny muted" style="margin:6px 0 0">${esc(op.help)}</p>` : ""}</fieldset>`;
   if (op.type === "choice") return `<div class="opt"><label class="l" for="o-${nm}">${esc(op.label)}</label><select id="o-${nm}" data-opt="${nm}">${op.choices.map(c => `<option value="${esc(c.value)}" ${String(c.value) === String(v) ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></div>`;
+  if (op.type === "multi" && op.choices.length > 12) {
+    const groups = new Map();
+    op.choices.forEach(c => { const m = /^\[([^\]]+)\]\s*(.*)$/.exec(c.label); const g = m ? m[1] : "Otros"; if (!groups.has(g)) groups.set(g, []); groups.get(g).push({ ...c, short: m ? m[2] : c.label }); });
+    return `<fieldset class="opt" style="border:0;margin:0;padding:0"><legend class="l">${esc(op.label)}</legend>
+      <p class="tiny muted" style="margin:2px 0 0">Ya vienen marcados los más útiles. Abre un tema para agregar o quitar.</p>
+      ${[...groups].map(([g, items]) => { const on = items.filter(c => (v || []).includes(c.value));
+        return `<details class="mgroup"><summary>${esc(g)} <span class="muted">${on.length ? `${on.length} elegido${on.length === 1 ? "" : "s"}: ${esc(on.map(c => c.short).join(", "))}` : "ninguno"}</span></summary>
+          <div class="chips">${items.map(c => `<label><input type="checkbox" data-multi="${nm}" value="${esc(c.value)}" ${(v || []).includes(c.value) ? "checked" : ""}><span>${esc(c.short)}</span></label>`).join("")}</div></details>`; }).join("")}</fieldset>`;
+  }
   if (op.type === "multi") return `<fieldset class="opt" style="border:0;margin:0;padding:0"><legend class="l">${esc(op.label)}</legend><div class="chips">${op.choices.map(c => `<label><input type="checkbox" data-multi="${nm}" value="${esc(c.value)}" ${(v || []).includes(c.value) ? "checked" : ""}><span>${esc(c.label)}</span></label>`).join("")}</div></fieldset>`;
   if (op.type === "text") return `<div class="opt"><label class="l" for="o-${nm}">${esc(op.label)}</label><input id="o-${nm}" type="text" data-opt="${nm}" value="${esc(v)}"></div>`;
   if (op.type === "files") return `<div class="opt"><span class="l">${esc(op.label)}</span>
@@ -772,21 +1019,26 @@ function chipsFor(m) {
 }
 function modRow(m, opts = {}) {
   const mt = meta(m), on = !!state.selection[m.id], off = m.compatible === false, req = requiredBy(m.id), open = state.open.has(m.id);
+  const desk = needsDesktop(m);
   return `<div class="mrow ${on ? "on" : ""} ${off ? "off" : ""} ${open ? "open" : ""}" data-row="${esc(m.id)}">
     <label class="switch"><input type="checkbox" ${on ? "checked" : ""} ${off ? "disabled" : ""} aria-label="${esc(mt.name)}"><span></span></label>
     <span class="badge" style="color:${mt.color}">${icon(mt.icon)}</span>
-    <div><div class="name">${esc(mt.name)}</div><div class="small muted">${esc(off ? m.incompatible_reason : mt.benefit)}</div>
-      <div class="meta">${chipsFor(m)}${req.length && on ? `<span class="pill info">necesario para ${esc(req.join(", "))}</span>` : ""}${opts.tech ? `<span class="pill">${esc(m.title)}</span>` : ""}</div>
+    <div><div class="name">${esc(mt.name)}</div><div class="small muted">${esc(desk ? mt.benefit : off ? m.incompatible_reason : mt.benefit)}</div>
+      <div class="meta">${desk ? '<span class="pill desk">App de escritorio</span>' : ""}${chipsFor(m)}${req.length && on ? `<span class="pill info">necesario para ${esc(req.join(", "))}</span>` : ""}${opts.tech ? `<span class="pill">${esc(m.title)}</span>` : ""}</div>
       ${opts.tech ? `<details class="tech"><summary>Más información</summary>${esc(m.description)}<div style="margin-top:6px">${(m.sources || []).map(s => `<a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(s.replace(/^https:\/\/(www\.)?/, "").split("/").slice(0, 3).join("/"))}</a>`).join(" · ")}${m.license ? ` · ${esc(m.license)}` : ""}</div></details>` : ""}
     </div>
     <div class="row" style="gap:6px;justify-content:flex-end">
       ${PREVIEW[m.id] ? `<button class="pvbtn" data-preview="${esc(m.id)}">Vista previa</button>` : ""}
+      ${desk ? `<button class="optbtn" data-desktop="${esc(m.engine_reason || "")}">Descargar la app</button>` : ""}
       ${m.options.length && on ? `<button class="optbtn" data-toggle-opts aria-expanded="${open}">${open ? "Ocultar opciones" : "Opciones"}</button>` : ""}
       ${opts.tech && m.can_uninstall && isInstalled(m) ? `<label class="check tiny" style="display:flex;gap:6px;align-items:center;color:var(--err);min-height:32px"><input type="checkbox" data-un ${state.uninstall.has(m.id) ? "checked" : ""}> Desinstalar</label>` : ""}
     </div>
     ${m.options.length ? `<div class="opts">${m.options.map(op => optionHtml(m, op)).join("")}</div>` : ""}
   </div>`;
 }
+// Engine-only feature while running without the desktop engine (explore or browser mode).
+const needsDesktop = m => !!m.engine_only && !(state.helper && !state.web);
+document.addEventListener("click", e => { const b = e.target.closest("[data-desktop]"); if (b) { e.preventDefault(); desktopDialog(b.dataset.desktop); } });
 function bindRows(scope) {
   $$("[data-row]", scope).forEach(row => {
     const id = row.dataset.row;
@@ -799,12 +1051,18 @@ function bindRows(scope) {
   });
 }
 
+// A small picture of what each style looks like, drawn with the same previews as the modules.
+const PROFILE_SHOT = { essential: "mod.nickelmenu", minimal: "conf.sideloaded", reader: "mod.nickelclock", full: "app.inkboy" };
+function profileShot(p) {
+  const id = PROFILE_SHOT[p.id], f = id && PREVIEW[id];
+  return f ? `<div class="pshot" aria-hidden="true">${pvScreen(f(state.device)[0][0], state.device, 74)}</div>` : "";
+}
 function renderWizard() {
   $$("#stepper li").forEach(li => { const n = Number(li.dataset.step); li.classList.toggle("done", n < state.step); n === state.step ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current"); });
   $$("[data-wstep]").forEach(s => s.classList.toggle("hidden", Number(s.dataset.wstep) !== state.step));
   if (state.step === 1) {
     $("#profiles").innerHTML = PROFILES.map(p => `<button class="profile" data-profile="${p.id}" aria-pressed="${state.profile === p.id}">
-      ${p.tag ? `<span class="pill info tag">${esc(p.tag)}</span>` : ""}<h3>${esc(p.name)}</h3><span class="small muted">${esc(p.desc)}</span>
+      ${p.tag ? `<span class="pill info tag">${esc(p.tag)}</span>` : ""}${profileShot(p)}<h3>${esc(p.name)}</h3><span class="small muted">${esc(p.desc)}</span>
       <ul>${p.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></button>`).join("") +
       `<p class="tiny muted" style="grid-column:1/-1;margin:4px 0 0">Las opciones se ajustan a tu ${esc(state.device ? state.device.name : "Kobo")}: lo que tu modelo no soporta no aparece.</p>`;
     $$("[data-profile]").forEach(b => b.onclick = () => {
@@ -819,7 +1077,7 @@ function renderWizard() {
     ? `<div class="finding info" style="margin-top:14px">${icon("info")}<div class="body"><b>Tu ${esc(state.device ? state.device.name : "Kobo")} tiene ${hiddenN} opciones no disponibles</b><div class="small muted">${esc(nm.incompatible_reason)}. ${state.device && /^[5-9]\./.test(state.device.firmware || "") ? "Los mods del menú de Nickel aún no funcionan en firmware 5 o 6. Las herramientas de biblioteca (cómics, libros, fuentes, respaldo) sí están disponibles." : "Actualiza el firmware desde Ajustes > Información del dispositivo y vuelve a conectar el Kobo para habilitarlas."}</div></div></div>` : "";
   if (state.step === 2) {
     $("#groups").innerHTML = notice + GROUPS.map(([title, ic, ids]) => {
-      const mods = ids.map(byId).filter(m => m && m.compatible !== false); if (!mods.length) return "";
+      const mods = ids.map(byId).filter(m => m && (m.compatible !== false || needsDesktop(m))); if (!mods.length) return "";
       return `<section class="group"><h3>${icon(ic)}${esc(title)}</h3>${mods.map(m => modRow(m)).join("")}</section>`;
     }).join("");
     bindRows($("#groups"));
@@ -884,7 +1142,7 @@ function renderActionBar() {
     back.classList.toggle("hidden", state.step === 1);
     back.innerHTML = `${icon("arrow-l")}Atrás`;
     back.onclick = () => { state.step--; renderWizard(); renderActionBar(); };
-    next.innerHTML = state.step < 3 ? (state.step === 2 && !state.device ? `${icon("usb")}Conecta tu Kobo` : `Continuar${icon("arrow-r")}`) : `${icon("check")}Aplicar en mi Kobo`;
+    next.innerHTML = state.step < 3 ? (state.step === 2 && !state.device ? `${icon("usb")}Conecta tu Kobo` : `Continuar${icon("arrow-r")}`) : (state.web === "zip" ? `${icon("check")}Preparar el paquete` : `${icon("check")}Aplicar en mi Kobo`);
     next.disabled = (state.step >= 2 && !state.device) || (state.step === 1 && !state.profile) || (state.step >= 2 && !n && !state.uninstall.size)
       || (state.step === 3 && !state.reviewOk);
     next.onclick = () => { if (state.step < 3) { state.step++; renderWizard(); renderActionBar(); window.scrollTo({ top: 0, behavior: "smooth" }); } else applyNow(state.selection); };
@@ -912,7 +1170,7 @@ async function openPlan(sel = state.selection) {
   dialog("Preparando…", "Todavía no se escribe nada", '<div class="row"><span class="spinner"></span>Calculando cambios</div>', [["Cancelar", "", () => dlg.close()]]);
   try {
     const res = await planNow(sel);
-    dialog("Revisa antes de aplicar", state.device.name, reviewHtml(res), [["Cancelar", "", () => dlg.close()], [`${icon("check")}Aplicar en mi Kobo`, "primary", () => applyNow(sel)]]);
+    dialog("Revisa antes de aplicar", state.device.name, reviewHtml(res), [["Cancelar", "", () => dlg.close()], [state.web === "zip" ? `${icon("check")}Preparar el paquete` : `${icon("check")}Aplicar en mi Kobo`, "primary", () => applyNow(sel)]]);
   } catch (e) {
     dialog("No se pudo preparar", "", `<div class="finding critical">${icon("x-circle")}<div class="body">${esc(e.message)}</div></div>`, [["Cerrar", "primary", () => dlg.close()]]);
   }
@@ -944,10 +1202,11 @@ async function applyNow(sel = state.selection) {
     if (main) { state.selection = {}; state.uninstall.clear(); state.step = 1; state.profile = null; state.open.clear(); }
     else Object.keys(sel).forEach(id => { if (state.lib[id] === sel[id]) delete state.lib[id]; });
     renderActionBar();
+    if (res.zip) { zipDone(res); return; }
     const tips = (res.log || []).filter(l => /^(Activa|Reinicia|Ábre|Nickel lo importará|Empareja)/.test(l));
     dialog("¡Listo!", `${res.changes.length} cambios aplicados con respaldo`, `
       <div class="health ok" style="margin-top:0">${icon("check-circle")}<div><b>Instalación completa</b><div class="small">Todo quedó respaldado en tu computador.</div></div></div>
-      ${res.needs_reboot ? `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo.</li><li>El Kobo instala las mejoras y <b>se reinicia solo</b> (1 a 2 minutos).</li><li>Abajo verás una pestaña nueva con tus atajos.</li></ol>` : ""}
+      ${res.needs_reboot ? `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo.</li><li>El Kobo instala las mejoras y <b>se reinicia solo</b> (1 a 2 minutos).</li><li>${res.results.some(r => r.id === "nm.menu" && r.ok) ? `Abajo verás la pestaña ${aioTab().replace("<b>", "<b class='tabchip'>")} con tus atajos.` : "Listo para leer."}</li></ol>` : ""}
       ${tips.map(l => `<div class="finding info">${icon("info")}<div class="body small">${esc(l)}</div></div>`).join("")}`,
       [["Cerrar", "", () => { dlg.close(); refresh(); go("home"); }], [`${icon("eject")}Expulsar Kobo`, "primary", eject]]);
   } catch (e) {
@@ -956,7 +1215,31 @@ async function applyNow(sel = state.selection) {
       [["Ver respaldos", "", () => { dlg.close(); go("backups"); }], ["Cerrar", "primary", () => dlg.close()]]);
   }
 }
+function download(bytes, name, type) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([bytes], { type })); a.download = name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+function zipDone(res) {
+  const n = res.sync.length;
+  dialog("Descarga el paquete para tu Kobo", `${n} archivo${n === 1 ? "" : "s"} en un solo KoboRoot.tgz`, `
+    <ol class="steps">
+      <li><b>Descarga KoboRoot.tgz</b> con el botón de abajo. No lo descomprimas.</li>
+      <li><b>Cópialo dentro de la carpeta .kobo</b> de la unidad KOBOeReader. Es una carpeta oculta: en Mac presiona Cmd + Mayús + . en Finder; en Windows activa «Elementos ocultos».</li>
+      <li><b>Expulsa el Kobo.</b> Instala todo y se reinicia solo (1 a 2 minutos).</li>
+    </ol>
+    <p class="tiny muted" style="margin:0 0 10px">Para preparar otro paquete, vuelve a conectar el Kobo después de reiniciarlo: así Kobo AIO parte de lo que realmente tiene.</p>
+    ${res.backupZip ? `<div class="finding info">${icon("info")}<div class="body small">Guarda también el respaldo: trae los archivos originales que se reemplazan, por si quieres volver atrás. Queda en tu computador, no lo copies al Kobo.</div></div>` : ""}`,
+    [...(res.backupZip ? [["Descargar respaldo", "", () => download(res.backupZip, "Kobo-AIO-respaldo.zip", "application/zip")]] : []),
+     ["Cerrar", "", () => { dlg.close(); go("home"); }],
+     [`${icon("upload")}Descargar KoboRoot.tgz`, "primary", () => download(res.zip, "KoboRoot.tgz", "application/gzip")]]);
+}
 async function eject() {
+  if (state.web) {
+    dialog("Expulsa el Kobo desde tu sistema", "", `<div class="finding info">${icon("info")}<div class="body small">${esc(EJECT_WEB)}</div></div>`, [["Cerrar", "primary", () => dlg.close()]]);
+    return;
+  }
   try {
     const r = await api("/api/eject", { method: "POST", json: {} });
     dialog(r.ok ? "Puedes desconectar el Kobo" : "No se pudo expulsar", "", r.ok
@@ -966,7 +1249,7 @@ async function eject() {
 }
 
 function renderLibrary() {
-  const lib = state.modules.filter(m => m.id.startsWith("lib.") && m.compatible !== false);
+  const lib = state.modules.filter(m => m.id.startsWith("lib.") && (m.compatible !== false || needsDesktop(m)));
   $("#libTasks").innerHTML = lib.map(m => {
     const mt = meta(m);
     if (!state.lib[m.id]) state.lib[m.id] = defaults(m);
@@ -978,13 +1261,17 @@ function renderLibrary() {
         ${PREVIEW[m.id] ? `<div><button class="pvbtn" data-preview="${esc(m.id)}">Vista previa</button></div>` : ""}</div></div>
       ${fileOps.slice(0, 1).map(op => optionHtml(m, op)).join("")}
       ${other.length || fileOps.length > 1 ? `<details><summary>Opciones</summary><div class="optsbox">${[...fileOps.slice(1), ...other].map(op => optionHtml(m, op)).join("")}</div></details>` : ""}
-      <button class="btn primary send" data-send ${m.compatible === false || !state.device ? "disabled" : ""}>${icon("upload")}Enviar al Kobo</button>
+      ${needsDesktop(m) ? `<div class="finding info" style="margin:0">${icon("info")}<div class="body small">Necesita la app de escritorio: ${esc(m.engine_reason || "")}.</div></div>
+        <button class="btn send" data-desktop="${esc(m.engine_reason || "")}">${icon("upload")}Descargar la app</button>`
+      : `<button class="btn primary send" data-send ${m.compatible === false || !state.device ? "disabled" : ""}>${icon("upload")}Enviar al Kobo</button>`}
     </article>`;
   }).join("") || '<div class="empty">Conecta el motor local.</div>';
   $$("#libTasks [data-task]").forEach(card => {
     const id = card.dataset.task;
     bindOptions(card, id);
-    $("[data-send]", card).onclick = () => {
+    const sendBtn = $("[data-send]", card);
+    if (!sendBtn) return;
+    sendBtn.onclick = () => {
       const m = byId(id), sel = state.lib[id] || {};
       const needs = m.options.find(o => o.type === "files");
       if (needs && !(sel[needs.id] || []).length && !(id === "lib.dictionaries" && (sel.wiktionary || []).length)) { toast("Primero agrega archivos."); return; }
@@ -1041,7 +1328,12 @@ function pvScreen(inner, d, w = 150) {
   return `<div class="mini ${d && d.color ? "" : "bw"}" style="width:${w + 16}px;height:${h + 22}px"><div class="scr">${inner}</div></div>`;
 }
 const txt = (top, n, cls = "") => `<div class="pv-txt ${cls}" style="top:${top}%">${Array.from({ length: n }, (_, i) => `<i style="width:${cls ? 100 : 70 + (i * 37) % 30}%"></i>`).join("")}</div>`;
-const bar = (aio) => `<div class="pv-bar"><span>Inicio</span><span>Mis libros</span>${aio ? "<b>Kobo AIO</b>" : "<span>Descubrir</span>"}<span>Más</span></div>`;
+function aioTab() {   // the NickelMenu tab exactly as configured in "Atajos rápidos" (label + icon)
+  const m = byId("nm.menu"), o = (m && (state.selection["nm.menu"] || defaults(m))) || {};
+  const op = m && m.options.find(x => x.id === "tab_icon"), svg = op && op.icons ? (op.icons[o.tab_icon] || [])[1] || "" : "";
+  return `<b>${svg}${esc(o.tab_label || "Kobo AIO")}</b>`;
+}
+const bar = (aio) => `<div class="pv-bar"><span>Inicio</span><span>Mis libros</span>${aio ? aioTab() : "<span>Descubrir</span>"}<span>Más</span></div>`;
 const book = (x, y, w, h, c) => `<div class="pv-row" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;right:auto;background:${c};box-shadow:0 1px 2px rgba(0,0,0,.25)"></div>`;
 const PREVIEW = {
   "mod.nickelhome": d => [[`${book(8, 8, 36, 30, "#7a5a8a")}${book(52, 8, 40, 14, "#c9a35a")}${book(52, 24, 40, 14, "#5a8a9a")}<div class="pv-row" style="top:42%;height:14%;background:#d8cfbd"></div><div class="pv-row" style="top:60%;height:24%;background:#cfc6b2"></div>${bar()}`, "Antes: recomendaciones y avisos"],
@@ -1082,8 +1374,54 @@ function renderCredits() {
   }).join("");
 }
 
+if (new URLSearchParams(location.search).has("aiotest")) {
+  window.AIO_TEST = {
+    async opfsKobo(files) {   // {rel: string|Uint8Array} -> FileSystemDirectoryHandle with that tree
+      const root = await navigator.storage.getDirectory();
+      try { await root.removeEntry("mockkobo", { recursive: true }); } catch (_) {}
+      const dir = await root.getDirectoryHandle("mockkobo", { create: true });
+      for (const [rel, data] of Object.entries(files)) {
+        let d = dir; const parts = rel.split("/");
+        for (const p of parts.slice(0, -1)) d = await d.getDirectoryHandle(p, { create: true });
+        const w = await (await d.getFileHandle(parts.at(-1), { create: true })).createWritable();
+        await w.write(data); await w.close();
+      }
+      return dir;
+    },
+    connect: given => connectBrowser(given),
+    useBackupDir: h => { BR.backup = h; },
+    state, BR,
+  };
+  if (new URLSearchParams(location.search).get("aiotest") === "auto") (async () => {   // end-to-end runs (REA/CI)
+    const kobo = await AIO_TEST.opfsKobo({
+      ".kobo/version": "N428000000000,4.9.77,4.45.23697,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390\n",
+      ".kobo/Kobo/Kobo eReader.conf": "[FeatureSettings]\nExcludeSyncFolders=((?!kobo|adobe).+|([^.][^/]*/)+.+)\n",
+      "Libros/Prueba.epub": new Uint8Array(64) });
+    const root = await navigator.storage.getDirectory();
+    BR.backup = await root.getDirectoryHandle("backups-test", { create: true });
+    await connectBrowser({ handle: kobo });
+    document.body.dataset.aiotest = state.device ? "connected" : "failed";
+  })().catch(e => { document.body.dataset.aiotest = "error: " + e.message; });
+}
 connect();
+let desktopOffered = false, ticks = 0;
 setInterval(() => {
+  ticks++;
+  if (!state.helper && !state.web && ticks > 12 && ticks % 3) return;   // after 1 min, probe every 15 s
+  if (state.web) {
+    if (!desktopOffered && HELPER) fetch(HELPER + "/api/status").then(r => r.ok ? r.json() : null).then(st => {
+      if (!st || desktopOffered) return;
+      desktopOffered = true;
+      dialog("Kobo AIO de escritorio está abierto", "Puedes usar todas las funciones",
+        '<p class="small" style="margin-top:0">Detecté la app en este computador. ¿Cambiamos a ella? Lo que ya aplicaste queda igual.</p>',
+        [["Seguir en el navegador", "", () => dlg.close()], [`${icon("check")}Usar la app`, "primary", () => {
+          dlg.close(); state.web = null; state.device = null;
+          if (BR.worker) { BR.worker.terminate(); BR.worker = null; }
+          connect();
+        }]]);
+    }).catch(() => {});
+    return;
+  }
   if (!state.helper) { connect(); return; }
   api("/api/devices").then(d => { if ((d.length > 0) !== !!state.device) refresh(); }).catch(() => connect());
 }, 5000);

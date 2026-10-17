@@ -38,7 +38,12 @@ def catalog(dev: KoboDevice | None = None) -> list[dict]:
 def demo_catalog() -> dict:
     """Device-less catalog shipped as web/catalog.json, so the page can be explored before installing anything."""
     from . import __version__
-    return {"version": __version__, "device": None, "modules": catalog(None), "installed": {}}
+    from .web import ENGINE_ONLY
+    items = catalog(None)
+    for it in items:
+        if it["id"] in ENGINE_ONLY:
+            it["engine_only"], it["engine_reason"] = True, ENGINE_ONLY[it["id"]]
+    return {"version": __version__, "device": None, "modules": items, "installed": {}}
 
 
 def _really_installed(installed: dict, dev: KoboDevice) -> dict:

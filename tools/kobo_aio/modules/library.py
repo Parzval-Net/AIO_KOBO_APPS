@@ -17,15 +17,25 @@ from PIL import Image, ImageOps
 
 from ..comics import PANELS, SUPPORTED_HELP, ComicOptions, convert, expand_inputs
 from ..comics import safe_title
-from ..core import AioError, Artifact, Module, Option, download, register
+from ..core import AioError, Artifact, Module, Option, download, host_key, install_tool, register
 from ..txn import safe_component
 from ._util import ONBOARD
 
+_KP = "https://github.com/pgaskin/kepubify/releases/download/v4.0.4/"
+# host_key() -> official kepubify 4.0.4 build (hashed locally; GitHub publishes no digests for this release).
 KEPUBIFY = {
-    "arm64": Artifact("https://github.com/pgaskin/kepubify/releases/download/v4.0.4/kepubify-darwin-arm64",
-                      "6467d44439ee899113c7f710b509ef9e5ce65e8df711c85192b9ea5b683594b7", "kepubify-darwin-arm64"),
-    "x86_64": Artifact("https://github.com/pgaskin/kepubify/releases/download/v4.0.4/kepubify-darwin-64bit",
-                       "851afab0b83ecaf11f6965c901483eed3e74a6b41a3ab0a68f7321bc48bac4a3", "kepubify-darwin-64bit"),
+    "darwin-arm64": Artifact(_KP + "kepubify-darwin-arm64",
+                             "6467d44439ee899113c7f710b509ef9e5ce65e8df711c85192b9ea5b683594b7", "kepubify-darwin-arm64"),
+    "darwin-x86_64": Artifact(_KP + "kepubify-darwin-64bit",
+                              "851afab0b83ecaf11f6965c901483eed3e74a6b41a3ab0a68f7321bc48bac4a3", "kepubify-darwin-64bit"),
+    "linux-x86_64": Artifact(_KP + "kepubify-linux-64bit",
+                             "37d7628d26c5c906f607f24b36f781f306075e7073a6fe7820a751bb60431fc5", "kepubify-linux-64bit"),
+    "linux-arm64": Artifact(_KP + "kepubify-linux-arm64",
+                            "5a15b8f6f6a96216c69330601bca29638cfee50f7bf48712795cff88ae2d03a3", "kepubify-linux-arm64"),
+    "windows-x86_64": Artifact(_KP + "kepubify-windows-64bit.exe",
+                               "f3dee3ece063329661fef474262fe403812335bf1676eab35b672565bf195738", "kepubify-windows-64bit.exe"),
+    "windows-arm64": Artifact(_KP + "kepubify-windows-arm64.exe",
+                              "0111c0896c4a82b5ba431768e42870993c8fa44225b10d79691fadf013d13565", "kepubify-windows-arm64.exe"),
 }
 SCREENSAVER = Artifact("https://github.com/redphx/nickel-screensaver/releases/download/v1.3.1/KoboRoot.tgz",
                        "4db0c61a31b2986aa692f5d02408716f5b2b4642b3597cceb5de765c36790d69", "KoboRoot.tgz", 27520)
@@ -99,15 +109,10 @@ register(Module(
 
 # -- EPUB -> KEPUB -------------------------------------------------------------
 def _kepubify_bin(ctx) -> Path:
-    art = KEPUBIFY["arm64" if platform.machine() == "arm64" else "x86_64"]
-    data = ctx.fetch(art)
-    dst = Path.home() / "Kobo-AIO" / "bin" / art.filename
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    if not dst.exists() or dst.read_bytes() != data:
-        dst.write_bytes(data)
-        dst.chmod(0o755)
-        subprocess.run(["xattr", "-d", "com.apple.quarantine", str(dst)], capture_output=True)
-    return dst
+    art = KEPUBIFY.get(host_key())
+    if art is None:
+        raise AioError(f"No hay kepubify para tu sistema ({host_key()}). Desactiva «Convertir a KEPUB».")
+    return install_tool(ctx, art)
 
 
 def _books_apply(mod, ctx, opts):

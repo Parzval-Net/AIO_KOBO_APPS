@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import shutil
@@ -601,6 +602,224 @@ class ModelAwarenessTests(TempKobo):
         (self.root / ".adds/nickel-home/config").write_text("nhm_enabled:1\n")
         engine.apply(parse_version_file(self.root), {}, ["mod.nickelhome"], offline=True)
         self.assertTrue((self.root / ".adds/nickel-home/uninstall").exists())  # nh_info.uninstall_flag (REA)
+
+
+class WebModeTests(TempKobo):
+    """Browser mode (kobo_aio.web) in plain CPython: same engine, in-memory mirror, lazy device reads."""
+
+    def setUp(self):
+        super().setUp()
+        from kobo_aio import checks, core, web
+        from kobo_aio.modules import library
+        self.web, self.core = web, core
+        self._saved = (web.ROOT, web.INBOX, web.AIO_HOME, core.CACHE_DIR, core.Context.fetch, core.download,
+                       library.download, checks.check_space, txnmod.LAZY_LOADER)
+        mem = self.tmp / "mem"
+        web.ROOT, web.AIO_HOME = mem / "kobo", mem / "home" / "Kobo-AIO"
+        web.INBOX, core.CACHE_DIR = web.AIO_HOME / "inbox", web.AIO_HOME / "cache"
+        txnmod.HOST_BACKUP_ROOT = web.AIO_HOME / "backups"
+        (self.root / ".adds" / "nm").mkdir(parents=True)
+        (self.root / ".adds" / "nm" / "mine").write_text("menu_item :main :Mio :cmd_spawn :true\n")
+        (self.root / ".adds" / "koreader").mkdir()
+        (self.root / ".adds" / "koreader" / "big.bin").write_bytes(b"k" * 2048)
+        self.loaded, self.fetched = [], []
+        self.artifacts: dict[str, bytes] = {}
+
+    def tearDown(self):
+        from kobo_aio import checks, core, web
+        from kobo_aio.modules import library
+        (web.ROOT, web.INBOX, web.AIO_HOME, core.CACHE_DIR, core.Context.fetch, core.download,
+         library.download, checks.check_space, txnmod.LAZY_LOADER) = self._saved
+        super().tearDown()
+
+    def _loader(self, rel):
+        self.loaded.append(rel)
+        return (self.root / rel).read_bytes()
+
+    def _fetcher(self, url):
+        self.fetched.append(url)
+        if url not in self.artifacts:
+            raise OSError("404")
+        return self.artifacts[url]
+
+    def mount(self):
+        entries = [[str(p.relative_to(self.root)), -1 if p.is_dir() else p.stat().st_size]
+                   for p in sorted(self.root.rglob("*"))]
+        return json.loads(self.web.mount(json.dumps(entries), self._loader, self._fetcher, "artifacts/"))
+
+    def sync(self, ops):
+        """What aio-worker.js does after a successful run: mirror the changed paths onto the device."""
+        for o in ops:
+            dst = self.root / o["rel"]
+            if o["op"] == "write":
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_bytes((self.web.ROOT / o["rel"]).read_bytes())
+            elif dst.exists():
+                dst.unlink()
+
+    def test_mount_is_lazy(self):
+        dev = self.mount()
+        self.assertEqual(dev["name"], "Kobo Libra Colour")
+        self.assertIn(".kobo/Kobo/Kobo eReader.conf", self.loaded)
+        self.assertIn(".adds/nm/mine", self.loaded)
+        for rel in ("Verne, Julio/Viaje.kepub.epub", ".kobo/KoboReader.sqlite", ".adds/koreader/big.bin"):
+            self.assertNotIn(rel, self.loaded)
+            self.assertEqual((self.web.ROOT / rel).stat().st_size, 0)   # placeholder until needed
+        data = txnmod.Transaction(self.web.ROOT, "S", dry_run=True).read_bytes(".adds/koreader/big.bin")
+        self.assertEqual(data, b"k" * 2048)
+        json.loads(self.web.doctor_json())
+        self.assertIn(".kobo/KoboReader.sqlite", self.loaded)
+        self.assertNotIn("Verne, Julio/Viaje.kepub.epub", self.loaded)
+
+    def test_apply_sync_and_rollback(self):
+        self.mount()
+        original = (self.root / ".kobo/Kobo/Kobo eReader.conf").read_bytes()
+        plan = json.loads(self.web.run_json("plan", json.dumps({"conf.exclude_sync": {}})))
+        self.assertTrue(plan["dry_run"])
+        res = json.loads(self.web.run_json("apply", json.dumps({"conf.exclude_sync": {}})))
+        self.assertEqual((self.root / ".kobo/Kobo/Kobo eReader.conf").read_bytes(), original)  # device untouched
+        ops = {o["rel"]: o["op"] for o in res["sync"]}
+        self.assertEqual(ops[".kobo/Kobo/Kobo eReader.conf"], "write")
+        self.assertIn(".adds/kobo-aio/state.json", ops)
+        backup = Path(res["backup_dir"])
+        self.assertEqual((backup / "files/.kobo/Kobo/Kobo eReader.conf").read_bytes(), original)
+        self.assertTrue(res["backup_rel"].startswith("backups/"))
+        self.sync(res["sync"])
+        self.assertIn(EXCLUDE_SYNC_RAW, (self.root / ".kobo/Kobo/Kobo eReader.conf").read_text())
+        bk = json.loads(self.web.backups_json())
+        self.assertEqual(len(bk), 1)
+        preview = json.loads(self.web.rollback_json(bk[0]["path"], True))
+        self.assertTrue(preview["actions"])
+        self.assertEqual(preview["sync"], [])
+        self.assertIn(EXCLUDE_SYNC_RAW, (self.web.ROOT / ".kobo/Kobo/Kobo eReader.conf").read_text())  # untouched
+        rb = json.loads(self.web.rollback_json(bk[0]["path"]))
+        self.sync(rb["sync"])
+        self.assertEqual((self.root / ".kobo/Kobo/Kobo eReader.conf").read_bytes(), original)
+        self.assertFalse((self.root / ".adds/kobo-aio/state.json").exists())
+
+    def test_artifacts_same_origin_and_pinned(self):
+        from kobo_aio.modules import _util
+        self.mount()
+        good = tgz({"usr/local/Kobo/imageformats/libnickelhome.so": b"ELF"})
+        nm = tgz({"usr/local/Kobo/imageformats/libnm.so": b"ELF", "mnt/onboard/.adds/nm/doc": b"doc"})
+        old, old_nm = _util.ART["nickelhome"], _util.ART["nickelmenu"]
+        _util.ART["nickelhome"] = self.core.Artifact(old.url, hashlib.sha256(good).hexdigest(), "KoboRoot.tgz", len(good))
+        _util.ART["nickelmenu"] = self.core.Artifact(old_nm.url, hashlib.sha256(nm).hexdigest(), "KoboRoot.tgz", len(nm))
+        self.artifacts[f"artifacts/{_util.ART['nickelmenu'].sha256[:16]}-KoboRoot.tgz"] = nm
+        try:
+            url = f"artifacts/{_util.ART['nickelhome'].sha256[:16]}-KoboRoot.tgz"
+            self.artifacts[url] = b"tampered"
+            with self.assertRaisesRegex(AioError, "SHA-256"):
+                self.web.run_json("plan", json.dumps({"mod.nickelhome": {}}))
+            self.artifacts[url] = good
+            res = json.loads(self.web.run_json("apply", json.dumps({"mod.nickelhome": {}})))
+            self.assertIn(".kobo/KoboRoot.tgz", [o["rel"] for o in res["sync"]])
+            self.assertTrue(all(u.startswith("artifacts/") for u in self.fetched))
+        finally:
+            _util.ART["nickelhome"], _util.ART["nickelmenu"] = old, old_nm
+
+    def test_guards(self):
+        self.mount()
+        with self.assertRaisesRegex(AioError, "computador"):
+            self.web.run_json("plan", json.dumps({"fw.kobopatch": {}}))
+        with self.assertRaisesRegex(AioError, "no permitido"):
+            self.web.run_json("plan", json.dumps({"lib.comics": {"files": ["/etc/passwd"]}}))
+        cat = {m["id"]: m for m in json.loads(self.web.catalog_json())["modules"]}
+        self.assertFalse(cat["maint.backup"]["compatible"])
+        self.assertTrue(cat["maint.backup"]["engine_only"])
+        with self.assertRaisesRegex(AioError, "borrar"):
+            self.web.export_koboroot(json.dumps([{"rel": ".adds/nm/mine", "op": "delete"}]))
+        with self.assertRaises(txnmod.SafetyError):
+            self.web.export_koboroot(json.dumps([{"rel": ".kobo/KoboReader.sqlite", "op": "write"}]))
+        res = json.loads(self.web.run_json("apply", json.dumps({"maint.no_spotlight": {}, "conf.exclude_sync": {}})))
+        with tarfile.open(fileobj=io.BytesIO(self.web.export_koboroot(json.dumps(res["sync"]))), mode="r:gz") as tf:
+            names = tf.getnames()
+            conf = tf.extractfile("mnt/onboard/.kobo/Kobo/Kobo eReader.conf").read().decode()
+        self.assertIn("mnt/onboard/.metadata_never_index", names)
+        self.assertIn(EXCLUDE_SYNC_RAW, conf)
+        self.assertTrue(all(n.startswith("mnt/onboard/") for n in names))
+        bz = zipfile.ZipFile(io.BytesIO(self.web.export_backup_zip(res["backup_dir"])))
+        self.assertIn(".kobo/Kobo/Kobo eReader.conf", bz.namelist())
+        up = json.loads(self.web.save_upload("../../evil name.cbz", b"x"))["path"]
+        self.assertTrue(Path(up).is_relative_to(self.web.INBOX))
+
+
+class SiteBuildTests(unittest.TestCase):
+    def test_site_hosts_every_browser_artifact(self):
+        """Any pinned download a browser-mode module can fetch must be published with the site (no CORS)."""
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
+        import build_site
+        from kobo_aio import web
+        from kobo_aio.core import Artifact
+        from kobo_aio.modules import _util, apps, firmware, fonts, library, maintenance, menu, settings, system
+
+        def arts(obj):
+            if isinstance(obj, Artifact):
+                yield obj
+            elif isinstance(obj, dict):
+                for v in obj.values():
+                    yield from arts(v)
+            elif isinstance(obj, (list, tuple)):
+                for v in obj:
+                    yield from arts(v)
+
+        engine_only = {a.sha256 for a in arts(vars(firmware))} | {a.sha256 for a in arts(library.KEPUBIFY)}
+        engine_only.add(library.AUDIOBOOK_PLUGIN.sha256)
+        reachable = {a.sha256 for mod in (_util, apps, fonts, library, maintenance, menu, settings, system)
+                     for a in arts(vars(mod))} - engine_only
+        hosted = {a.sha256 for a in build_site.web_artifacts()}
+        self.assertEqual(reachable, hosted)
+        self.assertIn("fw.kobopatch", web.ENGINE_ONLY)
+        self.assertTrue(all(len(sha) == 64 for sha, _ in build_site.PYODIDE_FILES.values()))
+        z = zipfile.ZipFile(io.BytesIO(build_site.engine_zip()))
+        self.assertIn("kobo_aio/web.py", z.namelist())
+        self.assertFalse(any("__pycache__" in n for n in z.namelist()))
+
+
+class TabIconTests(TempKobo):
+    def test_icons_match_nickel_format(self):
+        """Nickel's own tab icons (main_nav_*.png in 4.45) are 50x50 grayscale+alpha, black ink."""
+        from PIL import Image
+        from kobo_aio import tabicons
+        for k in tabicons.ICONS:
+            for active in (False, True):
+                im = Image.open(io.BytesIO(tabicons.render_png(k, active)))
+                self.assertEqual((im.size, im.mode), ((50, 50), "LA"))
+                self.assertEqual(im.getchannel("L").getextrema(), (0, 0))
+                lo, hi = im.getchannel("A").getextrema()
+                self.assertEqual(hi, 255)
+            self.assertTrue(tabicons.svg(k, True).startswith("<svg"))
+        idle = sum(Image.open(io.BytesIO(tabicons.render_png("star", False))).getchannel("A").getdata())
+        filled = sum(Image.open(io.BytesIO(tabicons.render_png("star", True))).getchannel("A").getdata())
+        self.assertGreater(filled, idle)   # active = filled shape
+
+    def test_menu_writes_icon_and_label(self):
+        from PIL import Image
+        (self.root / ".adds" / "nm").mkdir(parents=True)
+        (self.root / ".adds" / "nm" / "doc").write_text("doc")
+        dev = parse_version_file(self.root)
+        from kobo_aio.modules import menu
+        t = txnmod.Transaction(self.root, "S")
+        from kobo_aio.core import Context
+        ctx = Context(device=dev, txn=t)
+        mod = engine.REGISTRY["nm.menu"]
+        menu._menu_apply(mod, ctx, mod.resolved_options({"tab_label": "Mis atajos", "tab_icon": "bolt"}))
+        cfg = (self.root / ".adds/nm/kobo-aio-menu").read_text()
+        self.assertIn("experimental :menu_main_15505_label :Mis atajos", cfg)
+        self.assertIn("experimental :menu_main_15505_icon :/mnt/onboard/.adds/kobo-aio/tab-icon.png", cfg)
+        self.assertIn("experimental :menu_main_15505_icon_active :/mnt/onboard/.adds/kobo-aio/tab-icon-active.png", cfg)
+        self.assertFalse(any(p.suffix == ".png" for p in (self.root / ".adds/nm").iterdir()))  # nm parses that dir
+        self.assertEqual(lint_dir(self.root / ".adds/nm", self.root), [])
+        menu._menu_apply(mod, ctx, mod.resolved_options({"tab_label": "Atajos rápidos"}))
+        raw = (self.root / ".adds/nm/kobo-aio-menu").read_bytes()
+        self.assertIn(b":menu_main_15505_label :Atajos r\xe1pid", raw)   # Latin-1, as NickelMenu reads it
+        own = self.tmp / "logo.png"
+        Image.new("RGB", (300, 120), "white").save(own)
+        img = Image.open(own); img.paste((20, 20, 20), (40, 30, 260, 90)); img.save(own)
+        menu._menu_apply(mod, ctx, mod.resolved_options({"tab_icon_file": [str(own)]}))
+        im = Image.open(self.root / ".adds/kobo-aio/tab-icon.png")
+        self.assertEqual((im.size, im.mode), ((50, 50), "LA"))
+        self.assertGreater(im.getchannel("A").getextrema()[1], 200)
 
 
 class WebCatalogTests(unittest.TestCase):

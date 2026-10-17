@@ -43,6 +43,9 @@ AUDIO_EXTS = (".mp3z", ".mp3", ".m4b")
 AUDIO_FOLDER = "Audiobooks"   # audio files may only be added under this top-level folder
 
 HOST_BACKUP_ROOT = Path.home() / "Kobo-AIO" / "backups"
+# Browser mode (web.py) mirrors the Kobo with empty placeholders and loads a file's real content the first time a
+# transaction reads or backs it up. None on the desktop, where the device is a mounted volume.
+LAZY_LOADER = None
 
 
 class AioError(RuntimeError):
@@ -165,6 +168,8 @@ class Transaction:
     def _first_touch(self, rel: str) -> tuple[bool, str]:
         """Record (and back up) the pre-transaction state of a path the first time it is touched."""
         if rel not in self._orig:
+            if LAZY_LOADER is not None:
+                LAZY_LOADER(rel)
             p = self._abs(rel)
             existed = p.is_file()
             sha = sha256_file(p) if existed else ""
@@ -180,6 +185,8 @@ class Transaction:
         rel = _norm(rel)
         if rel in self.staged:
             return self.staged[rel]
+        if LAZY_LOADER is not None:
+            LAZY_LOADER(rel)
         p = self._abs(rel)
         return p.read_bytes() if p.is_file() else None
 

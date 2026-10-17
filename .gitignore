@@ -12,3 +12,5 @@ dist/Ink-boy-Kobo-Bundle.zip
 
 # Herramienta local de escritura cruda sobre el bloque del Kobo: no se publica
 src/tools/kobo_fat32_recover.cpp
+_site/
+_app/

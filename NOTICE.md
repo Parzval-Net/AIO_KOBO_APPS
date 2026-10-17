@@ -37,3 +37,17 @@ Se descargan desde sus publicaciones oficiales y se verifican por SHA-256. Cada 
 - KoboPatch Web UI (MIT): referencia para versiones fijadas, fusión de `KoboRoot.tgz`, validación de parches y scripts de alternancia (reimplementados).
 - NickelMenu Builder (MIT, Parzval-Net): biblioteca de acciones adaptada y validada contra la documentación oficial de NickelMenu.
 - KCC (ISC): referencia del flujo de conversión de cómics (reimplementado con Pillow).
+
+## Archivos publicados con el modo navegador
+
+El sitio de GitHub Pages (armado por `tools/build_site.py`) aloja copias sin modificar de estos archivos, porque GitHub Releases no permite que una página web los descargue directamente. Cada uno se verifica por SHA-256 y conserva su licencia original:
+
+- Pyodide 0.27.7 (MPL-2.0) con Pillow (MIT-CMU) y sqlite3 (dominio público): https://pyodide.org
+- NickelMenu (MIT), NickelClock (MIT), NickelHome, NickelTypeFix, NickelDissolve y NickelModManager (MIT), nickel-screensaver (MIT)
+- KOReader (AGPL-3.0, código en https://github.com/koreader/koreader) y Cadmus (AGPL-3.0, código en https://github.com/OGKevin/cadmus)
+- Plugins de KOReader: Project: Title (AGPL-3.0), App Store (GPL-3.0), kobo.koplugin (GPL-3.0), Hardcover (MIT), LocalSend (MIT)
+- ebook-fonts (cada familia con su licencia, en su mayoría OFL-1.1): https://github.com/nicoverbruggen/ebook-fonts
+
+## App de escritorio
+
+La app (`packaging/kobo-aio.spec`, compilada por `.github/workflows/release.yml`) incluye CPython (PSF License), Pillow (MIT-CMU) y PyMuPDF (AGPL-3.0; el código fuente completo de Kobo AIO está publicado en este repositorio) mediante PyInstaller (GPL-2.0 con excepción para el empaquetado).

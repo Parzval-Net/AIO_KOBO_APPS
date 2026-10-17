@@ -1,0 +1,64 @@
+name: release
+# Desktop app (Python included, nothing to install) for Windows, macOS and Linux.
+# Push a tag vX.Y.Z to publish; run manually to only build and test.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, asset: Kobo-AIO-windows-x64.exe }
+          - { os: macos-14, asset: Kobo-AIO-macos-arm64.zip }
+          - { os: macos-15-intel, asset: Kobo-AIO-macos-x64.zip }
+          - { os: ubuntu-22.04, asset: Kobo-AIO-linux-x64.tar.gz }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -r packaging/requirements.txt
+      - run: python -m unittest discover -s tests -p 'test_kobo_aio.py'
+      - run: pyinstaller packaging/kobo-aio.spec --noconfirm --distpath _app/dist --workpath _app/build
+      - name: Smoke test (catalog without a Kobo)
+        run: |
+          bin=_app/dist/Kobo-AIO; [ -f "$bin.exe" ] && bin="$bin.exe"
+          "$bin" catalog > catalog.json
+          python -c "import json; assert len(json.load(open('catalog.json'))) > 20"
+      - name: Package
+        run: |
+          mkdir -p out
+          case "${{ runner.os }}" in
+            Windows) cp _app/dist/Kobo-AIO.exe "out/${{ matrix.asset }}" ;;
+            macOS)   mv _app/dist/Kobo-AIO "_app/dist/Kobo AIO" && ditto -c -k --keepParent "_app/dist/Kobo AIO" "out/${{ matrix.asset }}" ;;
+            Linux)   tar -czf "out/${{ matrix.asset }}" -C _app/dist Kobo-AIO ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - run: cd out && sha256sum Kobo-AIO-* > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --title "Kobo AIO ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" out/* -R "$GITHUB_REPOSITORY" --clobber

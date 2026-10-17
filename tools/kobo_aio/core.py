@@ -5,6 +5,10 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
+import platform
+import subprocess
+import sys
 import tarfile
 import urllib.request
 import zipfile
@@ -31,10 +35,14 @@ class Option:
     default: object = False
     choices: list = field(default_factory=list)   # [(value, label)]
     help: str = ""
+    icons: dict = field(default_factory=dict)     # choice value -> [svg idle, svg active] (shown as a picker)
 
     def to_dict(self) -> dict:
-        return {"id": self.id, "label": self.label, "type": self.type, "default": self.default,
-                "choices": [{"value": v, "label": l} for v, l in self.choices], "help": self.help}
+        d = {"id": self.id, "label": self.label, "type": self.type, "default": self.default,
+             "choices": [{"value": v, "label": l} for v, l in self.choices], "help": self.help}
+        if self.icons:
+            d["icons"] = self.icons
+        return d
 
 
 @dataclass
@@ -89,6 +97,46 @@ class Context:
         self.firmware_parts.append((label, data))
 
 
+def host_key() -> str:
+    """'<os>-<arch>' of the computer running the engine: darwin|linux|windows - arm64|x86_64."""
+    osname = {"darwin": "darwin", "win32": "windows", "cygwin": "windows"}.get(sys.platform, "linux")
+    m = platform.machine().lower()
+    arch = "arm64" if m in ("arm64", "aarch64", "armv8l", "armv8b") else "x86_64" if m in ("x86_64", "amd64", "x64") else m
+    return f"{osname}-{arch}"
+
+
+def host_os() -> str:
+    return host_key().split("-", 1)[0]
+
+
+INSTALL_HINTS = {
+    "unar": {"darwin": "en Terminal: brew install unar", "linux": "en una terminal: sudo apt install unar (o el gestor de tu distribución)",
+             "windows": "instala 7-Zip desde https://www.7-zip.org"},
+    "ffmpeg": {"darwin": "en Terminal: brew install ffmpeg", "linux": "en una terminal: sudo apt install ffmpeg",
+               "windows": "en PowerShell: winget install Gyan.FFmpeg"},
+    "pymupdf": {"darwin": "en Terminal: pip3 install pymupdf", "linux": "en una terminal: pip3 install pymupdf",
+                "windows": "en PowerShell: py -m pip install pymupdf"},
+}
+
+
+def install_hint(tool: str) -> str:
+    return INSTALL_HINTS[tool][host_os()]
+
+
+def install_tool(ctx: "Context", art: Artifact) -> Path:
+    """Put a pinned native tool in ~/Kobo-AIO/bin, executable on this OS, and return its path."""
+    data = ctx.fetch(art)
+    dst = Path.home() / "Kobo-AIO" / "bin" / art.filename
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if not dst.exists() or dst.read_bytes() != data:
+        dst.write_bytes(data)
+        if host_os() != "windows":
+            dst.chmod(0o755)
+        if host_os() == "darwin":
+            subprocess.run(["xattr", "-d", "com.apple.quarantine", str(dst)], capture_output=True)
+    return dst
+
+
 def download(url: str, timeout: int = 180) -> bytes:
     """HTTPS GET with full certificate verification.
 
@@ -97,7 +145,6 @@ def download(url: str, timeout: int = 180) -> bytes:
     Integrity is still enforced by the caller through SHA-256 pinning.
     """
     import ssl
-    import subprocess
 
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     errors = []

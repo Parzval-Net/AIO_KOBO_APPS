@@ -21,6 +21,8 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from .core import install_hint
+
 AUDIO_EXTS = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav"}
 COVER_NAMES = ("cover", "folder", "front", "portada")
 
@@ -323,7 +325,7 @@ def build_mp3z(book: AudiobookInput, progress=lambda m: None, part_minutes: int 
 def _build_ffmpeg(book: AudiobookInput, safe: str, cover: bytes | None, progress) -> tuple[str, bytes, str]:
     ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
-        raise RuntimeError("Para formatos distintos de MP3 instala ffmpeg: brew install ffmpeg")
+        raise RuntimeError(f"Para formatos distintos de MP3 hace falta ffmpeg: {install_hint('ffmpeg')}")
     with tempfile.TemporaryDirectory() as tmp:
         tmpd = Path(tmp)
         lst = tmpd / "list.txt"

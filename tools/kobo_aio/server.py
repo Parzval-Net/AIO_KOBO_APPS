@@ -16,6 +16,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -28,7 +29,9 @@ from .device import candidate_mounts, find_device, parse_version_file
 from .nickelmenu import lint_dir
 from .txn import list_backups, load_manifest, rollback
 
-WEB_DIR = Path(__file__).resolve().parents[2] / "web"
+# The desktop app (PyInstaller) unpacks web/ next to the code; from the repository it is two levels up.
+WEB_DIR = (Path(getattr(sys, "_MEIPASS", "")) / "web") if getattr(sys, "frozen", False) else \
+    Path(__file__).resolve().parents[2] / "web"
 INBOX = Path.home() / "Kobo-AIO" / "inbox"
 MAX_UPLOAD = 4 * 1024 ** 3
 ALLOWED_ORIGINS = {"https://parzval-net.github.io"} | {
@@ -42,6 +45,31 @@ def _device(root: str | None):
     if dev is None:
         raise AioError("No hay un Kobo conectado. Conéctalo por USB y toca «Conectar».")
     return dev
+
+
+def eject_volume(root: Path) -> tuple[bool, str]:
+    """Safely eject the Kobo on macOS, Linux or Windows. Returns (ok, message for the user)."""
+    if sys.platform == "darwin":
+        cmds = [["diskutil", "eject", str(root)]]
+    elif sys.platform == "win32":
+        drive = str(root)[:2]   # "E:"
+        script = f"(New-Object -ComObject Shell.Application).Namespace(17).ParseName('{drive}').InvokeVerb('Eject')"
+        cmds = [["powershell", "-NoProfile", "-NonInteractive", "-Command", script]]
+    else:
+        cmds = [["gio", "mount", "-u", str(root)], ["umount", str(root)]]
+    out = ""
+    for cmd in cmds:
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            out = str(exc)
+            continue
+        out = (proc.stdout + proc.stderr).strip()
+        if proc.returncode == 0:
+            if sys.platform == "win32" and (root / ".kobo").exists():
+                return False, "Windows no pudo expulsarlo: usa «Quitar hardware de forma segura» en la barra de tareas."
+            return True, out
+    return False, out or "No se pudo expulsar: hazlo desde tu sistema antes de desconectar el cable."
 
 
 def _check_file_options(selection: dict) -> None:
@@ -211,10 +239,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(202, {"job": jid})
             if url.path == "/api/eject":
                 dev = _device(root)
-                cmd = ["diskutil", "eject", str(dev.root)] if sys.platform == "darwin" else ["umount", str(dev.root)]
-                proc = subprocess.run(cmd, capture_output=True, text=True)
-                return self._json(200 if proc.returncode == 0 else 500,
-                                  {"ok": proc.returncode == 0, "output": (proc.stdout + proc.stderr).strip()})
+                ok, output = eject_volume(dev.root)
+                return self._json(200 if ok else 500, {"ok": ok, "output": output})
             self.send_error(404)
         except AioError as exc:
             self._json(409, {"error": str(exc)})
@@ -269,10 +295,28 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
+def _already_running(port: int) -> bool:
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/status", timeout=2) as r:
+            return "version" in json.loads(r.read() or b"{}")
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def serve(port: int = 8765, open_browser: bool = True) -> None:
-    httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}/"
-    print(f"Kobo AIO {__version__} listo en {url}  (Ctrl+C para salir)", flush=True)
+    try:
+        httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    except OSError:
+        if _already_running(port):   # double-clicked twice: just bring the UI back
+            print(f"Kobo AIO ya está abierto en {url}", flush=True)
+            if open_browser:
+                import webbrowser
+                webbrowser.open(url)
+            return
+        raise
+    print(f"Kobo AIO {__version__} listo en {url}", flush=True)
+    print("Deja esta ventana abierta mientras lo usas. Para salir, ciérrala (o Ctrl+C).", flush=True)
     if open_browser:
         try:
             import webbrowser

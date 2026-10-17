@@ -18,7 +18,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from ..core import AioError, Artifact, Module, Option, register
+from ..core import AioError, Artifact, Module, Option, host_key, install_tool, register
 
 KP_COMMIT = "be94f5b04bf4969b6a19025ac1972905bb7584c7"
 KP_RAW = f"https://raw.githubusercontent.com/nicoverbruggen/kobopatch-webui/{KP_COMMIT}/patches"
@@ -45,10 +45,22 @@ FIRMWARE = {
                                     "41ac8068fa216d7fad2d28431b082fdd07b6719a669c2745e11d8df17ec4ba0e",
                                     "kobo-update-4.45.23697.zip", 161697408),
 }
+_KPT = "https://github.com/pgaskin/kobopatch/releases/download/v0.16.0/"
+# host_key() -> official kobopatch 0.16.0 build (SHA-256 from the GitHub release digests). Windows on ARM runs the
+# x64 build through Microsoft's emulation; there is no native one.
 KOBOPATCH = {
-    "arm64": Artifact("https://github.com/pgaskin/kobopatch/releases/download/v0.16.0/kobopatch-darwin-arm64",
-                      "4e9b702676d12e457fc4d4d55de39108a746c4f51786af9a51cc05a89ef5f407", "kobopatch-darwin-arm64"),
+    "darwin-arm64": Artifact(_KPT + "kobopatch-darwin-arm64",
+                             "4e9b702676d12e457fc4d4d55de39108a746c4f51786af9a51cc05a89ef5f407", "kobopatch-darwin-arm64"),
+    "darwin-x86_64": Artifact(_KPT + "kobopatch-darwin-64bit",
+                              "e1087463b110392159ad5bdc0b623db989b4e0cebb3b9b9bf0546a16fdc8d9a2", "kobopatch-darwin-64bit"),
+    "linux-x86_64": Artifact(_KPT + "kobopatch-linux-64bit",
+                             "81d1abdb54d997127b822908c5e4a73dc6540024c9596a5a4c232a147cc5aa2d", "kobopatch-linux-64bit"),
+    "linux-arm64": Artifact(_KPT + "kobopatch-linux-arm64",
+                            "71bfc4f3c87450fba284df9bba39ae6b1a8c52e8f13fc64ac61fc1b2e9eaf9d3", "kobopatch-linux-arm64"),
+    "windows-x86_64": Artifact(_KPT + "koboptch-windows-64bit.exe",
+                               "811e2c36e457f2e037d8fd64cbd8230139c10bce986d801c7da210651bffeea5", "koboptch-windows-64bit.exe"),
 }
+KOBOPATCH["windows-arm64"] = KOBOPATCH["windows-x86_64"]
 SUPPORTED_MODELS = tuple(sorted({m for _, m in FIRMWARE}))
 SUPPORTED_FIRMWARES = tuple(sorted({f for f, _ in FIRMWARE}))
 
@@ -127,9 +139,9 @@ def _fw_apply(mod, ctx, opts):
                        f"Tu Kobo tiene {dev.firmware} ({dev.model_id}).")
     if not opts["confirm"]:
         raise AioError("Confirma que entiendes el riesgo (opción «Entiendo el riesgo») para parchear el firmware.")
-    machine = "arm64" if platform.machine() == "arm64" else None
+    machine = host_key() if host_key() in KOBOPATCH else None
     if opts["mode"] == "patch" and machine is None:
-        raise AioError("kobopatch para este Mac (Intel) no está fijado todavía; usa KoboPatch Web UI.")
+        raise AioError(f"No hay kobopatch para tu sistema ({host_key()}); usa KoboPatch Web UI.")
     ctx.progress("Preparando firmware oficial (162 MB, se guarda en caché)…")
     fw = ctx.fetch(FIRMWARE[key])
     originals = _original_binaries(fw)
@@ -158,13 +170,7 @@ def _fw_apply(mod, ctx, opts):
                      ", ".join(s.partition('::')[2] for s in selected))
         ctx.add_firmware("kobopatch (simulado)", b"")
         return
-    tool = Path.home() / "Kobo-AIO" / "bin" / KOBOPATCH[machine].filename
-    data = ctx.fetch(KOBOPATCH[machine])
-    tool.parent.mkdir(parents=True, exist_ok=True)
-    if not tool.exists() or tool.read_bytes() != data:
-        tool.write_bytes(data)
-        tool.chmod(0o755)
-        subprocess.run(["xattr", "-d", "com.apple.quarantine", str(tool)], capture_output=True)
+    tool = install_tool(ctx, KOBOPATCH[machine])
     with tempfile.TemporaryDirectory() as tmp:
         t = Path(tmp)
         (t / "src").mkdir()
