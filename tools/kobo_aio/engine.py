@@ -35,6 +35,12 @@ def catalog(dev: KoboDevice | None = None) -> list[dict]:
     return items
 
 
+def demo_catalog() -> dict:
+    """Device-less catalog shipped as web/catalog.json, so the page can be explored before installing anything."""
+    from . import __version__
+    return {"version": __version__, "device": None, "modules": catalog(None), "installed": {}}
+
+
 def _really_installed(installed: dict, dev: KoboDevice) -> dict:
     """state.json entries whose module still looks installed on the device (a firmware update can wipe mods)."""
     out = {}

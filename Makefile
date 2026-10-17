@@ -57,7 +57,7 @@ CORE_CPP_SRCS := \
 BUILD_DIR := build
 DIST_DIR  := dist/Kobo-InkBoy
 
-.PHONY: all host test aio-test matrix aio demo-roms kobo bundle auto-install installer-web clean
+.PHONY: all host test aio-test matrix catalog aio demo-roms kobo bundle auto-install installer-web clean
 
 all: host demo-roms test
 
@@ -91,6 +91,9 @@ test: host
 	@$(BUILD_DIR)/inkboy-sim --device clara --mode turbo --frames 30 \
 		--screenshot $(BUILD_DIR)/sim_clara_hd_turbo_a2.ppm \
 		$(DIST_DIR)/.adds/inkboy/roms/Kobo_Kaleido_Color_Demo.gbc
+
+catalog:
+	@cd tools && $(PYTHON) -m kobo_aio export-catalog ../web/catalog.json && echo "[AIO] web/catalog.json actualizado"
 
 aio-test:
 	@echo "[AIO] Running Kobo AIO test suite..."

@@ -45,6 +45,8 @@ def main(argv=None) -> int:
     sub.add_parser("detect")
     sub.add_parser("doctor")
     sub.add_parser("catalog")
+    ex = sub.add_parser("export-catalog", help="Catálogo sin Kobo para el modo exploración de la web")
+    ex.add_argument("out", type=Path)
     for name in ("plan", "apply"):
         p = sub.add_parser(name)
         p.add_argument("--select", help="ids de módulos separados por coma")
@@ -66,6 +68,9 @@ def main(argv=None) -> int:
         return 0
 
     out = lambda obj: print(json.dumps(obj, ensure_ascii=False, indent=2))  # noqa: E731
+    if args.cmd == "export-catalog":
+        args.out.write_text(json.dumps(engine.demo_catalog(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        return 0
     if args.cmd == "catalog":
         dev = find_device(args.root)
         out(engine.catalog(dev))

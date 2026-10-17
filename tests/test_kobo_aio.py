@@ -603,5 +603,14 @@ class ModelAwarenessTests(TempKobo):
         self.assertTrue((self.root / ".adds/nickel-home/uninstall").exists())  # nh_info.uninstall_flag (REA)
 
 
+class WebCatalogTests(unittest.TestCase):
+    def test_demo_catalog_in_sync(self):
+        """web/catalog.json feeds the explore mode on GitHub Pages; regenerate it with `make catalog`."""
+        from kobo_aio import engine
+        shipped = json.loads((Path(__file__).resolve().parent.parent / "web" / "catalog.json").read_text(encoding="utf-8"))
+        self.assertEqual(shipped, json.loads(json.dumps(engine.demo_catalog(), ensure_ascii=False)),
+                         "web/catalog.json desactualizado: ejecuta make catalog")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -114,6 +114,18 @@ code,kbd{font-family:var(--mono);font-size:.88em;background:var(--sunk);padding:
 .health>.ic{width:28px;height:28px}
 .health.ok>.ic{color:var(--ok)}.health.warn>.ic{color:var(--warn)}.health.critical>.ic{color:var(--err)}
 .tiles{display:grid;gap:12px;grid-template-columns:repeat(3,1fr);margin-top:16px}
+.eyebrow{margin:0 0 4px;font-size:13px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--accent)}
+.sect{margin-top:26px}
+.benefits{display:grid;gap:12px;grid-template-columns:repeat(4,1fr);margin-top:16px}
+@media (max-width:900px){.benefits{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.benefits{grid-template-columns:1fr}}
+.benefit{display:flex;gap:12px;align-items:flex-start;padding:16px;border-radius:14px;border:1px solid var(--rule);background:var(--surface)}
+.benefit .badge{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--sunk);flex:none}
+.benefit b{font-family:var(--serif);font-size:16.5px}.benefit p{margin:4px 0 0}
+.steps li.done::before{content:"✓";background:var(--ok);color:var(--surface)}
+.steps li.now b{color:var(--accent)}
+.explore{display:flex;gap:10px;align-items:flex-start;margin:16px 0 0;padding:12px 16px;border-radius:12px;background:var(--info-bg);font-size:15px}
+.explore .ic{margin-top:2px;color:var(--accent)}
 @media (max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
 @media (max-width:480px){.tiles{grid-template-columns:1fr}}
 .tile{display:flex;flex-direction:column;gap:6px;text-align:left;padding:16px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);cursor:pointer;min-height:118px}
@@ -305,33 +317,31 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
 </header>
 
 <div class="wrap" id="main" tabindex="-1">
-  <section id="setup" class="view hidden" aria-labelledby="hSetup">
-    <div class="card hero">
-      <div class="ereader off" aria-hidden="true"><div class="screen"><b>Kobo AIO</b><i></i><i></i><i></i><i></i></div></div>
-      <div class="stack">
-        <h2 id="hSetup">Mejora tu Kobo en minutos</h2>
-        <p class="muted" style="margin:0">Menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros y más. Todo se instala desde tu computador, con respaldo automático y vuelta atrás. Nada se sube a internet.</p>
-        <ol class="steps">
-          <li><b>Descarga Kobo AIO</b> · <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">ZIP</a> (o clona el repositorio)</li>
-          <li><b>Ábrelo:</b> en Mac, doble clic en <code>Kobo AIO.command</code> (la primera vez: clic derecho, Abrir). En Windows o Linux: <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code></li>
-          <li><b>Conecta tu Kobo</b> por USB y toca «Conectar» en su pantalla.</li>
-        </ol>
-        <div class="row"><button class="btn primary" id="retryBtn"><svg class="ic" aria-hidden="true"><use href="#i-usb"/></svg>Buscar de nuevo</button><a class="btn" href="http://127.0.0.1:8765/">Abrir la versión local</a></div>
-        <p class="tiny muted" style="margin:0">Requiere Python 3.9+ (el lanzador instala Pillow si falta). Si tu navegador bloquea la conexión desde esta página, usa «Abrir la versión local».</p>
-      </div>
-    </div>
-  </section>
+  <div class="explore hidden" id="explore" role="note"></div>
 
   <section class="view" data-view="home" aria-labelledby="hHome">
     <div class="card hero">
       <div class="ereader off" id="ereader" aria-hidden="true"><div class="screen"><b id="eModel">Kobo</b><span id="eFw"></span><i></i><i></i><i></i><i></i><i></i></div></div>
       <div>
-        <h2 id="hHome">Conecta tu Kobo</h2>
-        <p class="muted" id="homeSub" style="margin:6px 0 0">Conéctalo por USB y toca «Conectar» en su pantalla.</p>
+        <p class="eyebrow" id="homeEyebrow">Todo en uno para lectores Kobo</p>
+        <h2 id="hHome">Saca más provecho a tu Kobo, sin riesgo</h2>
+        <div class="muted" id="homeSub" style="margin:6px 0 0">Kobo AIO instala desde tu computador las mejoras que más usa la comunidad: lectura más cómoda, inicio sin publicidad, cómics, audiolibros, diccionarios, apps y juegos. Antes de cambiar algo guarda una copia, y todo se puede deshacer.</div>
         <div class="health hidden" id="health" role="status" aria-live="polite"></div>
       </div>
     </div>
-    <div class="tiles">
+
+    <div id="pitch">
+      <div class="benefits">
+        <div class="benefit"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-type"/></svg></span><div><b>Lee más cómodo</b><p class="small muted">Tipografía con mejor espaciado y justificado, fuentes pensadas para tinta electrónica, reloj y batería mientras lees.</p></div></div>
+        <div class="benefit"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><div><b>Más contenido</b><p class="small muted">Cómics y manga de cualquier formato ajustados a tu pantalla, audiolibros con portada, diccionarios y libros que abren más rápido.</p></div></div>
+        <div class="benefit"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></span><div><b>Tu Kobo a tu manera</b><p class="small muted">Inicio sin publicidad, menú de atajos (modo oscuro, WiFi, suspender), KOReader y juegos de Game Boy.</p></div></div>
+        <div class="benefit"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><div><b>Sin riesgo</b><p class="small muted">Ves cada cambio antes de aplicarlo, se respalda todo y puedes volver atrás. Nunca toca tus libros ni tu progreso.</p></div></div>
+      </div>
+      <div class="card" id="start" style="margin-top:16px" aria-labelledby="hStart"></div>
+    </div>
+
+    <h3 class="sect">¿Qué quieres hacer?</h3>
+    <div class="tiles" style="margin-top:10px">
       <button class="tile primary" data-go="wizard"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-wand"/></svg></span><b>Mejorar mi Kobo</b><span class="small muted">Asistente en 3 pasos con lo recomendado</span></button>
       <button class="tile" data-lib="lib.comics"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><b>Cómics y manga</b><span class="small muted">Convierte para tu pantalla</span></button>
       <button class="tile" data-lib="lib.books"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-book-plus"/></svg></span><b>Agregar libros</b><span class="small muted">EPUB a KEPUB, más rápido</span></button>
@@ -339,7 +349,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <button class="tile" data-lib="lib.dictionaries"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-dict"/></svg></span><b>Diccionarios</b><span class="small muted">Español e inglés gratis</span></button>
       <button class="tile" data-quick="maint.backup"><span class="badge" style="color:var(--c2)"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg></span><b>Respaldar</b><span class="small muted">Libros y progreso al computador</span></button>
     </div>
-    <div class="card" style="margin-top:16px">
+    <div class="card hidden" id="reviewCard" style="margin-top:16px">
       <div class="row spread"><h3>Revisión del Kobo</h3><button class="btn sm ghost" id="recheckBtn"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg>Revisar de nuevo</button></div>
       <div id="findings" style="margin-top:12px"><div class="empty">Esperando un Kobo…</div></div>
     </div>
@@ -358,7 +368,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
     </div>
     <div data-wstep="2" class="hidden">
       <h2>Ajusta a tu gusto</h2>
-      <p class="muted" style="margin:6px 0 0">Lo activado se instalará. Toca «Opciones» para personalizar o «Vista previa» para ver cómo queda. Solo ves lo compatible con tu modelo.</p>
+      <p class="muted" style="margin:6px 0 0">Lo activado se instalará. Toca «Opciones» para personalizar o «Vista previa» para ver cómo queda. Con tu Kobo conectado solo ves lo compatible con tu modelo.</p>
       <div id="groups"></div>
     </div>
     <div data-wstep="3" class="hidden" id="review"></div>
@@ -524,8 +534,8 @@ applyThemeIcon();
 function go(view) {
   state.view = view;
   $$("nav.main button").forEach(b => b.dataset.go === view ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
-  $$("[data-view]").forEach(v => v.classList.toggle("hidden", v.dataset.view !== view || !state.helper));
-  $("#setup").classList.toggle("hidden", state.helper);
+  $$("[data-view]").forEach(v => v.classList.toggle("hidden", v.dataset.view !== view));
+  renderExplore();
   if (view === "wizard") { state.scope = "wizard"; renderWizard(); }
   if (view === "library") renderLibrary();
   if (view === "expert") { state.scope = "expert"; renderExpert(); }
@@ -570,39 +580,73 @@ async function connect() {
     state.helper = true;
     setChip("#helperDot", "#helperTxt", "ok", `Motor local ${s.version}`);
   } catch (_) {
+    const changed = state.helper !== false;
     state.helper = false;
     setChip("#helperDot", "#helperTxt", "err", "Motor local no encontrado");
-    go(state.view);
+    if (!state.modules.length) {   // explore mode: same catalog the engine ships, without a device
+      try { const c = await (await fetch("catalog.json", { cache: "no-cache" })).json(); state.modules = c.modules || []; } catch (_) {}
+      renderHome(); go(state.view);
+    } else if (changed) { state.device = null; renderHome(); go(state.view); }
     return;
   }
   await refresh();
 }
-$("#retryBtn").onclick = connect;
 
 async function refresh() {
   const cat = await api("/api/catalog");
   state.device = cat.device; state.modules = cat.modules; state.installed = cat.installed || {};
+  renderHome();
+  if (state.device) runDoctor();
+  go(state.view);
+}
+
+function renderHome() {
   const d = state.device;
-  $$(".tile[data-lib], .tile[data-quick]").forEach(t => { const m = byId(t.dataset.lib || t.dataset.quick); t.classList.toggle("hidden", !!(m && m.compatible === false)); });
+  $$(".tile[data-lib], .tile[data-quick]").forEach(t => { const m = byId(t.dataset.lib || t.dataset.quick); t.classList.toggle("hidden", !!(d && m && m.compatible === false)); });
+  $("#pitch").classList.toggle("hidden", !!d);
+  $("#reviewCard").classList.toggle("hidden", !d);
   if (d) {
     setChip("#devDot", "#devTxt", d.known ? "ok" : "warn", d.name);
+    $("#homeEyebrow").textContent = "Tu Kobo conectado";
     $("#hHome").textContent = d.name;
     $("#homeSub").innerHTML = `Firmware ${esc(d.firmware || "desconocido")}${d.year ? ` · modelo ${esc(d.year)}` : ""}<div class="caps">${capsHtml(d)}</div>`;
     deviceArt(d, $("#ereader"));
     $("#eModel").textContent = d.name.replace(/^Kobo /, "");
     $("#eFw").textContent = d.firmware || "";
     $("#ereader").classList.remove("off");
-    runDoctor();
   } else {
     setChip("#devDot", "#devTxt", "", "Sin Kobo");
-    $("#hHome").textContent = "Conecta tu Kobo";
-    $("#homeSub").textContent = "Conéctalo por USB y toca «Conectar» en su pantalla. Se detecta solo.";
+    $("#homeEyebrow").textContent = "Todo en uno para lectores Kobo";
+    $("#hHome").textContent = "Saca más provecho a tu Kobo, sin riesgo";
+    $("#homeSub").textContent = "Kobo AIO instala desde tu computador las mejoras que más usa la comunidad: lectura más cómoda, inicio sin publicidad, cómics, audiolibros, diccionarios, apps y juegos. Antes de cambiar algo guarda una copia, y todo se puede deshacer.";
     deviceArt(null, $("#ereader"));
     $("#ereader").classList.add("off");
     $("#health").classList.add("hidden");
     $("#findings").innerHTML = '<div class="empty">Esperando un Kobo…</div>';
   }
-  go(state.view);
+  renderStart();
+}
+
+function renderStart() {
+  const h = state.helper;
+  const st = (done, now) => done ? ' class="done"' : now ? ' class="now"' : "";
+  $("#start").innerHTML = `<h3 id="hStart">Cómo empezar</h3>
+    <ol class="steps">
+      <li${st(h, !h)}><b>${h ? "Kobo AIO está abierto en tu computador" : "Abre Kobo AIO en tu computador"}</b>${h ? "" : `<div class="small muted">Descarga el <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">ZIP</a>. En Mac, doble clic en <code>Kobo AIO.command</code> (la primera vez: clic derecho, Abrir). En Windows o Linux: <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code>.</div>
+        <details class="small" style="margin-top:6px"><summary>¿Qué necesito?</summary><p class="muted" style="margin:6px 0 0">Python 3.9 o superior, el programa que hace el trabajo en tu computador: detecta tu modelo, respalda, descarga y verifica cada mejora y convierte cómics y audiolibros. Una página web no puede escribir en el Kobo por sí sola. En Mac, si falta, el sistema ofrece instalarlo. En Windows descárgalo de python.org. No se instala nada más en tu computador ni se sube nada a internet.</p></details>`}</li>
+      <li${st(false, h)}><b>Conecta tu Kobo por USB</b><div class="small muted">Toca «Conectar» en la pantalla del Kobo. Se detecta solo y verás qué es compatible con tu modelo.</div></li>
+      <li><b>Elige y aplica</b><div class="small muted">Usa el asistente o elige cada mejora. Al expulsar, el Kobo se reinicia con todo listo (1 a 2 minutos).</div></li>
+    </ol>
+    <div class="row">${h ? "" : `<button class="btn primary" id="retryBtn">${icon("usb")}Ya lo abrí, buscar de nuevo</button><a class="btn" href="http://127.0.0.1:8765/">Abrir la versión local</a>`}
+      <button class="btn ghost" data-go="wizard">${icon("wand")}Explorar las mejoras</button></div>
+    ${h ? "" : '<p class="tiny muted" style="margin:10px 0 0">Si tu navegador bloquea la conexión desde esta página, usa «Abrir la versión local».</p>'}`;
+  const rb = $("#retryBtn"); if (rb) rb.onclick = connect;
+}
+
+function renderExplore() {
+  const el = $("#explore"), show = !state.device && state.view !== "home";
+  el.classList.toggle("hidden", !show);
+  if (show) el.innerHTML = `${icon("info")}<div><b>Estás explorando.</b> Puedes ver todo, pero para instalar ${state.helper ? "conecta tu Kobo por USB" : 'abre Kobo AIO en tu computador y conecta tu Kobo (<a href="#" data-go="home">cómo empezar</a>)'}. Al conectarlo se ocultará lo que tu modelo no admite.</div>`;
 }
 
 const SEVICON = { critical: "x-circle", warn: "alert", info: "info", ok: "check-circle" };
@@ -746,7 +790,6 @@ function bindRows(scope) {
 }
 
 function renderWizard() {
-  if (!state.helper) return;
   $$("#stepper li").forEach(li => { const n = Number(li.dataset.step); li.classList.toggle("done", n < state.step); n === state.step ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current"); });
   $$("[data-wstep]").forEach(s => s.classList.toggle("hidden", Number(s.dataset.wstep) !== state.step));
   if (state.step === 1) {
@@ -818,7 +861,7 @@ function reviewHtml(res) {
 
 function renderActionBar() {
   const bar = $("#actionbar"), ids = Object.keys(state.selection).filter(id => !id.startsWith("lib.") || state.view !== "wizard");
-  const show = state.helper && (state.view === "wizard" || (state.view === "expert" && (ids.length || state.uninstall.size)));
+  const show = state.view === "wizard" || (state.view === "expert" && (ids.length || state.uninstall.size));
   bar.classList.toggle("hidden", !show);
   if (!show) return;
   const back = $("#abBack"), next = $("#abNext");
@@ -826,12 +869,13 @@ function renderActionBar() {
     const n = ids.length;
     $("#abTitle").textContent = state.step === 1 ? (state.profile ? `Estilo: ${PROFILES.find(p => p.id === state.profile).name}` : "Elige un estilo para continuar")
       : state.step === 2 ? `${n} mejora${n === 1 ? "" : "s"} activada${n === 1 ? "" : "s"}` : "Último paso";
-    $("#abSub").textContent = state.step === 3 ? "Se respalda todo antes de escribir" : state.device ? state.device.name : "Conecta tu Kobo para continuar";
+    $("#abSub").textContent = state.step === 3 ? "Se respalda todo antes de escribir" : state.device ? state.device.name
+      : state.step === 2 ? "Conecta tu Kobo para revisar y aplicar" : "Modo exploración";
     back.classList.toggle("hidden", state.step === 1);
     back.innerHTML = `${icon("arrow-l")}Atrás`;
     back.onclick = () => { state.step--; renderWizard(); renderActionBar(); };
-    next.innerHTML = state.step < 3 ? `Continuar${icon("arrow-r")}` : `${icon("check")}Aplicar en mi Kobo`;
-    next.disabled = !state.device || (state.step === 1 && !state.profile) || (state.step >= 2 && !n && !state.uninstall.size)
+    next.innerHTML = state.step < 3 ? (state.step === 2 && !state.device ? `${icon("usb")}Conecta tu Kobo` : `Continuar${icon("arrow-r")}`) : `${icon("check")}Aplicar en mi Kobo`;
+    next.disabled = (state.step >= 2 && !state.device) || (state.step === 1 && !state.profile) || (state.step >= 2 && !n && !state.uninstall.size)
       || (state.step === 3 && !state.reviewOk);
     next.onclick = () => { if (state.step < 3) { state.step++; renderWizard(); renderActionBar(); window.scrollTo({ top: 0, behavior: "smooth" }); } else applyNow(); };
   } else {
@@ -839,6 +883,7 @@ function renderActionBar() {
     $("#abSub").textContent = ids.map(i => byId(i) ? meta(byId(i)).name : i).join(" · ");
     back.classList.remove("hidden"); back.textContent = "Limpiar";
     back.onclick = () => { state.selection = {}; state.uninstall.clear(); rerender(); };
+    if (!state.device) $("#abSub").textContent = "Conecta tu Kobo para revisar y aplicar";
     next.innerHTML = `Revisar cambios${icon("arrow-r")}`; next.disabled = !state.device;
     next.onclick = openPlan;
   }

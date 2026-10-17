@@ -1,0 +1,1865 @@
+{
+ "version": "1.1.1",
+ "device": null,
+ "modules": [
+  {
+   "id": "app.koreader",
+   "category": "Apps",
+   "title": "KOReader 2026.07.1",
+   "description": "Lector alternativo muy configurable: PDF y cómics con zoom/recorte, refresco y dithering a medida, estadísticas, sincronización y diccionarios StarDict. Se abre desde NickelMenu.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [],
+   "sources": [
+    "https://github.com/koreader/koreader",
+    "https://github.com/koreader/koreader/issues/12739"
+   ],
+   "license": "AGPL-3.0",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "app.cadmus",
+   "category": "Apps",
+   "title": "Cadmus 0.12.0",
+   "description": "Lector minimalista y rápido (fork de Plato) para EPUB, PDF, CBZ y DjVu. La 0.12 agrega suspensión automática y WiFi que duerme; si ya lo usabas, revisa sus ajustes de energía (cambiaron de lugar).",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [],
+   "sources": [
+    "https://github.com/OGKevin/cadmus"
+   ],
+   "license": "AGPL-3.0",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "app.inkboy",
+   "category": "Juegos",
+   "title": "Ink-boy (Game Boy / Game Boy Color)",
+   "description": "Emulador nativo optimizado para e-ink: color Kaleido 3 en Libra Colour, 4 grises en Carta, modo turbo A2 y guardado automático. Nunca sobrescribe tus partidas (.sav).",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [
+    {
+     "id": "mode",
+     "label": "Modo de pantalla",
+     "type": "choice",
+     "default": "quality",
+     "choices": [
+      {
+       "value": "quality",
+       "label": "Calidad (color / 4 grises)"
+      },
+      {
+       "value": "turbo",
+       "label": "Turbo 1-bit (A2)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "scale",
+     "label": "Escala",
+     "type": "choice",
+     "default": "6",
+     "choices": [
+      {
+       "value": "6",
+       "label": "x6 (960x864)"
+      },
+      {
+       "value": "7",
+       "label": "x7 (1120x1008, solo Libra)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "dmg_palette",
+     "label": "Paleta para juegos .gb",
+     "type": "choice",
+     "default": "1",
+     "choices": [
+      {
+       "value": "0",
+       "label": "Grises"
+      },
+      {
+       "value": "1",
+       "label": "Pokémon Rojo/Azul"
+      },
+      {
+       "value": "2",
+       "label": "Verde clásico"
+      },
+      {
+       "value": "3",
+       "label": "Oro/Cian"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "libra_buttons",
+     "label": "Botones físicos",
+     "type": "choice",
+     "default": "A_B",
+     "choices": [
+      {
+       "value": "A_B",
+       "label": "Arriba A / abajo B"
+      },
+      {
+       "value": "B_A",
+       "label": "Arriba B / abajo A"
+      },
+      {
+       "value": "START_SELECT",
+       "label": "Start / Select"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "exit_mode",
+     "label": "Al salir",
+     "type": "choice",
+     "default": "resume",
+     "choices": [
+      {
+       "value": "resume",
+       "label": "Volver a Nickel"
+      },
+      {
+       "value": "reboot",
+       "label": "Reiniciar (si Nickel se congela)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "demo_roms",
+     "label": "Copiar ROMs de demostración",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "overwrite_config",
+     "label": "Reemplazar mi config.ini",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/hellominecraft913-dev/Ink-boy"
+   ],
+   "license": "MIT",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "app.koreader_plugins",
+   "category": "Apps",
+   "title": "Plugins para KOReader",
+   "description": "Los más usados por la comunidad en 2026: biblioteca con portadas, tienda de plugins, sincronización con el lector de Kobo, Hardcover y envío inalámbrico con LocalSend.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "app.koreader"
+   ],
+   "options": [
+    {
+     "id": "plugins",
+     "label": "Plugins",
+     "type": "multi",
+     "default": [
+      "projecttitle",
+      "localsend"
+     ],
+     "choices": [
+      {
+       "value": "projecttitle",
+       "label": "Project: Title: biblioteca visual con portadas (AGPL-3.0)"
+      },
+      {
+       "value": "appstore",
+       "label": "App Store: instala y actualiza plugins desde el Kobo (GPL-3.0)"
+      },
+      {
+       "value": "kobo",
+       "label": "Sincroniza progreso con el lector de Kobo y controles Bluetooth (GPL-3.0)"
+      },
+      {
+       "value": "hardcover",
+       "label": "Hardcover: sincroniza lecturas con hardcover.app (MIT)"
+      },
+      {
+       "value": "localsend",
+       "label": "LocalSend: envía libros por WiFi desde el celular, sin cables (MIT)"
+      }
+     ],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/joshuacant/ProjectTitle",
+    "https://github.com/omer-faruq/appstore.koplugin",
+    "https://github.com/OGKevin/kobo.koplugin",
+    "https://github.com/Billiam/hardcoverapp.koplugin",
+    "https://github.com/kaikozlov/localsend.koplugin"
+   ],
+   "license": "AGPL-3.0 / GPL-3.0 / MIT (por plugin)",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "fw.kobopatch",
+   "category": "Sistema",
+   "title": "Parches de firmware (kobopatch, avanzado)",
+   "description": "Modifica Nickel con parches de la comunidad: interlineado y márgenes finos, tamaños de fuente, encabezados limpios, tiempos de suspensión y más. Se pierden al actualizar el firmware. Si algo falla, «Restaurar originales» o reinstalar el firmware lo revierte.",
+   "risk": "alto",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "mode",
+     "label": "Acción",
+     "type": "choice",
+     "default": "patch",
+     "choices": [
+      {
+       "value": "patch",
+       "label": "Aplicar parches"
+      },
+      {
+       "value": "restore",
+       "label": "Restaurar originales"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "patches",
+     "label": "Parches",
+     "type": "multi",
+     "default": [],
+     "choices": [
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::My 10 line spacing values",
+       "label": "10 interlineados más finos (My 10 line spacing values)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Custom font sizes",
+       "label": "Tamaños de fuente personalizados (Custom font sizes)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Custom left & right margins",
+       "label": "Márgenes laterales personalizados (Custom left & right margins)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Force user line spacing in KePubs",
+       "label": "Respetar tu interlineado en KePub (Force user line spacing in KePubs)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Remove title from reading header/footer",
+       "label": "Quitar el título del encabezado/pie (Remove title from reading header/footer)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Don't uppercase header/footer text",
+       "label": "Encabezado/pie sin mayúsculas (Don't uppercase header/footer text)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Larger Sleep/Power-off timeouts",
+       "label": "Tiempos de suspensión más largos (Larger Sleep/Power-off timeouts)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Block WiFi firmware upgrade",
+       "label": "Bloquear actualización de firmware por WiFi (Block WiFi firmware upgrade)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Both page turn buttons go next",
+       "label": "Ambos botones avanzan página (Both page turn buttons go next)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Disable all tutorial dialogs",
+       "label": "Desactivar tutoriales (Disable all tutorial dialogs)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Increase page navigation history",
+       "label": "Historial de navegación más largo (Increase page navigation history)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Dictionary text font-family/font-size/line-height",
+       "label": "Texto del diccionario más legible (Dictionary text font-family/font-size/line-height)"
+      },
+      {
+       "value": "src/libnickel.so.1.0.0.yaml::Allow USB storage even when device locked",
+       "label": "USB aunque el lector esté bloqueado (Allow USB storage even when device locked)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "confirm",
+     "label": "Entiendo el riesgo y tengo respaldo",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/pgaskin/kobopatch",
+    "https://www.mobileread.com/forums/showthread.php?t=373863",
+    "https://github.com/nicoverbruggen/kobopatch-webui"
+   ],
+   "license": "MIT (kobopatch)",
+   "reboot": true,
+   "can_uninstall": false,
+   "persistent": true
+  },
+  {
+   "id": "fonts.ebook",
+   "category": "Lectura",
+   "title": "Fuentes para e-reader (ebook-fonts)",
+   "description": "Familias optimizadas para e-ink (prefijo «KF»): Libron, Charis, Literata, Readerly, Disleksio (dislexia) y más. Aparecen en el menú de fuentes del lector.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [
+    {
+     "id": "core",
+     "label": "Colección principal",
+     "type": "multi",
+     "default": [
+      "Bitter",
+      "Cartisse",
+      "Charis",
+      "Garamond",
+      "Jost",
+      "Legible Next",
+      "Libron",
+      "Palatium",
+      "Sourcerer"
+     ],
+     "choices": [
+      {
+       "value": "Bitter",
+       "label": "Bitter"
+      },
+      {
+       "value": "Cartisse",
+       "label": "Cartisse"
+      },
+      {
+       "value": "Charis",
+       "label": "Charis"
+      },
+      {
+       "value": "Garamond",
+       "label": "Garamond"
+      },
+      {
+       "value": "Jost",
+       "label": "Jost"
+      },
+      {
+       "value": "Legible Next",
+       "label": "Legible Next"
+      },
+      {
+       "value": "Libron",
+       "label": "Libron"
+      },
+      {
+       "value": "Palatium",
+       "label": "Palatium"
+      },
+      {
+       "value": "Sourcerer",
+       "label": "Sourcerer"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "extra",
+     "label": "Colección extra (22 MB)",
+     "type": "multi",
+     "default": [],
+     "choices": [
+      {
+       "value": "Adelph",
+       "label": "Adelph"
+      },
+      {
+       "value": "Alegreya",
+       "label": "Alegreya"
+      },
+      {
+       "value": "Alizar",
+       "label": "Alizar"
+      },
+      {
+       "value": "Ancizar Sans",
+       "label": "Ancizar Sans"
+      },
+      {
+       "value": "Ancizar Serif",
+       "label": "Ancizar Serif"
+      },
+      {
+       "value": "Andada",
+       "label": "Andada"
+      },
+      {
+       "value": "Basker",
+       "label": "Basker"
+      },
+      {
+       "value": "Cardo",
+       "label": "Cardo"
+      },
+      {
+       "value": "Castoro",
+       "label": "Castoro"
+      },
+      {
+       "value": "Charis Literacy",
+       "label": "Charis Literacy"
+      },
+      {
+       "value": "Charis Old Style",
+       "label": "Charis Old Style"
+      },
+      {
+       "value": "Clara",
+       "label": "Clara"
+      },
+      {
+       "value": "Disleksio",
+       "label": "Disleksio"
+      },
+      {
+       "value": "Elstob",
+       "label": "Elstob"
+      },
+      {
+       "value": "Erewhon",
+       "label": "Erewhon"
+      },
+      {
+       "value": "Gentium",
+       "label": "Gentium"
+      },
+      {
+       "value": "Georsio",
+       "label": "Georsio"
+      },
+      {
+       "value": "Halcyon",
+       "label": "Halcyon"
+      },
+      {
+       "value": "Ibarra",
+       "label": "Ibarra"
+      },
+      {
+       "value": "Junius",
+       "label": "Junius"
+      },
+      {
+       "value": "Kierkegaard",
+       "label": "Kierkegaard"
+      },
+      {
+       "value": "Libertinus",
+       "label": "Libertinus"
+      },
+      {
+       "value": "Literata",
+       "label": "Literata"
+      },
+      {
+       "value": "Membo",
+       "label": "Membo"
+      },
+      {
+       "value": "Newsreader",
+       "label": "Newsreader"
+      },
+      {
+       "value": "NinePoint",
+       "label": "NinePoint"
+      },
+      {
+       "value": "Publica",
+       "label": "Publica"
+      },
+      {
+       "value": "Publica Wide",
+       "label": "Publica Wide"
+      },
+      {
+       "value": "Readerly",
+       "label": "Readerly"
+      },
+      {
+       "value": "Sable",
+       "label": "Sable"
+      },
+      {
+       "value": "Scarlet",
+       "label": "Scarlet"
+      },
+      {
+       "value": "Tabula",
+       "label": "Tabula"
+      },
+      {
+       "value": "Technical",
+       "label": "Technical"
+      },
+      {
+       "value": "Yrsa",
+       "label": "Yrsa"
+      },
+      {
+       "value": "Zilla Slab",
+       "label": "Zilla Slab"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "default_font",
+     "label": "Fuente de lectura por defecto",
+     "type": "choice",
+     "default": "none",
+     "choices": [
+      {
+       "value": "none",
+       "label": "No cambiar"
+      },
+      {
+       "value": "Bitter",
+       "label": "KF Bitter"
+      },
+      {
+       "value": "Cartisse",
+       "label": "KF Cartisse"
+      },
+      {
+       "value": "Charis",
+       "label": "KF Charis"
+      },
+      {
+       "value": "Garamond",
+       "label": "KF Garamond"
+      },
+      {
+       "value": "Jost",
+       "label": "KF Jost"
+      },
+      {
+       "value": "Legible Next",
+       "label": "KF Legible Next"
+      },
+      {
+       "value": "Libron",
+       "label": "KF Libron"
+      },
+      {
+       "value": "Palatium",
+       "label": "KF Palatium"
+      },
+      {
+       "value": "Sourcerer",
+       "label": "KF Sourcerer"
+      },
+      {
+       "value": "Adelph",
+       "label": "KF Adelph"
+      },
+      {
+       "value": "Alegreya",
+       "label": "KF Alegreya"
+      },
+      {
+       "value": "Alizar",
+       "label": "KF Alizar"
+      },
+      {
+       "value": "Ancizar Sans",
+       "label": "KF Ancizar Sans"
+      },
+      {
+       "value": "Ancizar Serif",
+       "label": "KF Ancizar Serif"
+      },
+      {
+       "value": "Andada",
+       "label": "KF Andada"
+      },
+      {
+       "value": "Basker",
+       "label": "KF Basker"
+      },
+      {
+       "value": "Cardo",
+       "label": "KF Cardo"
+      },
+      {
+       "value": "Castoro",
+       "label": "KF Castoro"
+      },
+      {
+       "value": "Charis Literacy",
+       "label": "KF Charis Literacy"
+      },
+      {
+       "value": "Charis Old Style",
+       "label": "KF Charis Old Style"
+      },
+      {
+       "value": "Clara",
+       "label": "KF Clara"
+      },
+      {
+       "value": "Disleksio",
+       "label": "KF Disleksio"
+      },
+      {
+       "value": "Elstob",
+       "label": "KF Elstob"
+      },
+      {
+       "value": "Erewhon",
+       "label": "KF Erewhon"
+      },
+      {
+       "value": "Gentium",
+       "label": "KF Gentium"
+      },
+      {
+       "value": "Georsio",
+       "label": "KF Georsio"
+      },
+      {
+       "value": "Halcyon",
+       "label": "KF Halcyon"
+      },
+      {
+       "value": "Ibarra",
+       "label": "KF Ibarra"
+      },
+      {
+       "value": "Junius",
+       "label": "KF Junius"
+      },
+      {
+       "value": "Kierkegaard",
+       "label": "KF Kierkegaard"
+      },
+      {
+       "value": "Libertinus",
+       "label": "KF Libertinus"
+      },
+      {
+       "value": "Literata",
+       "label": "KF Literata"
+      },
+      {
+       "value": "Membo",
+       "label": "KF Membo"
+      },
+      {
+       "value": "Newsreader",
+       "label": "KF Newsreader"
+      },
+      {
+       "value": "NinePoint",
+       "label": "KF NinePoint"
+      },
+      {
+       "value": "Publica",
+       "label": "KF Publica"
+      },
+      {
+       "value": "Publica Wide",
+       "label": "KF Publica Wide"
+      },
+      {
+       "value": "Readerly",
+       "label": "KF Readerly"
+      },
+      {
+       "value": "Sable",
+       "label": "KF Sable"
+      },
+      {
+       "value": "Scarlet",
+       "label": "KF Scarlet"
+      },
+      {
+       "value": "Tabula",
+       "label": "KF Tabula"
+      },
+      {
+       "value": "Technical",
+       "label": "KF Technical"
+      },
+      {
+       "value": "Yrsa",
+       "label": "KF Yrsa"
+      },
+      {
+       "value": "Zilla Slab",
+       "label": "KF Zilla Slab"
+      }
+     ],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/nicoverbruggen/ebook-fonts"
+   ],
+   "license": "SIL OFL 1.1 (por familia)",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "lib.comics",
+   "category": "Biblioteca",
+   "title": "Convertir cómics y manga para Kobo",
+   "description": "Estilo KCC, ajustado a tu panel: recorta márgenes, divide páginas dobles, ajusta a la resolución exacta, conserva y realza el color en Kaleido 3 y genera KEPUB de página fija (paso de página rápido) o CBZ para KOReader.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "files",
+     "label": "Archivos o carpetas",
+     "type": "files",
+     "default": [],
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "folder",
+     "label": "Carpeta en el Kobo",
+     "type": "text",
+     "default": "Comics",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "output",
+     "label": "Formato",
+     "type": "choice",
+     "default": "kepub",
+     "choices": [
+      {
+       "value": "kepub",
+       "label": "KEPUB página fija (Nickel)"
+      },
+      {
+       "value": "cbz",
+       "label": "CBZ (KOReader)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "manga",
+     "label": "Manga (derecha a izquierda)",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "spreads",
+     "label": "Páginas dobles",
+     "type": "choice",
+     "default": "split",
+     "choices": [
+      {
+       "value": "split",
+       "label": "Dividir"
+      },
+      {
+       "value": "rotate",
+       "label": "Girar"
+      },
+      {
+       "value": "both",
+       "label": "Girar y dividir"
+      },
+      {
+       "value": "none",
+       "label": "Dejar"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "crop",
+     "label": "Recortar márgenes",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "color",
+     "label": "Conservar color (paneles a color)",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "saturation",
+     "label": "Realce de color Kaleido",
+     "type": "choice",
+     "default": "1.25",
+     "choices": [
+      {
+       "value": "1.0",
+       "label": "Sin realce"
+      },
+      {
+       "value": "1.15",
+       "label": "Suave"
+      },
+      {
+       "value": "1.25",
+       "label": "Medio"
+      },
+      {
+       "value": "1.4",
+       "label": "Fuerte"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "gamma",
+     "label": "Gamma (contraste de medios tonos)",
+     "type": "choice",
+     "default": "1.0",
+     "choices": [
+      {
+       "value": "1.0",
+       "label": "Normal"
+      },
+      {
+       "value": "1.4",
+       "label": "Más oscuro"
+      },
+      {
+       "value": "1.8",
+       "label": "Escaneos claros"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "upscale",
+     "label": "Ampliar páginas pequeñas",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "use_kcc",
+     "label": "Usar KCC si está instalado",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/ciromattia/kcc"
+   ],
+   "license": "ISC (referencia)",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": false
+  },
+  {
+   "id": "lib.books",
+   "category": "Biblioteca",
+   "title": "Enviar libros (EPUB a KEPUB)",
+   "description": "Copia libros al Kobo sin pisar los existentes. Convierte EPUB a KEPUB con kepubify: abre más rápido, muestra páginas por capítulo, estadísticas y mejor tipografía en Nickel.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "files",
+     "label": "Libros o carpetas",
+     "type": "files",
+     "default": [],
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "folder",
+     "label": "Carpeta en el Kobo",
+     "type": "text",
+     "default": "Libros",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "kepubify",
+     "label": "Convertir EPUB a KEPUB",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "smart_punct",
+     "label": "Comillas y guiones tipográficos",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/pgaskin/kepubify"
+   ],
+   "license": "MIT",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": false
+  },
+  {
+   "id": "lib.dictionaries",
+   "category": "Biblioteca",
+   "title": "Diccionarios",
+   "description": "Instala diccionarios Wiktionary listos para Kobo o tus propios dicthtml-*.zip en .kobo/custom-dict (no los pisa la sincronización). Los oficiales es, es-en y en-es se activan gratis desde el Kobo con WiFi.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "wiktionary",
+     "label": "Wiktionary",
+     "type": "multi",
+     "default": [
+      "es-es"
+     ],
+     "choices": [
+      {
+       "value": "es-es",
+       "label": "Español (Wiktionary, ~940 mil entradas, 14 MB)"
+      },
+      {
+       "value": "es-es-noetym",
+       "label": "Español sin etimologías (13 MB)"
+      },
+      {
+       "value": "en-en",
+       "label": "English (Wiktionary, 66 MB)"
+      },
+      {
+       "value": "en-en-noetym",
+       "label": "English sin etimologías (54 MB)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "files",
+     "label": "Mis diccionarios (dicthtml-*.zip)",
+     "type": "files",
+     "default": [],
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://www.reader-dict.com",
+    "https://github.com/BoboTiG/ebook-reader-dict",
+    "https://pgaskin.net/dictutil/"
+   ],
+   "license": "CC BY-SA (contenido Wiktionary)",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": false
+  },
+  {
+   "id": "lib.sleep",
+   "category": "Personalización",
+   "title": "Pantallas de reposo propias",
+   "description": "Convierte tus imágenes a la resolución exacta del panel (color en Kaleido 3). Opcional: nickel-screensaver muestra el reposo transparente sobre la página, estilo KOReader.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "files",
+     "label": "Imágenes",
+     "type": "files",
+     "default": [],
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "fit",
+     "label": "Ajuste",
+     "type": "choice",
+     "default": "cover",
+     "choices": [
+      {
+       "value": "cover",
+       "label": "Llenar pantalla"
+      },
+      {
+       "value": "contain",
+       "label": "Imagen completa"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "overlay",
+     "label": "Instalar nickel-screensaver 1.3.1 (reposo transparente)",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/redphx/nickel-screensaver"
+   ],
+   "license": "MIT",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "app.audiobook",
+   "category": "Apps",
+   "title": "Audiolibros en KOReader (audiobook.koplugin 0.2.23)",
+   "description": "Reproductor de audiolibros y música para KOReader: MP3/M4B con capítulos, portada, temporizador, Bluetooth propio (compatible con la pila MediaTek de la Libra Colour) y lectura sincronizada. Paquete de 173 MB (incluye voces TTS y ffmpeg).",
+   "risk": "medio",
+   "recommended": false,
+   "requires": [
+    "app.koreader"
+   ],
+   "options": [],
+   "sources": [
+    "https://github.com/stradichenko/audiobook.koplugin"
+   ],
+   "license": "AGPL-3.0",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "lib.audiobooks",
+   "category": "Biblioteca",
+   "title": "Subir audiolibros (con capítulos y portada)",
+   "description": "Prepara tus audiolibros para escucharlos por Bluetooth. Stock: formato .mp3z que el propio lector reproduce, con portada en el reproductor y partes cortas para retomar cerca de donde ibas. Alternativa: MP3 con capítulos y posición exacta en KOReader. La portada sale de la carpeta (cover/folder.jpg), de las pistas o la que subas. Solo audio sin DRM propio.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "target",
+     "label": "Reproducir con",
+     "type": "choice",
+     "default": "nickel",
+     "choices": [
+      {
+       "value": "nickel",
+       "label": "Lector stock del Kobo (.mp3z)"
+      },
+      {
+       "value": "koreader",
+       "label": "KOReader + audiobook.koplugin (MP3 con capítulos)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "part_minutes",
+     "label": "Largo de cada parte (solo lector stock)",
+     "type": "choice",
+     "default": "10",
+     "choices": [
+      {
+       "value": "5",
+       "label": "5 min (retoma más cerca)"
+      },
+      {
+       "value": "10",
+       "label": "10 min (recomendado)"
+      },
+      {
+       "value": "20",
+       "label": "20 min"
+      },
+      {
+       "value": "0",
+       "label": "Sin dividir (una parte por pista)"
+      }
+     ],
+     "help": "El lector stock guarda en qué parte ibas, no el minuto exacto."
+    },
+    {
+     "id": "files",
+     "label": "Carpeta(s) del audiolibro o archivos",
+     "type": "files",
+     "default": [],
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "cover",
+     "label": "Portada (opcional)",
+     "type": "files",
+     "default": [],
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "title",
+     "label": "Título (opcional)",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "author",
+     "label": "Autor (opcional)",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/stradichenko/audiobook.koplugin"
+   ],
+   "license": "AGPL-3.0 (plugin)",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": false
+  },
+  {
+   "id": "maint.clean_macos",
+   "category": "Mantenimiento",
+   "title": "Limpiar basura de macOS",
+   "description": "Borra los archivos ._* (validando su firma AppleDouble) y .DS_Store que macOS deja en el Kobo.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [],
+   "sources": [],
+   "license": "",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": false
+  },
+  {
+   "id": "maint.no_spotlight",
+   "category": "Mantenimiento",
+   "title": "Desactivar Spotlight en el Kobo",
+   "description": "Evita que macOS cree índices (.Spotlight-V100) en el lector en cada conexión.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [],
+   "sources": [],
+   "license": "",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": false
+  },
+  {
+   "id": "maint.backup",
+   "category": "Mantenimiento",
+   "title": "Respaldar libros y progreso al computador",
+   "description": "Copia tus libros, la base de datos (progreso, notas, colecciones) y la configuración a ~/Kobo-AIO/library. Hazlo antes de cualquier cambio grande.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [
+    {
+     "id": "books",
+     "label": "Libros",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "database",
+     "label": "Base de datos y configuración",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "mods",
+     "label": "Mods y partidas (.adds)",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [],
+   "license": "",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": false
+  },
+  {
+   "id": "nm.menu",
+   "category": "Menú",
+   "title": "Menú rápido de NickelMenu",
+   "description": "Atajos validados contra la documentación oficial: suspender, reiniciar, importar libros, modo oscuro, WiFi, capturas, juegos ocultos, búsqueda en RAE/Wikipedia y respaldo de la base de datos.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [
+    {
+     "id": "items",
+     "label": "Atajos",
+     "type": "multi",
+     "default": [
+      "sleep",
+      "reboot",
+      "shutdown",
+      "rescan_full",
+      "dark_mode",
+      "auto_usb",
+      "home",
+      "wifi_toggle"
+     ],
+     "choices": [
+      {
+       "value": "sleep",
+       "label": "[Energía] Suspender"
+      },
+      {
+       "value": "reboot",
+       "label": "[Energía] Reiniciar"
+      },
+      {
+       "value": "shutdown",
+       "label": "[Energía] Apagar"
+      },
+      {
+       "value": "rescan_full",
+       "label": "[Biblioteca] Importar libros nuevos"
+      },
+      {
+       "value": "rescan",
+       "label": "[Biblioteca] Reescanear (rápido)"
+      },
+      {
+       "value": "open_authors",
+       "label": "[Biblioteca] Autores"
+      },
+      {
+       "value": "open_series",
+       "label": "[Biblioteca] Series"
+      },
+      {
+       "value": "open_shelves",
+       "label": "[Biblioteca] Colecciones"
+      },
+      {
+       "value": "stats",
+       "label": "[Biblioteca] Estadísticas"
+      },
+      {
+       "value": "words",
+       "label": "[Biblioteca] Mis palabras"
+      },
+      {
+       "value": "dark_mode",
+       "label": "[Lectura] Modo oscuro"
+      },
+      {
+       "value": "orient_invert",
+       "label": "[Lectura] Invertir orientación"
+      },
+      {
+       "value": "orient_swap",
+       "label": "[Lectura] Vertical / horizontal"
+      },
+      {
+       "value": "screenshot",
+       "label": "[Lectura] Captura de pantalla"
+      },
+      {
+       "value": "screenshots_toggle",
+       "label": "[Sistema] Capturas (botón)"
+      },
+      {
+       "value": "auto_usb",
+       "label": "[Sistema] Auto USB"
+      },
+      {
+       "value": "invert",
+       "label": "[Sistema] Invertir pantalla"
+      },
+      {
+       "value": "lockscreen",
+       "label": "[Sistema] Pantalla de bloqueo"
+      },
+      {
+       "value": "usb",
+       "label": "[Sistema] Conectar USB"
+      },
+      {
+       "value": "home",
+       "label": "[Sistema] Inicio"
+      },
+      {
+       "value": "wifi_toggle",
+       "label": "[Red] WiFi on/off"
+      },
+      {
+       "value": "wifi_connect",
+       "label": "[Red] Conectar WiFi"
+      },
+      {
+       "value": "bt_toggle",
+       "label": "[Red] Bluetooth on/off"
+      },
+      {
+       "value": "ip",
+       "label": "[Red] Dirección IP"
+      },
+      {
+       "value": "sketch",
+       "label": "[Extras] Bloc de dibujo"
+      },
+      {
+       "value": "sudoku",
+       "label": "[Extras] Sudoku"
+      },
+      {
+       "value": "solitaire",
+       "label": "[Extras] Solitario"
+      },
+      {
+       "value": "scramble",
+       "label": "[Extras] Word Scramble"
+      },
+      {
+       "value": "unblock",
+       "label": "[Extras] Unblock It"
+      },
+      {
+       "value": "browser",
+       "label": "[Extras] Navegador"
+      },
+      {
+       "value": "wikipedia",
+       "label": "[Extras] Wikipedia"
+      },
+      {
+       "value": "rekindle",
+       "label": "[Extras] ReKindle (apps web)"
+      },
+      {
+       "value": "sel_rae",
+       "label": "[Selección] Buscar en la RAE"
+      },
+      {
+       "value": "sel_wiki",
+       "label": "[Selección] Buscar en Wikipedia"
+      },
+      {
+       "value": "sel_translate",
+       "label": "[Selección] Traducir (Google)"
+      },
+      {
+       "value": "kernel",
+       "label": "[Diagnóstico] Versión del kernel"
+      },
+      {
+       "value": "mem",
+       "label": "[Diagnóstico] Memoria libre"
+      },
+      {
+       "value": "syslog",
+       "label": "[Diagnóstico] Guardar syslog"
+      },
+      {
+       "value": "backup_db",
+       "label": "[Diagnóstico] Respaldar base de datos"
+      },
+      {
+       "value": "ftp",
+       "label": "[Avanzado] Servidor FTP (puerto 1021) (riesgo alto)"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "tab_label",
+     "label": "Nombre de la pestaña NickelMenu (máx. 12)",
+     "type": "text",
+     "default": "Kobo AIO",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "simple_tabs",
+     "label": "Reordenar pestañas inferiores",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "notebooks",
+     "label": "Mostrar Cuadernos",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "hide_discover",
+     "label": "Ocultar Descubrir (tienda)",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "replace_kp_preset",
+     "label": "Reemplazar el preset antiguo de KoboPatch Web UI (si existe)",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/pgaskin/NickelMenu/blob/master/res/doc",
+    "https://github.com/Parzval-Net/NickelMenu-Builder"
+   ],
+   "license": "MIT",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "nm.owner",
+   "category": "Menú",
+   "title": "Tarjeta del propietario",
+   "description": "Muestra tus datos de contacto desde NickelMenu por si pierdes el lector. Comparte solo lo mínimo (por ejemplo, un correo alternativo).",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [
+    {
+     "id": "name",
+     "label": "Nombre",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "email",
+     "label": "Correo",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "phone",
+     "label": "Teléfono",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "reward",
+     "label": "Recompensa",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "note",
+     "label": "Nota",
+     "type": "text",
+     "default": "",
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/Parzval-Net/NickelMenu-Builder"
+   ],
+   "license": "MIT",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "conf.exclude_sync",
+   "category": "Ajustes",
+   "title": "Proteger la biblioteca (ExcludeSyncFolders)",
+   "description": "Evita que Nickel importe ROMs, scripts e imágenes de carpetas ocultas. Se escribe con el escape correcto de Qt: una versión mal escapada oculta todos los libros en subcarpetas.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [
+    {
+     "id": "hide_calibre",
+     "label": "Ocultar también la carpeta 'calibre'",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/pgaskin/NickelMenu",
+    "https://www.mobileread.com/forums/showthread.php?t=313456"
+   ],
+   "license": "",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": true
+  },
+  {
+   "id": "conf.preferences",
+   "category": "Ajustes",
+   "title": "Preferencias rápidas de Nickel",
+   "description": "Capturas con el botón de encendido, montaje USB sin preguntar, apagado automático y rotación horizontal en todas las vistas.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "screenshots",
+     "label": "Capturas de pantalla (botón de encendido)",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "auto_usb",
+     "label": "Montar USB automáticamente al conectar",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "auto_off",
+     "label": "Apagar tras inactividad",
+     "type": "choice",
+     "default": 30,
+     "choices": [
+      {
+       "value": 15,
+       "label": "15 min"
+      },
+      {
+       "value": 30,
+       "label": "30 min"
+      },
+      {
+       "value": 60,
+       "label": "1 hora"
+      },
+      {
+       "value": 120,
+       "label": "2 horas"
+      },
+      {
+       "value": 0,
+       "label": "Nunca"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "force_landscape",
+     "label": "Permitir horizontal en todas las vistas",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [],
+   "license": "",
+   "reboot": false,
+   "can_uninstall": false,
+   "persistent": true
+  },
+  {
+   "id": "conf.sideloaded",
+   "category": "Ajustes",
+   "title": "Modo sideload (sin cuenta Kobo)",
+   "description": "Inicio centrado en tus libros sin tienda ni recomendaciones. Ideal si no usas cuenta Kobo.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "enabled",
+     "label": "Activar modo sideload",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [],
+   "license": "",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickelmenu",
+   "category": "Sistema",
+   "title": "NickelMenu 0.6.0",
+   "description": "Menús personalizados en Nickel: base para lanzar apps, atajos y casi todo el AIO.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [],
+   "sources": [
+    "https://github.com/pgaskin/NickelMenu"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickelhome",
+   "category": "Sistema",
+   "title": "Inicio minimalista (NickelHome 0.6)",
+   "description": "Oculta recomendaciones, promociones y avisos de la pantalla de inicio sin parchear el firmware.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [
+    {
+     "id": "row1col2",
+     "label": "Ocultar recomendaciones junto a la lectura actual",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "row2col2",
+     "label": "Ocultar el contenido junto a «Mis libros»",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "row3",
+     "label": "Ocultar la fila de avisos y promociones",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "row2",
+     "label": "Ocultar también «Mis libros» en Inicio",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/nicoverbruggen/NickelHome"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickeltypefix",
+   "category": "Lectura",
+   "title": "Tipografía mejorada (NickelTypeFix 1.0)",
+   "description": "Activa kerning/ligaduras y corrige justificado irregular, letras que bailan, versalitas y fuentes que vuelven a la del sistema en kepubs. La 1.0 abre capítulos largos varias veces más rápido.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [
+    {
+     "id": "optimize_legibility",
+     "label": "Activar optimizeLegibility (kerning y ligaduras)",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/nicoverbruggen/NickelTypeFix"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickelclock",
+   "category": "Lectura",
+   "title": "Reloj y batería al leer (NickelClock 0.4.0)",
+   "description": "Muestra la hora (y opcionalmente la batería) en el encabezado o pie del lector.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [
+    {
+     "id": "placement",
+     "label": "Ubicación",
+     "type": "choice",
+     "default": "Header",
+     "choices": [
+      {
+       "value": "Header",
+       "label": "Encabezado"
+      },
+      {
+       "value": "Footer",
+       "label": "Pie"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "position",
+     "label": "Lado del reloj",
+     "type": "choice",
+     "default": "Right",
+     "choices": [
+      {
+       "value": "Left",
+       "label": "Izquierda"
+      },
+      {
+       "value": "Center",
+       "label": "Centro"
+      },
+      {
+       "value": "Right",
+       "label": "Derecha"
+      }
+     ],
+     "help": ""
+    },
+    {
+     "id": "battery",
+     "label": "Mostrar batería",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [
+    "https://github.com/shermp/NickelClock"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickeldissolve",
+   "category": "Lectura",
+   "title": "Animación al pasar página (NickelDissolve 0.7)",
+   "description": "Transición de disolución entre páginas. Experimental; solo en Kobo MediaTek recientes.",
+   "risk": "medio",
+   "recommended": false,
+   "requires": [],
+   "options": [],
+   "sources": [
+    "https://github.com/nicoverbruggen/NickelDissolve"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickelmodmanager",
+   "category": "Sistema",
+   "title": "Gestor de mods en el Kobo (NickelModManager 0.3)",
+   "description": "Agrega «Más > Administrar mods» en el Kobo para activar o desactivar cada mod sin computador. Útil si un mod da problemas tras una actualización. Proyecto nuevo (octubre 2026).",
+   "risk": "medio",
+   "recommended": false,
+   "requires": [],
+   "options": [],
+   "sources": [
+    "https://github.com/nicoverbruggen/NickelModManager"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  }
+ ],
+ "installed": {}
+}
