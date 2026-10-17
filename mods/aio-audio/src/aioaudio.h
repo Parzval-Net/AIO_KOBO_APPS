@@ -31,6 +31,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *e) Q_DECL_OVERRIDE;
 private:
     bool down;
+    QElapsedTimer lastTouch; // mouse events right after a touch are its synthesized copy: ignored
 };
 
 // Thin progress line. Interactive: round knob, tap or drag to seek (one repaint per ~2% of travel for e-ink).
@@ -58,6 +59,7 @@ private:
     bool interactive, dragging;
     int thickness, drawnX;
     QPixmap knob;
+    QElapsedTimer lastTouch;
 };
 
 // Lives on the application, not on the reader: closing the reader deletes the reader's children, so the
@@ -66,6 +68,7 @@ class AioCloser : public QObject {
     Q_OBJECT
 public:
     explicit AioCloser(QObject *parent) : QObject(parent) {}
+    QPointer<QWidget> reader; // the reader to close (null: already gone, nothing to do)
 public Q_SLOTS:
     void close();
 };
@@ -76,6 +79,9 @@ class AioAudio : public QObject {
 public:
     explicit AioAudio(QWidget *reader);
     ~AioAudio();
+    bool owns(QObject *player) const;   // the AudioPlayer belongs to this reader
+    void media(QObject *player, int index, const QByteArray &mp3, bool hasData); // one AudioPlayer::setMedia
+    void syncVolume();
     void setPlayer(QObject *player);
     void setTrack(int index, const QByteArray &mp3);
     void setCover(const QByteArray &mp3);
@@ -94,6 +100,7 @@ public Q_SLOTS:
     void endOfTrackCheck();
     void userSkip();
     void applyPending();
+    void applyPendingLast();
     void applyRate();
     void onDuration();
     void flashSender();

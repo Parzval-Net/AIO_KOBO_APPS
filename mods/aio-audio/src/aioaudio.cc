@@ -32,6 +32,7 @@
 #include <QBoxLayout>
 #include <QBuffer>
 #include <QCoreApplication>
+#include <QDir>
 #include <QEvent>
 #include <QFont>
 #include <QGuiApplication>
@@ -59,6 +60,7 @@
 
 #include <dlfcn.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include <NickelHook.h>
 
@@ -66,6 +68,7 @@
 
 #define AIO_DIR "/mnt/onboard/.adds/aio-audio"
 #define MP3Z "/usr/local/Kobo/libmp3z.so"
+#define MAX_TRACKS 999 // TRCK totals and saved track keys above this are treated as garbage
 
 static void (*MP3Reader_MP3Reader)(void *self, QWidget *parent, void *state);
 static void (*QLabel_setText)(QLabel *self, const QString &text);
@@ -86,6 +89,20 @@ static void (*BluetoothManager_setMuted)(void *self, const QString &dev, bool le
 static void (*BluetoothManager_setVolume)(void *self, const QString &dev, unsigned char left, unsigned char right);
 
 static int btVolume = -1; // 0..127, ours (positions.ini "btVolume"), -1 = not loaded yet
+
+// The user partition is mounted (not exported over USB): /mnt/onboard is its own filesystem and our folder,
+// which KoboRoot always ships (LEEME.txt), is there. Otherwise a QSettings write would land on the rootfs.
+static bool onboardReady() {
+    struct stat onboard, mnt;
+    if (stat("/mnt/onboard", &onboard) != 0 || stat("/mnt", &mnt) != 0 || onboard.st_dev == mnt.st_dev)
+        return false;
+    return QDir(QLatin1String(AIO_DIR)).exists();
+}
+
+// The headset volume API is complete: only then the volume buttons and the stream gain are ours.
+static bool btVolumeApi() {
+    return BluetoothManager_sharedInstance && BluetoothManager_a2dpSink && BluetoothManager_setVolume;
+}
 
 static int btVolumeLoad() {
     if (btVolume < 0) {
@@ -116,6 +133,25 @@ static bool btVolumeApply() {
     BluetoothManager_setVolume(bm, dev, v, v);
     nh_log("AIO Audio: headset volume %d/127 (%s)", v, absolute ? "absolute" : "software");
     return true;
+}
+
+static int volumePercent() {
+    return (btVolumeLoad() * 100 + 63) / 127;
+}
+
+// Full stream gain and our level on the headset; with no headset, our level as the stream gain instead.
+// Without the Bluetooth API the stock log10 stream volume is left alone.
+static void applyVolumeTo(QObject *player) {
+    if (!btVolumeApi())
+        return;
+    const bool headset = btVolumeApply();
+    if (player)
+        QMetaObject::invokeMethod(player, "setVolume", Q_ARG(int, headset ? 100 : volumePercent()));
+}
+
+// The AudioPlayer of an MP3Reader (MP3Reader+0x40 on 4.45, RE).
+static QObject *readerPlayer(const QWidget *reader) {
+    return *reinterpret_cast<QObject *const *>(reinterpret_cast<const char *>(reader) + 0x40);
 }
 
 static QPointer<AioAudio> aio;
@@ -518,16 +554,24 @@ AioTap::AioTap(QWidget *parent) : QLabel(parent), down(false) {
     setAttribute(Qt::WA_AcceptTouchEvents);
 }
 
+// A mouse event this soon after a touch is the copy the platform plugin may also deliver.
+static bool recentTouch(const QElapsedTimer &t) {
+    return t.isValid() && t.elapsed() < 500;
+}
+
 bool AioTap::event(QEvent *e) {
     switch (e->type()) {
     case QEvent::TouchBegin:
+        lastTouch.start();
         down = true;
         e->accept();
         return true;
     case QEvent::TouchUpdate:
+        lastTouch.start();
         e->accept();
         return true;
     case QEvent::TouchEnd: {
+        lastTouch.start();
         const QTouchEvent *te = static_cast<QTouchEvent *>(e);
         bool inside = te->touchPoints().isEmpty() || rect().contains(te->touchPoints().first().pos().toPoint());
         bool was = down;
@@ -538,6 +582,7 @@ bool AioTap::event(QEvent *e) {
         return true;
     }
     case QEvent::TouchCancel:
+        lastTouch.start();
         down = false;
         e->accept();
         return true;
@@ -547,11 +592,17 @@ bool AioTap::event(QEvent *e) {
 }
 
 void AioTap::mousePressEvent(QMouseEvent *e) {
-    down = e->button() == Qt::LeftButton;
     e->accept();
+    if (recentTouch(lastTouch))
+        return;
+    down = e->button() == Qt::LeftButton;
 }
 
 void AioTap::mouseReleaseEvent(QMouseEvent *e) {
+    if (recentTouch(lastTouch)) {
+        e->accept();
+        return;
+    }
     bool was = down;
     down = false;
     e->accept();
@@ -637,6 +688,7 @@ bool AioSlider::event(QEvent *e) {
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd: {
+        lastTouch.start();
         const QTouchEvent *te = static_cast<QTouchEvent *>(e);
         if (!te->touchPoints().isEmpty()) {
             qreal x = te->touchPoints().first().pos().x();
@@ -651,6 +703,7 @@ bool AioSlider::event(QEvent *e) {
         return true;
     }
     case QEvent::TouchCancel:
+        lastTouch.start();
         dragging = false;
         update();
         e->accept();
@@ -661,18 +714,20 @@ bool AioSlider::event(QEvent *e) {
 }
 
 void AioSlider::mousePressEvent(QMouseEvent *e) {
-    if (e->button() == Qt::LeftButton)
+    if (e->button() == Qt::LeftButton && !recentTouch(lastTouch))
         press(e->pos().x());
     e->accept();
 }
 
 void AioSlider::mouseMoveEvent(QMouseEvent *e) {
-    drag(e->pos().x());
+    if (!recentTouch(lastTouch))
+        drag(e->pos().x());
     e->accept();
 }
 
 void AioSlider::mouseReleaseEvent(QMouseEvent *e) {
-    release(e->pos().x());
+    if (!recentTouch(lastTouch))
+        release(e->pos().x());
     e->accept();
 }
 
@@ -717,6 +772,7 @@ AioAudio::AioAudio(QWidget *r)
         nh_log("AIO Audio: Ui_MP3Reader changed, keeping the stock layout");
         playPause = 0; // stock "Play"/"Pause" text stays
         speed = 0;
+        cover = 0;     // stock cover lambda keeps the cover (never marked aioCover)
         return;
     }
 
@@ -795,7 +851,7 @@ AioAudio::AioAudio(QWidget *r)
         hl->addSpacing(px(8));
         hl->addWidget(speed);
     }
-    if (volDown && volUp) { // stock log10 volume, kept wired; the stock "volume" label shows the level
+    if (volDown && volUp) { // headset volume when the Bluetooth API resolved, else the stock log10 volume
         hl->addSpacing(px(8));
         QLabel *volIcon = new QLabel(header);
         volIcon->setObjectName("aioVolumeIcon");
@@ -821,18 +877,22 @@ AioAudio::AioAudio(QWidget *r)
         volUp->setAlignment(Qt::AlignCenter);
         setIcon(volUp, glyph(G_PLUS, px(48)), vb);
         hl->addWidget(volUp);
+        const bool ours = btVolumeApi();
         QLabel *const vols[] = {volDown, volUp};
         for (QLabel *l : vols) {
             l->setProperty("aioOwned", true);
-            QObject::disconnect(l, nullptr, r, nullptr); // stock log10 stream volume: replaced by the headset volume
+            if (ours)
+                QObject::disconnect(l, nullptr, r, nullptr); // stock log10 stream volume: replaced by the headset volume
             onTap(l, this, "flashSender()");
         }
-        onTap(volDown, this, "volumeDown()");
-        onTap(volUp, this, "volumeUp()");
-        volumeLabel = volume;
-        if (volume)
-            volume->setProperty("aioOwned", true); // stock applyVolume would write "Volume: 10" here
-        showVolume();
+        if (ours) {
+            onTap(volDown, this, "volumeDown()");
+            onTap(volUp, this, "volumeUp()");
+            volumeLabel = volume;
+            if (volume)
+                volume->setProperty("aioOwned", true); // stock applyVolume would write "Volume: 10" here
+            showVolume();
+        }
     } else {
         if (volDown) volDown->hide();
         if (volUp) volUp->hide();
@@ -1032,6 +1092,18 @@ void AioAudio::setPlayer(QObject *p) {
         speed->setText(QString::fromLatin1(RATE_NAMES[speedIndex]));
 }
 
+bool AioAudio::owns(QObject *p) const {
+    return p && reader && readerPlayer(reader.data()) == p;
+}
+
+void AioAudio::media(QObject *p, int index, const QByteArray &mp3, bool hasData) {
+    setPlayer(p); // AudioPlayer : QMediaPlayer (single inheritance)
+    setTrack(index, mp3);
+    if (hasData)
+        setCover(mp3);
+    tick();
+}
+
 QString AioAudio::bookKey() const {
     QString k = bookTitle.trimmed();
     k.replace('/', '_');
@@ -1049,6 +1121,8 @@ void AioAudio::loadState() {
     QSettings s(AIO_DIR "/positions.ini", QSettings::IniFormat);
     s.beginGroup(key);
     savedTrack = s.value("track", -1).toInt();
+    if (savedTrack < 0 || savedTrack > MAX_TRACKS)
+        savedTrack = -1;
     savedPos = s.value("pos", 0).toLongLong();
     QStringList ds = s.value("durations").toString().split(' ', QString::SkipEmptyParts);
     for (int i = 0; i < ds.size(); i++) {
@@ -1057,7 +1131,7 @@ void AioAudio::loadState() {
         if (kv.size() == 2) {
             int idx = kv.at(0).toInt(&ok1);
             qint64 ms = kv.at(1).toLongLong(&ok2);
-            if (ok1 && ok2 && idx >= 0 && ms > 0)
+            if (ok1 && ok2 && idx >= 0 && idx <= MAX_TRACKS && ms > 0)
                 durations.insert(idx, ms);
         }
     }
@@ -1069,6 +1143,10 @@ void AioAudio::saveState(bool askPlayer) {
     const QString key = bookKey();
     if (key.isEmpty() || track < 0 || pendingSeek >= 0)
         return; // a resume not applied yet must not be overwritten
+    if (!onboardReady()) {
+        nh_log("AIO Audio: /mnt/onboard not mounted, position not saved");
+        return;
+    }
     qint64 pos = lastPos, dur = lastDur;
     if (askPlayer && player) {
         pos = player->property("position").toLongLong();
@@ -1095,7 +1173,7 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
     const QStringList tr = id3Text(mp3, "TRCK").split('/'); // Kobo AIO: "7/15" over the whole .mp3z
     int no = tr.size() >= 1 ? tr.at(0).trimmed().toInt() : 0;
     int count = tr.size() >= 2 ? tr.at(1).trimmed().toInt() : 0;
-    if (no < 0 || count < 0 || (count > 0 && no > count))
+    if (no < 1 || no > MAX_TRACKS || count < 0 || count > MAX_TRACKS || (count > 0 && no > count))
         no = count = 0;
     if (!album.isEmpty() && album != bookTitle) {
         bookTitle = album;
@@ -1118,7 +1196,7 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
             pendingSeek = savedPos;
             QTimer::singleShot(1000, this, SLOT(applyPending()));
             QTimer::singleShot(2500, this, SLOT(applyPending()));
-            QTimer::singleShot(5000, this, SLOT(applyPending()));
+            QTimer::singleShot(5000, this, SLOT(applyPendingLast()));
         }
     } else if (changed) {
         pendingSeek = -1;
@@ -1152,6 +1230,21 @@ void AioAudio::applyPending() {
         lastPos = pendingSeek;
         resumeTarget = pendingSeek;
     }
+    pendingSeek = -1;
+    QTimer::singleShot(400, this, SLOT(tick()));
+}
+
+// Last retry: if the duration is still unknown, seek anyway, so the resume never blocks saveState for good.
+void AioAudio::applyPendingLast() {
+    if (pendingSeek < 0 || (player && player->property("duration").toLongLong() > 0)) {
+        applyPending();
+        return;
+    }
+    if (player) {
+        QMetaObject::invokeMethod(player, "setPosition", Q_ARG(qint64, pendingSeek));
+        resumeTarget = pendingSeek; // repeated by applyPending once durationChanged arrives, if it was dropped
+    }
+    lastPos = pendingSeek; // a close before the next tick keeps the saved minute
     pendingSeek = -1;
     QTimer::singleShot(400, this, SLOT(tick()));
 }
@@ -1248,6 +1341,10 @@ void AioAudio::setCover(const QByteArray &mp3) {
     QSize native = jr.size();
     if (!native.isValid() || native.width() > 8000 || native.height() > 8000)
         return;
+    const QByteArray fmt = jr.format().toLower();
+    if (fmt != "jpeg" && fmt != "jpg" && qint64(native.width()) * native.height() > 4000000)
+        return; // only JPEG decodes at the scaled size: others would be decoded whole first
+
     jr.setScaledSize(native.scaled(coverBox, Qt::KeepAspectRatio)); // the JPEG handler decodes at that scale
     QImage img = jr.read();
     if (img.isNull())
@@ -1350,17 +1447,22 @@ void AioAudio::goHome() {
         lastDur = player->property("duration").toLongLong();
     }
     saveState(false);
-    if (MP3Reader_saveBookmark && reader)
-        MP3Reader_saveBookmark(reader.data());
     static QPointer<AioCloser> closer;
     if (!closer)
         closer = new AioCloser(QCoreApplication::instance());
+    closer->reader = reader;
     QMetaObject::invokeMethod(closer, "close", Qt::QueuedConnection);
 }
 
 void AioCloser::close() {
+    QWidget *r = reader.data();
+    reader = 0;
+    if (!r)
+        return; // the reader closed some other way before this ran
+    if (MP3Reader_saveBookmark)
+        MP3Reader_saveBookmark(r);
     if (ReadingController_closeReadingView)
-        ReadingController_closeReadingView(); // deletes the reader (and its AioAudio), not this object
+        ReadingController_closeReadingView(); // static: deletes the reader (and its AioAudio), not this object
 }
 
 void AioAudio::cycleSpeed() {
@@ -1385,6 +1487,12 @@ void AioAudio::sleepFired() {
     sleepTimer->stop();
     sleepMode = 0;
     pauseOnPlay = false;
+    // The pause goes around MP3Reader, so its "Play" setText may never come: show it ourselves first
+    // (icon, `playing`, tick timer, saved position), then pause.
+    if (!playPauseText(playPause.data(), QString::fromLatin1("Play"))) {
+        playing = false;
+        timer->stop();
+    }
     if (player)
         QMetaObject::invokeMethod(player, "pause");
     updateSleepLabel();
@@ -1432,10 +1540,16 @@ void AioAudio::showVolume() {
 
 void AioAudio::stepVolume(int delta) {
     btVolume = qBound(0, btVolumeLoad() + delta, 127);
-    btVolumeApply();
+    applyVolumeTo(player.data()); // no headset: the player's own volume, so the buttons still do something
     showVolume();
+    if (!onboardReady())
+        return;
     QSettings s(AIO_DIR "/positions.ini", QSettings::IniFormat);
     s.setValue("btVolume", btVolume); // one small write per tap, never on a timer
+}
+
+void AioAudio::syncVolume() {
+    applyVolumeTo(player.data());
 }
 
 void AioAudio::volumeDown() { stepVolume(-8); }
@@ -1459,15 +1573,35 @@ void AioAudio::unflash() {
 
 // -- hooks ----------------------------------------------------------------------------------------------
 
+// The last setMedia no AioAudio took (its reader was still being built, or `aio` belongs to an older reader).
+static QPointer<QObject> lastMediaPlayer;
+static int lastMediaIndex = -1;
+static QByteArray lastMediaData;
+static bool lastMediaHasData = false;
+
+static void forgetMedia() {
+    lastMediaPlayer = 0;
+    lastMediaIndex = -1;
+    lastMediaData = QByteArray(); // the whole track: let it go
+    lastMediaHasData = false;
+}
+
 extern "C" __attribute__((visibility("default"))) void _aio_reader(void *self, QWidget *parent, void *state) {
     MP3Reader_MP3Reader(self, parent, state);
     // MP3Reader passes `this` to Ui_MP3Reader::setupUi as the form QWidget, so the QObject is at offset 0.
     QWidget *reader = reinterpret_cast<QWidget *>(self);
     if (qstrcmp(reader->metaObject()->className(), "MP3Reader") || reader->objectName() != "MP3Reader") {
         nh_log("unexpected reader %s, keeping the stock layout", reader->metaObject()->className());
+        forgetMedia();
         return;
     }
     aio = new AioAudio(reader);
+    // Stock setPage may already have called setMedia inside the constructor, before AioAudio existed.
+    if (lastMediaPlayer && aio->owns(lastMediaPlayer.data()))
+        aio->media(lastMediaPlayer.data(), lastMediaIndex, lastMediaData, lastMediaHasData);
+    else if (lastMediaPlayer)
+        nh_log("AIO Audio: pending track is not this reader's player (MP3Reader+0x40), dropped");
+    forgetMedia();
 }
 
 extern "C" __attribute__((visibility("default"))) void _aio_setText(QLabel *self, const QString &text) {
@@ -1475,8 +1609,12 @@ extern "C" __attribute__((visibility("default"))) void _aio_setText(QLabel *self
         QLabel_setText(self, text);
         return;
     }
-    if (text == QLatin1String("Pause") && self->objectName() == QLatin1String("playPause"))
-        btVolumeApply(); // now playing: make sure the headset is not at volume 0
+    if (text == QLatin1String("Pause") && self->objectName() == QLatin1String("playPause")) {
+        if (aio)
+            aio->syncVolume(); // now playing: make sure the headset is not at volume 0
+        else
+            applyVolumeTo(0);
+    }
     if (aio && aio->playPauseText(self, text))
         return; // play/pause icon
     if (self->property("aioOwned").toBool())
@@ -1505,20 +1643,23 @@ extern "C" __attribute__((visibility("default"))) void _aio_setGeometry(QWidget 
 
 extern "C" __attribute__((visibility("default"))) void _aio_setMedia(void *self, int index, const void *content, QIODevice *device) {
     AudioPlayer_setMedia(self, index, content, device);
+    QObject *player = reinterpret_cast<QObject *>(self); // AudioPlayer : QMediaPlayer (single inheritance)
     // AUDIO-FIX: stock setPage just called applyVolume(10) (10 % stream gain) and never sets the headset's
     // volume. Full stream gain, and the headset volume is what the volume buttons change (like Kobo's player).
-    QMetaObject::invokeMethod(reinterpret_cast<QObject *>(self), "setVolume", Q_ARG(int, 100));
-    btVolumeApply();
-    if (!aio)
+    // Only with the whole Bluetooth API: otherwise the stock volume stays.
+    applyVolumeTo(player);
+    QBuffer *buffer = qobject_cast<QBuffer *>(device);
+    const QByteArray data = buffer ? buffer->data() : QByteArray();
+    if (aio && aio->owns(player)) {
+        forgetMedia();
+        aio->media(player, index, data, buffer != 0);
         return;
-    aio->setPlayer(reinterpret_cast<QObject *>(self)); // AudioPlayer : QMediaPlayer (single inheritance)
-    if (QBuffer *buffer = qobject_cast<QBuffer *>(device)) {
-        aio->setTrack(index, buffer->data());
-        aio->setCover(buffer->data());
-    } else {
-        aio->setTrack(index, QByteArray());
     }
-    aio->tick();
+    // No AioAudio for this reader yet (setPage inside the MP3Reader constructor): _aio_reader replays it.
+    lastMediaPlayer = player;
+    lastMediaIndex = index;
+    lastMediaData = data;
+    lastMediaHasData = buffer != 0;
 }
 
 static int aio_init() {
