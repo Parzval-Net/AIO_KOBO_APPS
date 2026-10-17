@@ -918,7 +918,7 @@ AioTap::AioTap(QWidget *parent, const QPixmap &i, const QFont &f, bool c, bool f
     setAttribute(Qt::WA_AcceptTouchEvents);
     setAttribute(Qt::WA_OpaquePaintEvent);
     if (!icon.isNull() && feedback)
-        iconInv = inverted(icon, icon.size());
+        iconInv = ::inverted(icon, icon.size());
     pressTimer->setSingleShot(true);
     pressTimer->setInterval(120);
     connect(pressTimer, SIGNAL(timeout()), this, SLOT(unpress()));
