@@ -28,6 +28,7 @@ jobs:
           path: ~/Kobo-AIO/cache
           key: site-${{ hashFiles('tools/build_site.py', 'tools/kobo_aio/modules/*.py') }}
           restore-keys: site-
+      - run: python -m pip install Pillow   # the engine imports it while listing the pinned artifacts
       - run: python tools/build_site.py --out _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

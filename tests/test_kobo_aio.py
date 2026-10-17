@@ -316,7 +316,7 @@ class AudiobookTests(TempKobo):
         from kobo_aio.audiobooks import build_mp3z, collect, mp3_duration_ms, strip_tags
         src = self.tmp / "Autora - Canción de otoño"
         src.mkdir()
-        (src / "1 - Capítulo único ¿Ñandú?.mp3").write_bytes(silent_mp3(150))
+        (src / "1 - Capítulo único ¿Ñandú¡.mp3").write_bytes(silent_mp3(150))   # no "?": invalid on Windows
         (src / "2 - Épílogo.mp3").write_bytes(silent_mp3(20))
         name, data, _ = build_mp3z(collect(src), part_minutes=1)
         self.assertEqual(name, "Canción de otoño.mp3z")  # Nickel title = file name (Unicode OK there)

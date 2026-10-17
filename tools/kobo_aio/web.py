@@ -222,7 +222,7 @@ def _check_selection(selection: dict) -> None:
 
 
 def _home_rel(path) -> str:
-    return str(Path(path).resolve().relative_to(AIO_HOME.resolve()))
+    return Path(path).resolve().relative_to(AIO_HOME.resolve()).as_posix()   # the worker joins it with "/"
 
 
 def sync_ops(rels) -> list[dict]:
