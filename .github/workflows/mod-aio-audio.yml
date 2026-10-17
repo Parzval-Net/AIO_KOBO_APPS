@@ -2,6 +2,9 @@ name: Mod AIO Audio
 
 on:
   push:
+    # Path filters do not apply to tag pushes: a tag aio-audio-v* always builds and publishes a release.
+    branches: ["**"]
+    tags: ["aio-audio-v*"]
     paths: ["mods/aio-audio/**", ".github/workflows/mod-aio-audio.yml"]
   pull_request:
     paths: ["mods/aio-audio/**", ".github/workflows/mod-aio-audio.yml"]
@@ -47,3 +50,37 @@ jobs:
             mods/aio-audio/src/libaioaudio.so
             mods/aio-audio/SHA256SUMS
             mods/aio-audio/readelf.txt
+
+  release:
+    # Only for tags aio-audio-v*; the only job allowed to write (create/update the release).
+    if: startsWith(github.ref, 'refs/tags/aio-audio-v')
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: aio-audio
+          path: dist
+      - name: Check package
+        working-directory: dist
+        run: |
+          sha256sum -c SHA256SUMS
+          test "$(tar tzf KoboRoot.tgz | grep -v '/$' | sed 's#^\./##' | sort | tr '\n' ' ')" = \
+            "mnt/onboard/.adds/aio-audio/LEEME.txt usr/local/Kobo/imageformats/libaioaudio.so "
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        working-directory: dist
+        run: |
+          # Prerelease and never "latest": the app releases (v*) keep the latest slot.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" KoboRoot.tgz SHA256SUMS --clobber
+          else
+            gh release create "$TAG" KoboRoot.tgz SHA256SUMS --verify-tag --prerelease --latest=false \
+              --title "AIO Audio ${TAG#aio-audio-v} (experimental)" \
+              --notes "Mod experimental AIO Audio para Nickel (firmware 4.23 a 4.x). Kobo AIO lo instala y verifica por SHA-256; para fijar este build usa: make pin-aioaudio TGZ=KoboRoot.tgz VERSION=${TAG#aio-audio-v}"
+          fi

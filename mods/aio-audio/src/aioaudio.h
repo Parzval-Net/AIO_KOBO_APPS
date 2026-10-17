@@ -19,8 +19,11 @@
 
 class QEvent;
 class QGestureEvent;
+class QKeyEvent;
 class QMouseEvent;
 class QPaintEvent;
+class QRect;
+class QRegion;
 class QTimer;
 
 // Passive area (header, rows, bars, cover box): takes every touch and mouse event, so a tap that misses a button
@@ -62,6 +65,9 @@ public:
     void setText(const QString &text); // no-op when unchanged
     QString text() const { return str; }
     void setAlignment(Qt::Alignment a) { align = a; }
+    void setDetail(const QString &text);  // second text, right-aligned (track number); no-op when unchanged
+    void setInverted(bool on);            // drawn white on black (the current track)
+    void setInset(int px) { inset = px; } // side padding of plain (non-chip) buttons
     void fitWidth(const QStringList &texts, int minWidth); // fixed width for the widest text (set the height first)
 Q_SIGNALS:
     void tapped();
@@ -84,6 +90,9 @@ private:
     Qt::Alignment align;
     bool chip, feedback, down, pressed;
     QTimer *pressTimer;
+    QString detail;
+    bool inverted;
+    int inset;
     QElapsedTimer lastTouch; // mouse events right after a touch are its synthesized copy: ignored
 };
 
@@ -127,6 +136,15 @@ public Q_SLOTS:
     void close();
 };
 
+// Application event filter, installed only while a restyled player is shown: the page-turn buttons (as Nickel's
+// TactileButtonFilter delivers them, already oriented and inverted) seek -30/+30 s instead of changing the track.
+class AioKeys : public QObject {
+    Q_OBJECT
+public:
+    explicit AioKeys(QObject *parent) : QObject(parent) {}
+    bool eventFilter(QObject *watched, QEvent *e) Q_DECL_OVERRIDE;
+};
+
 // One per open .mp3z (child of the MP3Reader widget, so it dies with it).
 class AioAudio : public QObject {
     Q_OBJECT
@@ -140,8 +158,14 @@ public:
     void setCover(const QByteArray &mp3);
     bool playPauseText(QLabel *label, const QString &text); // stock "Play"/"Pause": icon instead of text
     void setChapter(const QString &name);
-    QPixmap framedCover(const QPixmap &pm) const;          // a stock cover, fitted into our framed box
+    QPixmap framedCover(const QPixmap &pm);                // a stock cover, fitted into our framed box (kept)
     bool eventFilter(QObject *watched, QEvent *e) Q_DECL_OVERRIDE;
+    QWidget *readerWidget() const { return reader.data(); }
+    bool restyled() const { return !rootPane.isNull(); }  // our layout is on (the hooks below may act)
+    bool readerShown() const;
+    bool trackEnded() const;                               // the player is at the end of its track (auto-advance)
+    bool pageKey(QObject *receiver, QKeyEvent *e);         // page-turn button: true when taken
+    bool fastRegion(const QRegion &region, const QPoint &origin) const; // only our black/white controls changed
 
 public Q_SLOTS:
     void rewind();
@@ -167,6 +191,12 @@ public Q_SLOTS:
     void saveVolumeNow();
     void savePaused();
     void btTapped();
+    void openToc();
+    void closeToc();
+    void tocPrev();
+    void tocNext();
+    void tocRowTapped();
+    void jumpNow();
 
 private:
     int px(int dragon) const;
@@ -188,6 +218,16 @@ private:
     QString bookKey() const;
     void installGestureFilters();
     bool gestureOnPane(QGestureEvent *e) const;
+    bool isGestureHost(QObject *o) const;
+    void setKeyFilter(bool on);
+    void relayout();                    // cover size from the reader's real height (Show/Resize)
+    void redrawCover();
+    void drawPlaceholder();
+    bool inFast(const QRect &global) const;
+    int currentTrack() const;
+    void buildToc();
+    void layoutToc();
+    void fillToc();
 
     QPointer<QWidget> reader;
     QPointer<QObject> player;
@@ -221,6 +261,24 @@ private:
     bool btChecked = false, btRequested = false, btRetried = false, btMine = false, btRetryPending = false;
     int btTries = 0;                    // 1 s retries while another reader's read is in flight (at most 5)
     int sentVolume = -1;                // last level sent to btDev by this reader
+    // Layout from the real reader height: everything but the cover has a fixed height.
+    QPointer<AioPane> coverRow;
+    int fixedH = 0;
+    QImage coverSrc;                    // the picture of the cover shown (re-framed when the box changes)
+    bool placeholder = false;
+    QString bookPath, fallbackTitle;    // the .mp3z (Content::getId), its folder or file name
+    // Fast refresh: these widgets only ever paint black and white.
+    QList<QPointer<QWidget> > fastWidgets;
+    bool keysOn = false;
+    QElapsedTimer keyClock;             // auto-repeat of a held page button: one seek per 400 ms
+    // "Capitulos": the .mp3z entries as libmp3z orders them, read once on the first open.
+    QPointer<AioTap> tocTap, tocPrevTap, tocNextTap, tocClose;
+    QPointer<AioPane> tocPane, tocLine;
+    QPointer<AioText> tocTitle, tocPageText;
+    QList<QPointer<AioTap> > tocRows;
+    QStringList tocNames;
+    bool tocLoaded = false;
+    int tocPage = 0, tocPerPage = 9, tocCurrent = -1, jumpTarget = -1;
 };
 
 #endif

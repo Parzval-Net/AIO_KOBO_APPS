@@ -6,18 +6,29 @@
 // no cover (AudioPlayer::broadcastMetadata only emits trackImageChanged when Qt reports metadata).
 //
 // Layout, built in our own pane on top of the stock Ui_MP3Reader form (portrait, black on white, sizes scaled
-// from a 1680 px tall screen, every tap target >= 106 px, every row a fixed height):
-//   header      [<] Mis libros ....................................... ( 1,25x )   112 px, thin black line
-//   cover       square, min(70% of the width, 42% of the height), thin black frame, read from the track's
-//               ID3 APIC (placeholder box with the book title when there is none)
-//   title       book title (ID3 TALB), bold, one line, elided
-//   chapter     chapter/track name, italic, one line, elided
-//   scrubber    seek slider (tap or drag); elapsed at the left and "-remaining" at the right under it
+// from a 1680 px tall screen, tap targets >= 106 px). Every row but the cover has a fixed height; the cover is
+// the largest square that fits the reader's real height (measured on Show/Resize) and the space left over is
+// spread evenly between the groups, so nothing is clipped:
+//   header      [<] Mis libros ................................... [toc] ( 1,25x )   112 px, thin black line
+//   cover       square, min(78% of the width, 48% of the height), thin black frame, 16 grey levels, read from
+//               the track's ID3 APIC (placeholder box with the book title when there is none)
+//   title       book title: ID3 TALB, else the .mp3z's folder name, else its file name; bold, one line
+//   chapter     cleaned track name, italic, one line
+//   scrubber    seek slider (tap or drag); elapsed / "-remaining" 8 px under it, aligned with the line ends
 //   transport   [|<]  [-30]  [ play/pause ]  [+30]  [>|]   (stock prev/next chapter buttons keep their wiring)
 //   bottom bar  [-] 55% [+]          ( timer 15 min )          [bt] headset name
 //   footer      "Pista 3 de 15 · 23% del libro · quedan ≈ 5 h 10 min"
+// "Capitulos" (header): full-reader list of the .mp3z tracks (ZIP central directory, sorted like libmp3z), 9 rows
+// per page; a tap jumps there through MP3Reader::goToPage and saves the bookmark.
 // Extras: sleep timer (15/30/60 min or end of track), playback speed, resume inside the track (positions.ini:
 // libmp3z only remembers the track), whole-book progress from TRCK and the learned track lengths.
+//
+// Track changes come only from our controls. Nickel's reading view turns taps, swipes and page keys on the cover
+// or the screen edges into goToNextPage/goToPrevPage signals that reach MP3Reader through its qt_static_metacall;
+// while our layout is on, those calls are dropped (unless the track just ended: auto-advance keeps working).
+// The stock prev/next buttons (PMF connections) and headset media keys (MP3Reader::keyPressEvent) are not
+// affected. The page-turn buttons, as Nickel delivers them (Key_Left/Up = back, Key_Right/Down = forward, already
+// oriented and inverted by its TactileButtonFilter), seek -30/+30 s; in the track list they turn its pages.
 //
 // Performance rules. Kobo Libra Colour (Kaleido colour e-ink): every repainted region goes through kernel colour
 // mapping threads that run SCHED_RR and preempt the A2DP encoder and GStreamer, and Nickel usually keeps a single
@@ -27,6 +38,11 @@
 //     volume and unmute at most once per device per Nickel run; setVolume only when the level changed, 300 ms
 //     after the last volume tap. Never on taps, ticks or play/pause changes. btVolume is saved 2 s after the
 //     last tap. The Bluetooth chip only consumes the tap (one deferred re-read per reader).
+//   - Monochrome: icons are pure black/white (no antialiased greys), the cover has 16 grey levels (dithered).
+//   - Fast refresh: a flush that only covers our black/white controls (times, slider, buttons in their pressed
+//     state, volume, sleep label) asks the Kobo platform plugin for a DU partial update instead of the default
+//     colour-aware waveform. Anything else (cover, titles, the track list, whole screens) is left as it was.
+//     Create AIO_DIR/no-fast-refresh to turn it off.
 //   - Fixed geometry: every row has a fixed height, every changing text a fixed width from its worst case; our
 //     texts paint themselves, so a text change repaints its own rect and never relayouts.
 //   - The slider is opaque and repaints only the band between the old and the new knob position.
@@ -34,43 +50,57 @@
 //     pixmap. No stylesheet repolish ever, no feedback on the back link or the cover.
 //   - Ticks: every 5 s while playing and visible, only elapsed/remaining and the slider (one band); the footer
 //     at most every 60 s or on a track change; the sleep label only when its minute changes. The timer stops
-//     when paused or when the reader is hidden.
+//     when paused or when the reader is hidden; nothing under the track list is repainted while it is open.
 //   - Every passive area takes touch and mouse events, so a tap never falls through to the reading view (events
 //     over a stock button we kept go on to it), and Nickel's gestures whose hot spot is on our pane are eaten
 //     at the reader's ancestors, where its recognizers deliver them.
-//   - Nothing is shown or hidden per track: the space is reserved.
+//   - Nothing is shown or hidden per track: the space is reserved. The track list is parsed once, on its first
+//     open, never per tick.
 //
-// Every hook below is a PLT entry of libmp3z.so (verified on 4.45.23697 with REA/Ghidra and the .rel.plt
-// table), so only calls made by libmp3z are affected:
+// Hooks (PLT entries, verified on 4.45.23697 against each library's .rel.plt: R_ARM_JUMP_SLOT, STB_GLOBAL,
+// STT_FUNC), so only calls made by that library are affected. libmp3z.so:
 //   MP3Reader::MP3Reader(QWidget*, PluginState*)   called by MP3ReaderPlugin::reader: restyle the Ui_MP3Reader form
 //   QLabel::setText                                setupUi, applyVolume, setPage and the play/pause lambda
 //   AudioPlayer::setMedia(int, QMediaContent, QIODevice*)  setPage: keep the player, read tags and cover
 //   QLabel::setPixmap, QWidget::setGeometry        stock cover lambda: never replaces or moves our cover
-// Optional symbols: TouchLabel::set(De)SelectedPixmap, ReadingController::closeReadingView, BluetoothManager and
-// BluetoothDevice (libnickel, nh_dlsym) and MP3Reader::saveBookmark (libmp3z is RTLD_LOCAL: dlopen RTLD_NOLOAD +
-// dlsym at runtime). All hooks and symbols are optional: if a firmware changes them, Nickel keeps the stock player.
+//   MP3Reader::goToNextPage/goToPrevPage/goToPage/goToNextChapter/goToPrevChapter   dropped when called from
+//                                                  MP3Reader::qt_static_metacall (Nickel's reading view signals)
+// libnickel.so: ReadingView::processTap/processSwipe   swallowed while our player is shown in that view
+// libQt5Widgets.so.5: QBackingStore::flush(QRegion, QWindow*, QPoint, QList<QPair<QRect, quint64> >)  fast refresh
+// Optional symbols: TouchLabel::set(De)SelectedPixmap, ReadingController::closeReadingView, Content::getId,
+// BluetoothManager and BluetoothDevice (libnickel, nh_dlsym) and MP3Reader::saveBookmark/goToPage/event/
+// staticMetaObject (libmp3z is RTLD_LOCAL: dlopen RTLD_NOLOAD + dlsym at runtime). All hooks and symbols are
+// optional: if a firmware changes them, Nickel keeps the stock behaviour for that part.
 
 #include <QBoxLayout>
 #include <QBuffer>
 #include <QCoreApplication>
+#include <QApplication>
+#include <QBackingStore>
 #include <QDir>
 #include <QEvent>
+#include <QFile>
+#include <QFileInfo>
 #include <QFont>
 #include <QFontMetrics>
 #include <QGesture>
 #include <QGuiApplication>
 #include <QImage>
 #include <QImageReader>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLayout>
 #include <QMetaMethod>
+#include <QMetaProperty>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
+#include <QPair>
 #include <QPolygonF>
 #include <QRegExp>
+#include <QRegion>
 #include <QScreen>
 #include <QSettings>
 #include <QSpacerItem>
@@ -78,10 +108,13 @@
 #include <QTimer>
 #include <QTouchEvent>
 #include <QVariant>
+#include <QVector>
 #include <QWidget>
+#include <QWindow>
 #include <qmath.h>
 
 #include <dlfcn.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/stat.h>
 
@@ -102,6 +135,27 @@ static void (*TouchLabel_setDeselectedPixmap)(QLabel *self, const QPixmap &pixma
 static void (*TouchLabel_setSelectedPixmap)(QLabel *self, const QPixmap &pixmap);   // libnickel, optional
 static void (*ReadingController_closeReadingView)();                                 // libnickel, optional
 static void (*MP3Reader_saveBookmark)(void *self);                                   // libmp3z, optional
+static void (*MP3Reader_goToPageFn)(void *self, int page);                           // libmp3z, 1-based, optional
+// Navigation hooks (libmp3z PLT): the originals.
+static void (*MP3Reader_goToNextPage)(void *self);
+static void (*MP3Reader_goToPrevPage)(void *self);
+static void (*MP3Reader_goToPage)(void *self, int page);
+static void (*MP3Reader_goToNextChapter)(void *self);
+static void (*MP3Reader_goToPrevChapter)(void *self, int how);                       // ReadingNavigationType
+// Nickel's reading view (libnickel PLT, optional).
+static void (*ReadingView_processTap)(void *self, void *tap);
+static void (*ReadingView_processSwipe)(void *self, void *swipe);
+// The .mp3z path: Content::getId of the Volume embedded at MP3Reader+0x24 (libnickel, optional; QString sret).
+static QString (*Content_getId)(const void *self);
+// Kobo's QtGui: the list carries per-rect update flags for the platform plugin (empty: its default waveform).
+typedef QList<QPair<QRect, quint64> > AioFlushList;
+static void (*QBackingStore_flush)(QBackingStore *self, const QRegion &region, QWindow *win, const QPoint &offset,
+                                   const AioFlushList &list);
+#define AIO_WAVE_DU_PARTIAL 0x24 // 0x20 DU | 0x4 partial (libkobo)
+static bool fastFlushOn = true;  // set false if anything looks wrong: then every flush is left as it was
+// MP3Reader::qt_static_metacall, [start, end): calls coming from there are Nickel's reading view signals.
+static uintptr_t metacallStart = 0, metacallEnd = 0;
+static bool navRangeOk = false;
 // Bluetooth output (libnickel, optional). Kobo's own AudiobookPlayer::updateSpeaker pushes a volume to the A2DP
 // device before playing; libmp3z never does, so mtkbtd's PCM keeps Volume=0 and the headset stays silent.
 static void *(*BluetoothManager_sharedInstance)();
@@ -167,7 +221,81 @@ static QObject *readerPlayer(const QWidget *reader) {
     return *reinterpret_cast<QObject *const *>(reinterpret_cast<const char *>(reader) + 0x40);
 }
 
+// The .mp3z of an MP3Reader: Content::getId of its Volume (embedded at MP3Reader+0x24 on 4.45, RE: setPage and
+// saveBookmark pass this+0x24), "file://" stripped. Empty unless it looks like an absolute .mp3z path.
+static QString readerPath(const QWidget *reader) {
+    if (!Content_getId || !reader)
+        return QString();
+    QString id = Content_getId(reinterpret_cast<const char *>(reader) + 0x24);
+    if (id.startsWith(QLatin1String("file://")))
+        id = id.mid(7);
+    if (!id.startsWith(QLatin1String("/")) || !id.endsWith(QLatin1String(".mp3z"), Qt::CaseInsensitive))
+        return QString();
+    return id;
+}
+
+static quint32 le16(const unsigned char *b) {
+    return quint32(b[0]) | quint32(b[1]) << 8;
+}
+static quint32 le32(const unsigned char *b) {
+    return quint32(b[0]) | quint32(b[1]) << 8 | quint32(b[2]) << 16 | quint32(b[3]) << 24;
+}
+
+// The entry names of a ZIP (.mp3z) as libmp3z orders its tracks (4.45, RE): every entry, UTF-8,
+// QStringList::sort(). Only the End Of Central Directory (last 66 KB) and the central directory are read; every
+// field is checked against what was read. Empty on any doubt (ZIP64, damaged file).
+static QStringList zipNames(const QString &path) {
+    QStringList names;
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return names;
+    const qint64 size = f.size();
+    if (size < 22)
+        return names;
+    const qint64 tailLen = qMin<qint64>(size, 66 * 1024);
+    if (!f.seek(size - tailLen))
+        return names;
+    const QByteArray tail = f.read(tailLen);
+    if (qint64(tail.size()) != tailLen)
+        return names;
+    const unsigned char *t = reinterpret_cast<const unsigned char *>(tail.constData());
+    int e = -1;
+    for (int i = tail.size() - 22; i >= 0; i--)
+        if (t[i] == 'P' && t[i + 1] == 'K' && t[i + 2] == 5 && t[i + 3] == 6) {
+            e = i;
+            break;
+        }
+    if (e < 0)
+        return names;
+    const quint32 entries = le16(t + e + 10), cdSize = le32(t + e + 12), cdOff = le32(t + e + 16);
+    const qint64 eocdPos = size - tailLen + e;
+    if (entries == 0xffff || cdSize == 0xffffffffu || cdOff == 0xffffffffu)
+        return names; // ZIP64
+    if (cdSize < 46 || cdSize > 8u * 1024 * 1024 || qint64(cdOff) + qint64(cdSize) > eocdPos || !f.seek(cdOff))
+        return names;
+    const QByteArray cd = f.read(cdSize);
+    if (quint32(cd.size()) != cdSize)
+        return names;
+    const unsigned char *c = reinterpret_cast<const unsigned char *>(cd.constData());
+    quint32 pos = 0;
+    while (cdSize - pos >= 46 && names.size() < MAX_TRACKS && quint32(names.size()) < entries) {
+        if (le32(c + pos) != 0x02014b50u)
+            break;
+        const quint32 nl = le16(c + pos + 28), xl = le16(c + pos + 30), cl = le16(c + pos + 32);
+        if (nl > cdSize - pos - 46)
+            break;
+        names << QString::fromUtf8(reinterpret_cast<const char *>(c + pos + 46), int(nl));
+        const quint32 step = 46 + nl + xl + cl;
+        if (step > cdSize - pos)
+            break;
+        pos += step;
+    }
+    names.sort();
+    return names;
+}
+
 static QPointer<AioAudio> aio;
+static QPointer<AioKeys> keyFilter;
 
 // The last setMedia no AioAudio took (setPage inside the MP3Reader constructor, before its AioAudio existed).
 // Kept only while a reader is being constructed: nobody else would replay it.
@@ -196,14 +324,37 @@ static void resolveMp3z() {
         return;
     done = true;
     static const char sym[] = "_ZN9MP3Reader12saveBookmarkEv";
+    static const char page[] = "_ZN9MP3Reader8goToPageEi";
+    void *smo = 0, *ev = 0;
     if (void *h = dlopen(MP3Z, RTLD_LAZY | RTLD_NOLOAD)) {
         MP3Reader_saveBookmark = reinterpret_cast<void (*)(void *)>(dlsym(h, sym));
+        MP3Reader_goToPageFn = reinterpret_cast<void (*)(void *, int)>(dlsym(h, page)); // the function, not its PLT
+        smo = dlsym(h, "_ZN9MP3Reader16staticMetaObjectE");
+        ev = dlsym(h, "_ZN9MP3Reader5eventEP6QEvent");
         dlclose(h); // only drops the reference NOLOAD added: the plugin keeps the library loaded
     }
     if (!MP3Reader_saveBookmark)
         MP3Reader_saveBookmark = reinterpret_cast<void (*)(void *)>(dlsym(RTLD_DEFAULT, sym));
+    if (!MP3Reader_goToPageFn)
+        MP3Reader_goToPageFn = reinterpret_cast<void (*)(void *, int)>(dlsym(RTLD_DEFAULT, page));
     if (!MP3Reader_saveBookmark)
         nh_log("MP3Reader::saveBookmark not found, closing without it");
+    if (!MP3Reader_goToPageFn)
+        nh_log("AIO Audio: MP3Reader::goToPage not found, no track list");
+    // qt_static_metacall is not exported: its address is in the class's QMetaObject (d.static_metacall); the
+    // function that follows it in libmp3z 4.45 is MP3Reader::event. Anything unexpected: nothing is blocked.
+    if (smo && ev) {
+        const QMetaObject *mo = static_cast<const QMetaObject *>(smo);
+        const uintptr_t start = reinterpret_cast<uintptr_t>(mo->d.static_metacall) & ~uintptr_t(1);
+        const uintptr_t end = reinterpret_cast<uintptr_t>(ev) & ~uintptr_t(1);
+        if (start && start < end && end < start + 0x2000) {
+            metacallStart = start;
+            metacallEnd = end;
+            navRangeOk = true;
+        }
+    }
+    if (!navRangeOk)
+        nh_log("AIO Audio: MP3Reader::qt_static_metacall range unknown, Nickel's page turns are left alone");
 }
 
 template <class T> static T *child(QWidget *root, const char *name) {
@@ -278,10 +429,10 @@ static bool isPartName(const QString &s) {
     return re.exactMatch(s);
 }
 
-// "File Name: 007 - Capitulo 3 (2-4).mp3" -> "Capitulo 3 · parte 2 de 4", "Parte 1 (3-15)" -> "Parte 1 · 3/15"
-// (entries made by Kobo AIO: "NNN - chapter (part-parts).mp3"; others are cleaned up).
-static QString trackTitle(QString t) {
-    t = t.mid(11).trimmed();
+// "007 - Capitulo 3 (2-4).mp3" -> "Capitulo 3 · parte 2 de 4", "Parte 1 (3-15)" -> "Parte 1 · 3/15", "(1-1)" is
+// dropped (entries made by Kobo AIO: "NNN - chapter (part-parts).mp3"; others are cleaned up).
+static QString cleanTrackName(QString t) {
+    t = t.trimmed();
     int dot = t.lastIndexOf('.');
     if (dot > 0 && t.length() - dot <= 5)
         t.truncate(dot);
@@ -304,13 +455,34 @@ static QString trackTitle(QString t) {
             int k = kn[0].toInt(&ok1), n = kn[1].toInt(&ok2);
             if (ok1 && ok2 && k > 0 && n >= k) {
                 QString name = t.left(open).trimmed();
-                // one arg() pass: no %N from the name
-                t = QString::fromUtf8(isPartName(name) ? "%1 · %2/%3" : "%1 · parte %2 de %3")
-                        .arg(name, QString::number(k), QString::number(n));
+                if (n == 1)
+                    t = name; // a single part: nothing to number
+                else // one arg() pass: no %N from the name
+                    t = QString::fromUtf8(isPartName(name) ? "%1 · %2/%3" : "%1 · parte %2 de %3")
+                            .arg(name, QString::number(k), QString::number(n));
             }
         }
     }
     return t;
+}
+
+// Stock title label: "File Name: 007 - x.mp3".
+static QString trackTitle(const QString &t) {
+    return cleanTrackName(t.mid(11));
+}
+
+// "a · a · b" -> "a · b" (a chapter named like its part).
+static QString dedupe(const QString &name) {
+    const QString sep = QString::fromUtf8(" · ");
+    const QStringList parts = name.split(sep);
+    QStringList out;
+    for (int i = 0; i < parts.size(); i++) {
+        const QString p = parts.at(i).trimmed();
+        if (p.isEmpty() || (!out.isEmpty() && out.last().compare(p, Qt::CaseInsensitive) == 0))
+            continue;
+        out << p;
+    }
+    return out.join(sep);
 }
 
 static QString translate(QLabel *label, const QString &text, bool compact) {
@@ -456,9 +628,10 @@ static QString id3Text(const QByteArray &mp3, const char *id) {
 
 // -- icons ------------------------------------------------------------------------------------------------
 
-enum Glyph { G_PLAY, G_PAUSE, G_BACK30, G_FWD30, G_CHEVRON, G_BT, G_TIMER, G_KNOB, G_SKIP_PREV, G_SKIP_NEXT, G_MINUS, G_PLUS };
+enum Glyph { G_PLAY, G_PAUSE, G_BACK30, G_FWD30, G_CHEVRON, G_BT, G_TIMER, G_KNOB, G_SKIP_PREV, G_SKIP_NEXT, G_MINUS, G_PLUS, G_TOC };
 
-// Painted stand-ins, pure black on transparent (crisp on e-ink), for when a Nickel resource is missing.
+// Painted stand-ins, pure black on transparent (no antialiasing: crisp on e-ink and safe for DU updates), for
+// when a Nickel resource is missing.
 static QPixmap glyph(Glyph g, int size) {
     size = qMax(8, size);
     QImage img(size, size, QImage::Format_ARGB32_Premultiplied);
@@ -466,7 +639,6 @@ static QPixmap glyph(Glyph g, int size) {
     const qreal s = size, lw = qMax<qreal>(2, s / 14);
     {
         QPainter p(&img);
-        p.setRenderHint(QPainter::Antialiasing);
         p.setPen(QPen(Qt::black, lw, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         p.setBrush(Qt::NoBrush);
         auto P = [s](qreal x, qreal y) { return QPointF(x * s, y * s); };
@@ -541,6 +713,13 @@ static QPixmap glyph(Glyph g, int size) {
             p.drawLine(P(0.24, 0.50), P(0.76, 0.50));
             p.drawLine(P(0.50, 0.24), P(0.50, 0.76));
             break;
+        case G_TOC: // three list lines with their bullets
+            for (int i = 0; i < 3; i++) {
+                const qreal y = 0.30 + i * 0.20;
+                p.fillRect(QRectF(P(0.14, y - 0.045), P(0.24, y + 0.045)), Qt::black);
+                p.drawLine(P(0.34, y), P(0.84, y));
+            }
+            break;
         }
     }
     if (g == G_FWD30 || g == G_SKIP_NEXT)
@@ -558,14 +737,48 @@ static QPixmap glyph(Glyph g, int size) {
     return QPixmap::fromImage(img);
 }
 
-// A Nickel resource at `size` px tall (Dragon sizes scaled to the screen), or the painted stand-in.
+// Pure black and white: dark opaque pixels black, light opaque pixels white, the rest transparent.
+static QPixmap monochrome(const QPixmap &pm) {
+    QImage img = pm.toImage().convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < img.height(); y++) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < img.width(); x++) {
+            const QRgb c = line[x];
+            if (qAlpha(c) < 128)
+                line[x] = 0;
+            else
+                line[x] = qGray(c) < 128 ? 0xff000000u : 0xffffffffu;
+        }
+    }
+    return QPixmap::fromImage(img);
+}
+
+// A Nickel resource at `size` px tall (Dragon sizes scaled to the screen), in black and white, or the painted
+// stand-in.
 static QPixmap nickelIcon(const char *path, int size, Glyph fallback) {
     QPixmap pm(QString::fromLatin1(path));
     if (pm.isNull() || pm.height() <= 0)
         return glyph(fallback, size);
     if (qAbs(pm.height() - size) * 10 > size)
         pm = pm.scaledToHeight(size, Qt::SmoothTransformation);
-    return pm;
+    return monochrome(pm);
+}
+
+// 16 grey levels, ordered dither: what the e-ink shows well, and far cheaper to map than full colour.
+static QImage grey16(const QImage &src) {
+    QImage img = src.convertToFormat(QImage::Format_RGB32);
+    for (int y = 0; y < img.height(); y++) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < img.width(); x++) {
+            const int g = qGray(line[x]);
+            line[x] = qRgb(g, g, g);
+        }
+    }
+    static QVector<QRgb> greys;
+    if (greys.isEmpty())
+        for (int i = 0; i < 16; i++)
+            greys << qRgb(i * 17, i * 17, i * 17);
+    return img.convertToFormat(QImage::Format_Indexed8, greys, Qt::OrderedDither);
 }
 
 // Pressed state: the icon in white on a black box.
@@ -599,6 +812,7 @@ static QPixmap framed(const QImage &src, const QSize &box, int lw) {
     QImage img = src;
     if (img.width() > inner.width() || img.height() > inner.height())
         img = img.scaled(inner, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    img = grey16(img);
     const int w = img.width() + 2 * lw, h = img.height() + 2 * lw;
     const QRect r((box.width() - w) / 2, (box.height() - h) / 2, w, h);
     QPainter p(&out);
@@ -700,7 +914,7 @@ void AioText::paintEvent(QPaintEvent *e) {
 
 AioTap::AioTap(QWidget *parent, const QPixmap &i, const QFont &f, bool c, bool fb)
     : QWidget(parent), icon(i), face(f), align(Qt::AlignHCenter), chip(c), feedback(fb), down(false), pressed(false),
-      pressTimer(new QTimer(this)) {
+      pressTimer(new QTimer(this)), inverted(false), inset(0) {
     setAttribute(Qt::WA_AcceptTouchEvents);
     setAttribute(Qt::WA_OpaquePaintEvent);
     if (!icon.isNull() && feedback)
@@ -717,8 +931,22 @@ void AioTap::setText(const QString &t) {
     update();
 }
 
+void AioTap::setDetail(const QString &t) {
+    if (t == detail)
+        return;
+    detail = t;
+    update();
+}
+
+void AioTap::setInverted(bool on) {
+    if (on == inverted)
+        return;
+    inverted = on;
+    update();
+}
+
 int AioTap::padding() const {
-    return chip ? height() / 4 : 0;
+    return chip ? height() / 4 : inset;
 }
 
 int AioTap::gap() const {
@@ -742,40 +970,42 @@ void AioTap::fitWidth(const QStringList &texts, int minWidth) {
     setFixedWidth(qMax(minWidth, w));
 }
 
+// Pure black and white (no antialiased outline): the pressed state and the inverted state are white on black.
 void AioTap::paintEvent(QPaintEvent *) {
     QPainter p(this);
+    const bool dark = pressed != inverted;
     p.fillRect(rect(), Qt::white);
     const QRect b = box();
     if (chip) {
         const int lw = qMax(2, height() / 48);
         const qreal radius = b.height() / 2.0;
-        p.setRenderHint(QPainter::Antialiasing);
-        p.setPen(pressed ? QPen(Qt::NoPen) : QPen(Qt::black, lw));
-        p.setBrush(pressed ? QBrush(Qt::black) : QBrush(Qt::NoBrush));
+        p.setPen(dark ? QPen(Qt::NoPen) : QPen(Qt::black, lw));
+        p.setBrush(dark ? QBrush(Qt::black) : QBrush(Qt::NoBrush));
         p.drawRoundedRect(QRectF(b).adjusted(lw / 2.0, lw / 2.0, -lw / 2.0, -lw / 2.0), radius, radius);
-        p.setRenderHint(QPainter::Antialiasing, false);
-    } else if (pressed) {
+    } else if (dark) {
         p.fillRect(b, Qt::black);
     }
     QFontMetrics fm(face);
     const int pad = padding();
     const int g = !icon.isNull() && !str.isEmpty() ? gap() : 0;
-    const QString t = fm.elidedText(str, Qt::ElideRight, qMax(0, b.width() - 2 * pad - icon.width() - g));
+    const int dw = detail.isEmpty() ? 0 : fm.width(detail) + 2 * gap();
+    const QString t = fm.elidedText(str, Qt::ElideRight, qMax(0, b.width() - 2 * pad - icon.width() - g - dw));
     const int cw = icon.width() + g + (t.isEmpty() ? 0 : fm.width(t));
     int x = b.left() + (b.width() - cw) / 2;
     if (align & Qt::AlignLeft)
         x = b.left() + pad;
     else if (align & Qt::AlignRight)
-        x = b.right() + 1 - pad - cw;
+        x = b.right() + 1 - pad - dw - cw;
     if (!icon.isNull()) {
-        p.drawPixmap(x, (height() - icon.height()) / 2, pressed && !iconInv.isNull() ? iconInv : icon);
+        p.drawPixmap(x, (height() - icon.height()) / 2, dark && !iconInv.isNull() ? iconInv : icon);
         x += icon.width() + g;
     }
-    if (!t.isEmpty()) {
-        p.setFont(face);
-        p.setPen(pressed ? Qt::white : Qt::black);
-        p.drawText(QRect(x, 0, qMax(0, width() - x), height()), Qt::AlignLeft | Qt::AlignVCenter, t);
-    }
+    p.setFont(face);
+    p.setPen(dark ? Qt::white : Qt::black);
+    if (!t.isEmpty())
+        p.drawText(QRect(x, 0, qMax(0, b.right() + 1 - pad - dw - x), height()), Qt::AlignLeft | Qt::AlignVCenter, t);
+    if (!detail.isEmpty())
+        p.drawText(QRect(b.left(), 0, qMax(0, b.width() - pad), height()), Qt::AlignRight | Qt::AlignVCenter, detail);
 }
 
 void AioTap::press() {
@@ -1023,9 +1253,14 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     scale = h / 1680.0;
     if (w > h)
         nh_log("AIO Audio: landscape screen (%dx%d), layout scaled by %.2f", w, h, double(scale));
-    const int side = qMax(px(200), qMin(w * 70 / 100, h * 42 / 100));
+    // First guess from the screen; relayout() measures the reader on Show and resizes the cover to fit.
+    int side = qMax(px(200), qMin(w * 78 / 100, h * 48 / 100));
     coverBox = QSize(side, side);
     const int target = px(106);                  // 9 mm at 300 ppi
+    if (QFile::exists(QLatin1String(AIO_DIR "/no-fast-refresh")) && fastFlushOn) {
+        fastFlushOn = false;
+        nh_log("AIO Audio: fast refresh off (no-fast-refresh)");
+    }
 
     timer = new QTimer(this);
     timer->setInterval(5000);                    // e-ink: one short update every 5 s, only while playing and visible
@@ -1092,14 +1327,33 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
                 u->hide();
     }
 
+    // The book: its .mp3z path names the title when the tags do not.
+    bookPath = readerPath(r);
+    if (!bookPath.isEmpty()) {
+        const QFileInfo fi(bookPath);
+        const QString dir = fi.dir().dirName();
+        const bool generic = dir.isEmpty() || dir.startsWith(QLatin1Char('.')) || dir == QLatin1String("onboard") ||
+                             dir == QLatin1String("mnt");
+        fallbackTitle = generic ? fi.completeBaseName() : dir;
+        fallbackTitle = fallbackTitle.trimmed();
+    }
+
     AioPane *root = new AioPane(r, Qt::white);
     root->setObjectName("aioRoot");
     rootPane = root;
     QVBoxLayout *v = new QVBoxLayout(root);
-    v->setContentsMargins(px(32), 0, px(32), px(12));
+    const int bottomMargin = px(16);
+    v->setContentsMargins(px(32), 0, px(32), bottomMargin);
     v->setSpacing(0);
+    const int gapMin = px(8);                    // under every stretch: groups never touch
+    int fixed = bottomMargin;
+    auto addGap = [v, gapMin, &fixed]() {
+        v->addSpacing(gapMin);
+        v->addStretch(1);
+        fixed += gapMin;
+    };
 
-    // Header: [<] Mis libros .............. (1x)
+    // Header: [<] Mis libros .............. [toc] (1x)
     const int headerH = px(112);
     AioPane *header = new AioPane(root);
     header->setFixedHeight(headerH);
@@ -1119,6 +1373,16 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         hl->addWidget(backTap);
     }
     hl->addStretch(1);
+    if (MP3Reader_goToPageFn && !bookPath.isEmpty()) {
+        AioTap *tt = new AioTap(header, nickelIcon(":/images/reading/reading_toc.png", px(48), G_TOC), fChip, false, true);
+        tt->setObjectName("aioToc");
+        tt->setFixedSize(target, headerH);
+        connect(tt, SIGNAL(tapped()), this, SLOT(openToc()));
+        tocTap = tt;
+        hl->addWidget(tt);
+        hl->addSpacing(px(12));
+        fastWidgets << QPointer<QWidget>(tt);
+    }
     AioTap *sp = new AioTap(header, QPixmap(), fChip, true, true);
     sp->setObjectName("aioSpeed");
     sp->setFixedHeight(headerH);
@@ -1129,17 +1393,21 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     sp->setText(rates.at(speedIndex));
     connect(sp, SIGNAL(tapped()), this, SLOT(cycleSpeed()));
     speedTap = sp;
+    fastWidgets << QPointer<QWidget>(sp);
     hl->addWidget(sp);
     v->addWidget(header);
     AioPane *line = new AioPane(root, Qt::black);
-    line->setFixedHeight(qMax(2, px(2)));
+    const int lineH = qMax(2, px(2));
+    line->setFixedHeight(lineH);
     v->addWidget(line);
-    v->addSpacing(px(24));
+    fixed += headerH + lineH;
+    addGap();
 
-    // Cover, centred, framed.
-    AioPane *coverRow = new AioPane(root);
-    coverRow->setFixedHeight(side);
-    QHBoxLayout *cr = new QHBoxLayout(coverRow);
+    // Cover, centred, framed (its size follows the reader's height: relayout()).
+    AioPane *cvr = new AioPane(root);
+    cvr->setFixedHeight(side);
+    coverRow = cvr;
+    QHBoxLayout *cr = new QHBoxLayout(cvr);
     cr->setContentsMargins(0, 0, 0, 0);
     cr->setSpacing(0);
     cover->setFixedSize(coverBox);
@@ -1148,35 +1416,45 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     cr->addStretch(1);
     cr->addWidget(cover);
     cr->addStretch(1);
-    v->addWidget(coverRow);
+    v->addWidget(cvr);
     if (const QPixmap *pm = cover->pixmap())
         if (!pm->isNull())
             cover->setPixmap(framedCover(*pm));
+    addGap();
 
     // Book title and chapter, one line each.
-    v->addSpacing(px(20));
+    const int titleH = qMax(px(56), QFontMetrics(fTitle).height() + px(6));
     AioText *tt = new AioText(root, fTitle, Qt::AlignHCenter);
-    tt->setFixedHeight(px(56));
+    tt->setFixedHeight(titleH);
     titleText = tt;
+    if (!fallbackTitle.isEmpty())
+        tt->setText(fallbackTitle); // until a TALB arrives
     v->addWidget(tt);
+    const int chapterH = qMax(px(44), QFontMetrics(fChapter).height() + px(6));
     AioText *ct = new AioText(root, fChapter, Qt::AlignHCenter);
-    ct->setFixedHeight(px(44));
+    ct->setFixedHeight(chapterH);
     chapterText = ct;
     v->addWidget(ct);
-    v->addStretch(1);
+    fixed += titleH + chapterH;
+    addGap();
 
-    // Scrubber, then elapsed / -remaining right under it (the 5 s tick touches only this band).
+    // Scrubber, then elapsed / -remaining 8 px under it, aligned with the ends of the line (the 5 s tick touches
+    // only this band).
     const QPixmap knob = nickelIcon(":/images/reading/scrubber_handle_off.png", px(56), G_KNOB);
     AioSlider *sl = new AioSlider(root, qMax(4, px(6)), qMax(2, px(2)), knob);
-    sl->setFixedHeight(qMax(target, knob.height() + px(16))); // the whole band is the tap target
+    const int sliderH = knob.height() + px(16);
+    sl->setFixedHeight(sliderH);
     connect(sl, SIGNAL(seekRequested(qint64)), this, SLOT(seekTo(qint64)));
     slider = sl;
+    fastWidgets << QPointer<QWidget>(sl);
     v->addWidget(sl);
-    const int timeH = px(40);
-    AioPane *times = new AioPane(root);
+    v->addSpacing(px(8));
+    const int timeH = qMax(px(40), QFontMetrics(fTime).height() + px(4));
+    AioPane *times = new AioPane(root, Qt::white);
     times->setFixedHeight(timeH);
     QHBoxLayout *tl = new QHBoxLayout(times);
-    tl->setContentsMargins(0, 0, 0, 0);
+    const int knobHalf = knob.width() / 2 + 1; // AioSlider::margin(): where the line starts and ends
+    tl->setContentsMargins(knobHalf, 0, knobHalf, 0);
     tl->setSpacing(0);
     AioText *el = new AioText(times, fTime, Qt::AlignLeft);
     el->setFixedSize(clockWidth(fTime, false) + px(8), timeH);
@@ -1188,8 +1466,10 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     elapsedText = el;
     remainText = rem;
     el->setText(QString::fromLatin1("0:00"));
+    fastWidgets << QPointer<QWidget>(times) << QPointer<QWidget>(el) << QPointer<QWidget>(rem);
     v->addWidget(times);
-    v->addSpacing(px(16));
+    fixed += sliderH + px(8) + timeH;
+    addGap();
 
     // Transport: [|<] [-30] [play/pause] [+30] [>|], evenly spaced.
     playIcon = nickelIcon(":/images/audiobook/play_button.png", px(158), G_PLAY);
@@ -1202,9 +1482,10 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     xl->setContentsMargins(0, 0, 0, 0);
     xl->setSpacing(0);
     xl->addStretch(1);
-    auto addButton = [xl](QWidget *b) {
+    auto addButton = [xl, this](QWidget *b) {
         xl->addWidget(b, 0, Qt::AlignVCenter);
         xl->addStretch(1);
+        fastWidgets << QPointer<QWidget>(b); // icons only: black and white
     };
     const QSize cb(target, target);
     const int sb = qMax(target, px(100) + px(12));
@@ -1253,7 +1534,8 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         addButton(next);
     }
     v->addWidget(transport);
-    v->addStretch(1);
+    fixed += pb;
+    addGap();
 
     // Bottom bar: [-] 55% [+] ....... (timer 15 min) ....... [bt] name. Equal side groups keep the chip centred.
     AioPane *bar = new AioPane(root);
@@ -1283,6 +1565,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         vg->addWidget(vt);
         vg->addWidget(up);
         volText = vt;
+        fastWidgets << QPointer<QWidget>(dn) << QPointer<QWidget>(vt) << QPointer<QWidget>(up);
         showVolume();
     } else if (stockVolume) { // stock log10 stream volume, restyled
         QLabel *const vols[] = {volDown, volUp};
@@ -1300,6 +1583,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         vg->addWidget(volDown);
         vg->addWidget(volume);
         vg->addWidget(volUp);
+        fastWidgets << QPointer<QWidget>(volDown) << QPointer<QWidget>(volume) << QPointer<QWidget>(volUp);
     }
     vg->addStretch(1);
     bl->addWidget(volGroup);
@@ -1312,6 +1596,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
                                << QString::fromUtf8("60 min"), target);
     connect(st, SIGNAL(tapped()), this, SLOT(cycleSleep()));
     sleepTap = st;
+    fastWidgets << QPointer<QWidget>(st);
     bl->addWidget(st);
     bl->addStretch(1);
     AioTap *bt = new AioTap(bar, nickelIcon(":/images/reading/bluetooth.png", px(54), G_BT), fTime, false, false);
@@ -1322,13 +1607,18 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     btTap = bt;
     bl->addWidget(bt);
     v->addWidget(bar);
+    fixed += target;
+    v->addSpacing(gapMin);
+    fixed += gapMin;
 
-    // Footer: track and whole-book progress, text only.
-    v->addSpacing(px(8));
+    // Footer: track and whole-book progress, text only (its height from the font: never clipped).
+    const int footH = QFontMetrics(fFoot).height() + px(8);
     AioText *ft = new AioText(root, fFoot, Qt::AlignHCenter);
-    ft->setFixedHeight(px(36));
+    ft->setFixedHeight(footH);
     footerText = ft;
     v->addWidget(ft);
+    fixed += footH;
+    fixedH = fixed;
 
     col->insertWidget(0, root, 1);
     col->invalidate();
@@ -1347,12 +1637,14 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
                      QString("#volume { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(28)));
 
     installGestureFilters(); // again on every Show: Nickel may reparent the reader after its constructor
+    relayout();
     schedule();
 }
 
 AioAudio::~AioAudio() {
     if (btMine)
         btQueued = false; // our deferred read dies with us
+    setKeyFilter(false);
     for (int i = 0; i < gestureHosts.size(); i++)
         if (QWidget *w = gestureHosts.at(i).data())
             w->removeEventFilter(this);
@@ -1397,11 +1689,19 @@ bool AioAudio::gestureOnPane(QGestureEvent *ge) const {
     return true;
 }
 
+bool AioAudio::isGestureHost(QObject *o) const {
+    for (int i = 0; i < gestureHosts.size(); i++)
+        if (gestureHosts.at(i).data() == o)
+            return true;
+    return false;
+}
+
 bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
     const QEvent::Type type = e->type();
     if (type == QEvent::Gesture || type == QEvent::GestureOverride) {
         QGestureEvent *ge = static_cast<QGestureEvent *>(e);
-        if (gestureOnPane(ge)) { // ours: accepted, so Qt does not offer it to the next ancestor either
+        // only at the reader's ancestors: gestures of the stock buttons inside our pane go on to them
+        if ((watched == reader.data() || isGestureHost(watched)) && gestureOnPane(ge)) { // ours: accepted, so Qt does not offer it further
             const QList<QGesture *> gs = ge->gestures();
             for (int i = 0; i < gs.size(); i++)
                 ge->accept(gs.at(i));
@@ -1411,14 +1711,387 @@ bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
     } else if (watched == reader.data()) {
         if (type == QEvent::Hide) {
             timer->stop(); // nothing repaints behind other screens
+            setKeyFilter(false);
         } else if (type == QEvent::Show) {
             installGestureFilters();
+            setKeyFilter(true);
+            relayout();
             tick();
             if (playing && !timer->isActive())
                 timer->start();
+        } else if (type == QEvent::Resize) {
+            relayout();
         }
     }
     return QObject::eventFilter(watched, e);
+}
+
+bool AioAudio::readerShown() const {
+    return reader && reader->isVisible();
+}
+
+// The page-turn buttons, only while our player is shown: the app filter goes on and off with the reader.
+void AioAudio::setKeyFilter(bool on) {
+    QCoreApplication *app = QCoreApplication::instance();
+    if (!app)
+        return;
+    if (on) {
+        if (!rootPane)
+            return; // stock layout: the page keys stay Nickel's
+        if (!keyFilter)
+            keyFilter = new AioKeys(app);
+        app->installEventFilter(keyFilter); // Qt drops a previous install of the same filter first
+        keysOn = true;
+    } else if (keysOn) {
+        keysOn = false;
+        if (keyFilter && (aio.isNull() || aio.data() == this)) // a newer reader keeps its filter
+            app->removeEventFilter(keyFilter);
+    }
+}
+
+bool AioKeys::eventFilter(QObject *watched, QEvent *e) {
+    const QEvent::Type t = e->type();
+    if (t != QEvent::KeyPress && t != QEvent::KeyRelease)
+        return false; // every event of the application passes here: nothing else is looked at
+    return aio && aio->pageKey(watched, static_cast<QKeyEvent *>(e));
+}
+
+// Nickel's page keys (4.45, RE): TactileButtonFilter turns the page buttons (F23/F24) into Key_Up/Key_Down or
+// Key_Left/Key_Right (screen orientation and the "invert page turn buttons" setting applied) and sends them to the
+// current view; ReadingView::keyPressEvent pages forward on Key_Right/Key_Down and back on Key_Left/Key_Up
+// (shouldPageForward, left-to-right). Here: -30/+30 s, or the track list's pages. Media keys are not touched.
+bool AioAudio::pageKey(QObject *receiver, QKeyEvent *ke) {
+    int dir = 0;
+    switch (ke->key()) {
+    case Qt::Key_Right:
+    case Qt::Key_Down:
+        dir = 1;
+        break;
+    case Qt::Key_Left:
+    case Qt::Key_Up:
+        dir = -1;
+        break;
+    default:
+        return false;
+    }
+    if (!rootPane || !readerShown() || !receiver || !receiver->isWidgetType())
+        return false;
+    QWidget *w = static_cast<QWidget *>(receiver);
+    QWidget *r = reader.data();
+    if (w != r && !r->isAncestorOf(w) && !w->isAncestorOf(r) && !w->inherits("ReadingView"))
+        return false; // another screen or a dialog over the player
+    if (QApplication::activePopupWidget() || QApplication::activeModalWidget())
+        return false;
+    if (ke->type() == QEvent::KeyRelease)
+        return true; // the release of a key we took
+    if (ke->isAutoRepeat() && keyClock.isValid() && keyClock.elapsed() < 400)
+        return true; // a held button: one step per 400 ms
+    keyClock.start();
+    if (tocPane && tocPane->isVisible()) {
+        if (dir > 0)
+            tocNext();
+        else
+            tocPrev();
+    } else if (dir > 0) {
+        ahead();
+    } else {
+        rewind();
+    }
+    return true;
+}
+
+// Track changes are let through when the track is over: whatever libmp3z/Nickel uses to advance keeps working.
+bool AioAudio::trackEnded() const {
+    QObject *p = player.data();
+    if (!p)
+        return true;
+    const qint64 pos = p->property("position").toLongLong(), dur = p->property("duration").toLongLong();
+    if (dur > 0 && pos >= dur - 1500)
+        return true;
+    const QMetaObject *mo = p->metaObject();
+    const int i = mo->indexOfProperty("mediaStatus");
+    if (i >= 0) {
+        const QMetaProperty prop = mo->property(i);
+        if (prop.isEnumType()) {
+            const QVariant v = prop.read(p);
+            if (v.isValid() && v.constData() && *static_cast<const int *>(v.constData()) == 7) // EndOfMedia
+                return true;
+        }
+    }
+    return false;
+}
+
+bool AioAudio::inFast(const QRect &g) const {
+    for (int i = 0; i < fastWidgets.size(); i++) {
+        const QWidget *w = fastWidgets.at(i).data();
+        if (w && w->isVisible() && QRect(w->mapToGlobal(QPoint(0, 0)), w->size()).contains(g))
+            return true;
+    }
+    return false;
+}
+
+// Every rect of the flushed region (window coordinates, the window at `origin`) is inside one of our black and
+// white controls, the player is shown and the track list is closed.
+bool AioAudio::fastRegion(const QRegion &region, const QPoint &origin) const {
+    if (!rootPane || !readerShown() || (tocPane && tocPane->isVisible()))
+        return false;
+    const QRect b = region.boundingRect();
+    if (b.isEmpty())
+        return false;
+    if (inFast(b.translated(origin)))
+        return true;
+    if (region.rectCount() <= 1)
+        return false;
+    const QVector<QRect> rs = region.rects();
+    for (int i = 0; i < rs.size(); i++)
+        if (!inFast(rs.at(i).translated(origin)))
+            return false;
+    return true;
+}
+
+// The cover: the largest square that fits the reader's height once every fixed row is placed.
+void AioAudio::relayout() {
+    if (!rootPane || !reader || !cover || !coverRow)
+        return;
+    const int h = reader->height(), w = reader->width();
+    if (h < px(400) || w < px(300))
+        return; // not laid out yet
+    int side = qMin((w - 2 * px(32)) * 78 / 100, h * 48 / 100);
+    side = qMin(side, h - fixedH);
+    side = qMax(side, px(160));
+    if (side == coverBox.width() && coverRow->minimumHeight() == side)
+        return;
+    coverBox = QSize(side, side);
+    cover->setFixedSize(coverBox);
+    coverRow->setFixedHeight(side);
+    redrawCover();
+    if (tocPane && tocPane->isVisible()) {
+        tocPane->setGeometry(rootPane->rect());
+        layoutToc();
+    }
+}
+
+void AioAudio::redrawCover() {
+    if (!cover)
+        return;
+    if (!coverSrc.isNull())
+        cover->setPixmap(framed(coverSrc, coverBox, frameWidth())); // straight to QtWidgets (not hooked)
+    else if (placeholder)
+        drawPlaceholder();
+}
+
+// No picture anywhere yet: a framed box with the book title (the stock lambda may still replace it).
+void AioAudio::drawPlaceholder() {
+    if (!cover)
+        return;
+    const int lw = frameWidth();
+    QPixmap ph(coverBox);
+    ph.fill(Qt::white);
+    QPainter p(&ph);
+    drawFrame(p, QRect(QPoint(0, 0), coverBox), lw);
+    p.setRenderHint(QPainter::TextAntialiasing);
+    p.setFont(makeFont("DefaultSerif", px(44), true));
+    p.setPen(Qt::black);
+    p.drawText(QRect(QPoint(0, 0), coverBox).adjusted(px(48), px(48), -px(48), -px(48)),
+               Qt::AlignCenter | Qt::TextWordWrap, bookTitle.isEmpty() ? QString::fromUtf8("Audiolibro") : bookTitle);
+    p.end();
+    placeholder = true;
+    cover->setPixmap(ph);
+}
+
+// -- track list ("Capitulos") -------------------------------------------------------------------------------
+
+// libmp3z's current track (MP3Reader+0x30, 0-based, 4.45 RE), checked against the list; else ours.
+int AioAudio::currentTrack() const {
+    int k = -1;
+    if (reader)
+        k = *reinterpret_cast<const int *>(reinterpret_cast<const char *>(reader.data()) + 0x30);
+    if (k < 0 || k >= tocNames.size())
+        k = track >= 0 && track < tocNames.size() ? track : -1;
+    return k;
+}
+
+void AioAudio::buildToc() {
+    AioPane *pane = new AioPane(rootPane, Qt::white);
+    pane->setObjectName("aioTocPane");
+    tocPane = pane;
+    const QFont fTitle = makeFont("DefaultSerif", px(40), true);
+    const QFont fChip = makeFont("DefaultSansSerif", px(28), true);
+    const QFont fRow = makeFont("DefaultSansSerif", px(32), false);
+    const QFont fPage = makeFont("DefaultSansSerif", px(26), false);
+    AioText *t = new AioText(pane, fTitle, Qt::AlignLeft);
+    t->setText(QString::fromUtf8("Capítulos"));
+    tocTitle = t;
+    AioTap *close = new AioTap(pane, QPixmap(), fChip, true, true);
+    close->setText(QString::fromUtf8("Cerrar"));
+    connect(close, SIGNAL(tapped()), this, SLOT(closeToc()));
+    tocClose = close;
+    tocLine = new AioPane(pane, Qt::black);
+    for (int i = 0; i < 12; i++) {
+        AioTap *row = new AioTap(pane, QPixmap(), fRow, false, true);
+        row->setAlignment(Qt::AlignLeft);
+        row->setInset(px(16));
+        row->setProperty("aioIndex", -1);
+        connect(row, SIGNAL(tapped()), this, SLOT(tocRowTapped()));
+        tocRows << QPointer<AioTap>(row);
+    }
+    AioTap *pv = new AioTap(pane, QPixmap(), fChip, true, true);
+    pv->setText(QString::fromUtf8("‹ Anterior"));
+    connect(pv, SIGNAL(tapped()), this, SLOT(tocPrev()));
+    tocPrevTap = pv;
+    AioTap *nx = new AioTap(pane, QPixmap(), fChip, true, true);
+    nx->setText(QString::fromUtf8("Siguiente ›"));
+    connect(nx, SIGNAL(tapped()), this, SLOT(tocNext()));
+    tocNextTap = nx;
+    tocPageText = new AioText(pane, fPage, Qt::AlignHCenter);
+}
+
+// Manual geometry over the whole reader: header, about 9 rows of at least 106 px, page buttons at the bottom.
+void AioAudio::layoutToc() {
+    if (!tocPane || !tocClose || !tocTitle || !tocLine || !tocPrevTap || !tocNextTap || !tocPageText)
+        return;
+    const int W = tocPane->width(), H = tocPane->height();
+    const int m = px(32), target = px(106), headerH = px(112), lineH = qMax(2, px(2));
+    tocClose->setFixedHeight(headerH);
+    tocClose->fitWidth(QStringList() << tocClose->text(), target);
+    const int closeW = tocClose->width();
+    tocClose->setGeometry(W - m - closeW, 0, closeW, headerH);
+    tocTitle->setGeometry(m, 0, qMax(0, W - 3 * m - closeW), headerH);
+    tocLine->setGeometry(m, headerH, qMax(0, W - 2 * m), lineH);
+    const int navH = target, navY = H - navH - px(16);
+    tocPrevTap->setFixedHeight(navH);
+    tocNextTap->setFixedHeight(navH);
+    tocPrevTap->fitWidth(QStringList() << tocPrevTap->text(), target);
+    tocNextTap->fitWidth(QStringList() << tocNextTap->text(), target);
+    const int pw = tocPrevTap->width(), nw = tocNextTap->width();
+    tocPrevTap->setGeometry(m, navY, pw, navH);
+    tocNextTap->setGeometry(W - m - nw, navY, nw, navH);
+    tocPageText->setGeometry(m + pw, navY, qMax(0, W - 2 * m - pw - nw), navH);
+    const int top = headerH + lineH + px(8), avail = qMax(0, navY - px(8) - top);
+    int rows = 9, rowH = avail / rows;
+    if (rowH < target) {
+        rows = qMax(1, avail / target);
+        rowH = qMax(1, avail / rows);
+    }
+    rows = qMin(rows, tocRows.size());
+    tocPerPage = rows;
+    for (int i = 0; i < tocRows.size(); i++) {
+        AioTap *row = tocRows.at(i).data();
+        if (!row)
+            continue;
+        if (i < rows) {
+            row->setFixedHeight(rowH);
+            row->setGeometry(m, top + i * rowH, qMax(0, W - 2 * m), rowH);
+            row->show();
+        } else {
+            row->hide();
+        }
+    }
+}
+
+void AioAudio::fillToc() {
+    const int n = tocNames.size(), per = qMax(1, tocPerPage);
+    const int pages = qMax(1, (n + per - 1) / per);
+    tocPage = qBound(0, tocPage, pages - 1);
+    for (int i = 0; i < per && i < tocRows.size(); i++) {
+        AioTap *row = tocRows.at(i).data();
+        if (!row)
+            continue;
+        const int k = tocPage * per + i;
+        if (k < n) {
+            QString name = tocNames.at(k);
+            name = name.mid(name.lastIndexOf('/') + 1); // folder entries keep their own name
+            QString clean = dedupe(cleanTrackName(name));
+            if (clean.isEmpty())
+                clean = name;
+            row->setText(clean);
+            row->setDetail(QString::number(k + 1));
+            row->setInverted(k == tocCurrent);
+            row->setProperty("aioIndex", k);
+        } else {
+            row->setText(n == 0 && i == 0 ? QString::fromUtf8("No se pudo leer la lista de pistas") : QString());
+            row->setDetail(QString());
+            row->setInverted(false);
+            row->setProperty("aioIndex", -1);
+        }
+    }
+    if (tocPageText)
+        tocPageText->setText(QString::fromUtf8("Página %1 de %2").arg(tocPage + 1).arg(pages));
+}
+
+void AioAudio::openToc() {
+    if (!rootPane || !reader)
+        return;
+    if (!tocLoaded) { // once per reader, on the first open
+        tocLoaded = true;
+        tocNames = zipNames(bookPath);
+        if (tocNames.isEmpty())
+            nh_log("AIO Audio: could not read the track list of the .mp3z");
+        else if (trackCount > 0 && tocNames.size() != trackCount)
+            nh_log("AIO Audio: %d entries in the .mp3z, TRCK says %d", tocNames.size(), trackCount);
+    }
+    if (!tocPane)
+        buildToc();
+    tocPane->setGeometry(rootPane->rect());
+    layoutToc();
+    tocCurrent = currentTrack();
+    tocPage = tocCurrent >= 0 ? tocCurrent / qMax(1, tocPerPage) : 0;
+    fillToc();
+    tocPane->raise();
+    tocPane->show();
+}
+
+void AioAudio::closeToc() {
+    if (tocPane && tocPane->isVisible()) {
+        tocPane->hide();
+        QTimer::singleShot(0, this, SLOT(tick())); // what changed underneath while the list was open
+    }
+}
+
+void AioAudio::tocPrev() {
+    if (!tocPane || !tocPane->isVisible() || tocPage <= 0)
+        return;
+    tocPage--;
+    fillToc();
+}
+
+void AioAudio::tocNext() {
+    if (!tocPane || !tocPane->isVisible() || (tocPage + 1) * qMax(1, tocPerPage) >= tocNames.size())
+        return;
+    tocPage++;
+    fillToc();
+}
+
+void AioAudio::tocRowTapped() {
+    AioTap *row = qobject_cast<AioTap *>(sender());
+    if (!row)
+        return;
+    const int k = row->property("aioIndex").toInt();
+    if (k < 0 || k >= tocNames.size())
+        return;
+    closeToc();
+    if (k == currentTrack())
+        return; // already playing: nothing to reload, the position stays
+    jumpTarget = k;
+    QTimer::singleShot(0, this, SLOT(jumpNow())); // not inside the tap
+}
+
+// goToPage (1-based) -> setPage(k) -> setMedia: setTrack sees the change and saves the new track from 0:00.
+void AioAudio::jumpNow() {
+    const int k = jumpTarget;
+    jumpTarget = -1;
+    QWidget *r = reader.data();
+    if (k < 0 || !r || !MP3Reader_goToPageFn)
+        return;
+    userSkip();       // not an "end of track" for the sleep timer
+    pendingSeek = -1; // no resume over the chosen track
+    resumeTarget = -1;
+    QPointer<AioAudio> self(this);
+    MP3Reader_goToPageFn(r, k + 1); // the function itself, not the PLT entry we filter
+    if (!self || !reader)
+        return;
+    if (MP3Reader_saveBookmark)
+        MP3Reader_saveBookmark(reader.data());
 }
 
 // The tick timer runs only while playing and visible.
@@ -1444,10 +2117,12 @@ void AioAudio::setIcon(QLabel *l, const QPixmap &pm, const QSize &box, const QPi
     }
 }
 
-QPixmap AioAudio::framedCover(const QPixmap &pm) const {
+QPixmap AioAudio::framedCover(const QPixmap &pm) {
     if (pm.isNull())
         return pm;
-    return framed(pm.toImage(), coverBox, frameWidth());
+    coverSrc = pm.toImage(); // re-framed if relayout() changes the box
+    placeholder = false;
+    return framed(coverSrc, coverBox, frameWidth());
 }
 
 void AioAudio::setPlayer(QObject *p) {
@@ -1559,6 +2234,11 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
         bookTitle = album;
         if (titleText)
             titleText->setText(album);
+        loadState();
+    } else if (album.isEmpty() && bookTitle.isEmpty() && !fallbackTitle.isEmpty()) {
+        bookTitle = fallbackTitle; // no TALB: the folder (or file) names the book and its saved position
+        if (titleText)
+            titleText->setText(bookTitle);
         loadState();
     }
     const int cur = no > 0 ? no - 1 : index;
@@ -1711,7 +2391,7 @@ void AioAudio::savePaused() {
 
 void AioAudio::setChapter(const QString &name) {
     if (chapterText)
-        chapterText->setText(name);
+        chapterText->setText(dedupe(name)); // the track name only ("Pista k de n" is in the footer)
 }
 
 void AioAudio::setCover(const QByteArray &mp3) {
@@ -1723,18 +2403,7 @@ void AioAudio::setCover(const QByteArray &mp3) {
         const QPixmap *cur = cover->pixmap();
         if (cur && !cur->isNull())
             return;
-        // No picture anywhere yet: a framed box with the book title (the stock lambda may still replace it).
-        QPixmap ph(coverBox);
-        ph.fill(Qt::white);
-        QPainter p(&ph);
-        drawFrame(p, QRect(QPoint(0, 0), coverBox), lw);
-        p.setRenderHint(QPainter::TextAntialiasing);
-        p.setFont(makeFont("DefaultSerif", px(44), true));
-        p.setPen(Qt::black);
-        p.drawText(QRect(QPoint(0, 0), coverBox).adjusted(px(48), px(48), -px(48), -px(48)),
-                   Qt::AlignCenter | Qt::TextWordWrap, bookTitle.isEmpty() ? QString::fromUtf8("Audiolibro") : bookTitle);
-        p.end();
-        cover->setPixmap(ph);
+        drawPlaceholder();
         return;
     }
     // setPage runs before the reader is laid out, so the label size is not known yet: always use the box
@@ -1758,6 +2427,8 @@ void AioAudio::setCover(const QByteArray &mp3) {
     if (img.isNull())
         return;
     cover->setProperty("aioCover", true);
+    coverSrc = img;
+    placeholder = false;
     cover->setPixmap(framed(img, coverBox, lw));
     coverKey = key;
 }
@@ -1777,6 +2448,8 @@ void AioAudio::tick() {
         if (track >= 0 && !durations.contains(track))
             durations.insert(track, dur);
     }
+    if (tocPane && tocPane->isVisible())
+        return; // hidden under the track list: closeToc() ticks again
     if (elapsedText)
         elapsedText->setText(hms(pos));
     if (remainText)
@@ -2183,6 +2856,117 @@ extern "C" __attribute__((visibility("default"))) void _aio_setMedia(void *self,
     lastMediaHasData = buffer != 0;
 }
 
+// -- navigation: track changes only from our controls ------------------------------------------------------
+
+// A libmp3z navigation call to drop: our layout is on for this reader, the call comes from
+// MP3Reader::qt_static_metacall (Nickel's reading view: taps, swipes and page keys on the cover and the edges)
+// and the track is not over (auto-advance). Our hooks are reached through libmp3z's PLT stub, which does not touch
+// lr, so our return address is the caller's.
+static bool blockNav(void *self, void *ret, const char *what) {
+    if (!navRangeOk || !aio || !aio->restyled() || static_cast<void *>(aio->readerWidget()) != self)
+        return false;
+    const uintptr_t pc = reinterpret_cast<uintptr_t>(ret) & ~uintptr_t(1);
+    if (pc <= metacallStart || pc >= metacallEnd)
+        return false; // stock prev/next buttons (PMF), headset media keys (keyPressEvent), anything else
+    if (aio->trackEnded())
+        return false;
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        nh_log("AIO Audio: %s from Nickel's reading view dropped (track changes only from the player)", what);
+    }
+    return true;
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_nextPage(void *self) {
+    if (blockNav(self, __builtin_return_address(0), "goToNextPage"))
+        return;
+    MP3Reader_goToNextPage(self);
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_prevPage(void *self) {
+    if (blockNav(self, __builtin_return_address(0), "goToPrevPage"))
+        return;
+    MP3Reader_goToPrevPage(self);
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_goToPage(void *self, int page) {
+    if (blockNav(self, __builtin_return_address(0), "goToPage"))
+        return;
+    MP3Reader_goToPage(self, page);
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_nextChapter(void *self) {
+    if (blockNav(self, __builtin_return_address(0), "goToNextChapter"))
+        return;
+    MP3Reader_goToNextChapter(self);
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_prevChapter(void *self, int how) {
+    if (blockNav(self, __builtin_return_address(0), "goToPrevChapter"))
+        return;
+    MP3Reader_goToPrevChapter(self, how);
+}
+
+// The ReadingView that shows our player (its reader at ReadingView+0x4c, 4.45 RE: keyPressEvent posts media keys
+// there), while it is shown. Anything else: Nickel's own handling.
+static bool ownView(void *view) {
+    if (!view || !ReadingController_closeReadingView || !aio || !aio->restyled() || !aio->readerShown())
+        return false; // without our "Mis libros" link, Nickel's reading menu is the way out
+    const QWidget *r = *reinterpret_cast<QWidget *const *>(static_cast<const char *>(view) + 0x4c);
+    return r && r == aio->readerWidget();
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_viewTap(void *self, void *tap) {
+    if (ownView(self)) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            nh_log("AIO Audio: reading view tap over the player swallowed (no menu, no page turn)");
+        }
+        return;
+    }
+    ReadingView_processTap(self, tap);
+}
+
+extern "C" __attribute__((visibility("default"))) void _aio_viewSwipe(void *self, void *swipe) {
+    if (ownView(self))
+        return;
+    ReadingView_processSwipe(self, swipe);
+}
+
+// -- fast refresh ---------------------------------------------------------------------------------------------
+
+// Kobo's QtWidgets flushes with an empty list (libkobo: default, colour-aware waveform). When only our black and
+// white controls changed, ask for a DU partial update of each rect instead. Every other flush is untouched, and
+// nothing is allocated unless all the conditions hold.
+extern "C" __attribute__((visibility("default"))) void _aio_flush(QBackingStore *self, const QRegion &region,
+                                                                  QWindow *win, const QPoint &offset,
+                                                                  const AioFlushList &list) {
+    if (fastFlushOn && !self) {
+        fastFlushOn = false;
+        nh_log("AIO Audio: QBackingStore::flush without a backing store, fast refresh off");
+    }
+    if (fastFlushOn && win && list.isEmpty() && aio && aio->fastRegion(region, win->geometry().topLeft())) {
+        AioFlushList du;
+        if (region.rectCount() <= 1) {
+            du.append(qMakePair(region.boundingRect(), quint64(AIO_WAVE_DU_PARTIAL)));
+        } else {
+            const QVector<QRect> rs = region.rects();
+            for (int i = 0; i < rs.size(); i++)
+                du.append(qMakePair(rs.at(i), quint64(AIO_WAVE_DU_PARTIAL)));
+        }
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            nh_log("AIO Audio: fast refresh (DU) for the player controls");
+        }
+        QBackingStore_flush(self, region, win, offset, du);
+        return;
+    }
+    QBackingStore_flush(self, region, win, offset, list);
+}
+
 static int aio_init() {
     nh_log("AIO Audio ready");
     return 0;
@@ -2202,6 +2986,14 @@ static struct nh_hook AioAudioHook[] = {
     {.sym = "_ZN6QLabel9setPixmapERK7QPixmap", .sym_new = "_aio_setPixmap", .lib = MP3Z, .out = nh_symoutptr(QLabel_setPixmap), .desc = "keep cover", .optional = true},
     {.sym = "_ZN7QWidget11setGeometryERK5QRect", .sym_new = "_aio_setGeometry", .lib = MP3Z, .out = nh_symoutptr(QWidget_setGeometry), .desc = "keep cover place", .optional = true},
     {.sym = "_ZN11AudioPlayer8setMediaEiRK13QMediaContentP9QIODevice", .sym_new = "_aio_setMedia", .lib = MP3Z, .out = nh_symoutptr(AudioPlayer_setMedia), .desc = "cover and seeking", .optional = true},
+    {.sym = "_ZN9MP3Reader12goToNextPageEv", .sym_new = "_aio_nextPage", .lib = MP3Z, .out = nh_symoutptr(MP3Reader_goToNextPage), .desc = "tracks only from the player", .optional = true},
+    {.sym = "_ZN9MP3Reader12goToPrevPageEv", .sym_new = "_aio_prevPage", .lib = MP3Z, .out = nh_symoutptr(MP3Reader_goToPrevPage), .desc = "tracks only from the player", .optional = true},
+    {.sym = "_ZN9MP3Reader8goToPageEi", .sym_new = "_aio_goToPage", .lib = MP3Z, .out = nh_symoutptr(MP3Reader_goToPage), .desc = "tracks only from the player", .optional = true},
+    {.sym = "_ZN9MP3Reader15goToNextChapterEv", .sym_new = "_aio_nextChapter", .lib = MP3Z, .out = nh_symoutptr(MP3Reader_goToNextChapter), .desc = "tracks only from the player", .optional = true},
+    {.sym = "_ZN9MP3Reader15goToPrevChapterE21ReadingNavigationType", .sym_new = "_aio_prevChapter", .lib = MP3Z, .out = nh_symoutptr(MP3Reader_goToPrevChapter), .desc = "tracks only from the player", .optional = true},
+    {.sym = "_ZN11ReadingView10processTapEP10TapGesture", .sym_new = "_aio_viewTap", .lib = "libnickel.so.1.0.0", .out = nh_symoutptr(ReadingView_processTap), .desc = "no reading menu over the player", .optional = true},
+    {.sym = "_ZN11ReadingView12processSwipeEP12SwipeGesture", .sym_new = "_aio_viewSwipe", .lib = "libnickel.so.1.0.0", .out = nh_symoutptr(ReadingView_processSwipe), .desc = "no page turn over the player", .optional = true},
+    {.sym = "_ZN13QBackingStore5flushERK7QRegionP7QWindowRK6QPointRK5QListI5QPairI5QRectyEE", .sym_new = "_aio_flush", .lib = "libQt5Widgets.so.5", .out = nh_symoutptr(QBackingStore_flush), .desc = "fast refresh of the player controls", .optional = true},
     {0},
 };
 
@@ -2209,6 +3001,7 @@ static struct nh_dlsym AioAudioDlsym[] = {
     {.name = "_ZN10TouchLabel19setDeselectedPixmapERK7QPixmap", .out = nh_symoutptr(TouchLabel_setDeselectedPixmap), .desc = "tap feedback (normal)", .optional = true},
     {.name = "_ZN10TouchLabel17setSelectedPixmapERK7QPixmap", .out = nh_symoutptr(TouchLabel_setSelectedPixmap), .desc = "tap feedback (pressed)", .optional = true},
     {.name = "_ZN17ReadingController16closeReadingViewEv", .out = nh_symoutptr(ReadingController_closeReadingView), .desc = "back to My Books", .optional = true},
+    {.name = "_ZNK7Content5getIdEv", .out = nh_symoutptr(Content_getId), .desc = "book path (title, track list)", .optional = true},
     {.name = "_ZN16BluetoothManager14sharedInstanceEv", .out = nh_symoutptr(BluetoothManager_sharedInstance), .desc = "headset volume", .optional = true},
     {.name = "_ZNK16BluetoothManager8a2dpSinkEv", .out = nh_symoutptr(BluetoothManager_a2dpSink), .desc = "headset volume", .optional = true},
     {.name = "_ZNK16BluetoothManager22supportsAbsoluteVolumeERK7QString", .out = nh_symoutptr(BluetoothManager_supportsAbsoluteVolume), .desc = "headset volume", .optional = true},
