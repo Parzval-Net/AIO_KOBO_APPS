@@ -78,3 +78,111 @@ register(Module(
              Option("mods", "Mods y partidas (.adds)", "bool", True)],
     apply_fn=_backup_apply,
 ))
+
+
+# -- Back to stock ---------------------------------------------------------------------------------------
+# How each NickelHook mod removes itself, read from the pinned binaries with REA/Ghidra (nh_info of every
+# NickelHook mod, 2026-10-17): "flag" = create this file, "xflag" = delete this file. The mod deletes its own
+# library from the system on the next boot, so the Kobo must be ejected and restarted afterwards.
+STOCK_MODS = [
+    # (folder that shows it is installed, file to create, file to delete)
+    (".adds/nm", ".adds/nm/uninstall", None),                                        # NickelMenu: flag
+    (".adds/nickel-home", ".adds/nickel-home/uninstall", None),                      # NickelHome: flag
+    (".adds/nickel-type-fix", None, ".adds/nickel-type-fix/uninstall"),              # NickelTypeFix: xflag
+    (".adds/nickelclock", None, ".adds/nickelclock/uninstall"),                      # NickelClock: xflag
+    (".adds/nickel-dissolve", None, ".adds/nickel-dissolve/uninstall"),              # NickelDissolve: xflag
+    (".adds/nickel-mod-manager", None, ".adds/nickel-mod-manager/uninstall"),        # NickelModManager: xflag
+    (".adds/screensaver", ".adds/screensaver/uninstall.txt", None),                  # nickel-screensaver: flag
+]
+# Kobo eReader.conf keys that Kobo AIO (or the usual mod guides) set and stock firmware does not have.
+STOCK_CONF_KEYS = [("FeatureSettings", "ExcludeSyncFolders"), ("FeatureSettings", "Screenshots"),
+                   ("DeveloperSettings", "AutoUsbGadget"), ("DeveloperSettings", "ForceAllowLandscape"),
+                   ("ApplicationPreferences", "SideloadedMode")]
+APP_TREES = (".adds/koreader", ".adds/cadmus", ".adds/plato", ".adds/inkboy")
+KNOWN_ADDS = {p.split("/")[1] for p, _, _ in STOCK_MODS} | {p.split("/")[1] for p in APP_TREES} | {"kobo-aio"}
+
+
+def _files_under(ctx, rel: str, keep=()) -> list[str]:
+    root = ctx.device.root / rel
+    if not root.is_dir():
+        return []
+    return [str(f.relative_to(ctx.device.root)) for f in sorted(root.rglob("*"))
+            if f.is_file() and str(f.relative_to(ctx.device.root)) not in keep]
+
+
+def _stock_apply(mod, ctx, opts):
+    from ..core import REGISTRY
+    from ._util import conf_edit
+    root, txn = ctx.device.root, ctx.txn
+    installed = ctx.state.get("installed", {})
+    # 1. Firmware patches first: their restore needs the official binaries (desktop engine, exact firmware).
+    if opts["restore_system"] and "fw.kobopatch" in installed:
+        fw = REGISTRY["fw.kobopatch"]
+        ok, why = fw.compatible(ctx.device)
+        try:
+            if not ok:
+                raise RuntimeError(why)
+            fw.apply_fn(fw, ctx, fw.resolved_options({"mode": "restore", "confirm": True}))
+        except Exception as exc:  # noqa: BLE001 - e.g. browser mode (no kobopatch) or another firmware
+            txn.note(f"No se pudo restaurar el sistema original aquí ({exc}). Usa la app de escritorio o el "
+                     "restablecimiento de fábrica del Kobo.")
+    # 2. Nothing queued may install mods on the next boot (except the restored originals added above).
+    if txn.exists(".kobo/KoboRoot.tgz"):
+        txn.delete(".kobo/KoboRoot.tgz", note="mejoras pendientes de instalar: se descartan")
+    # 3. Every NickelHook mod removes itself on the next boot.
+    for folder, flag, xflag in STOCK_MODS:
+        if not (root / folder).is_dir():
+            continue
+        name = folder.split("/")[1]
+        if flag:
+            txn.write_text(flag, "", note=f"{name} se desinstala al reiniciar")
+        if xflag and txn.exists(xflag):
+            txn.delete(xflag, note=f"{name} se desinstala al reiniciar")
+    keep = {flag for _, flag, _ in STOCK_MODS if flag}
+    # NickelMenu entries and NickelModManager's kept copies (it can put mods back after a system update).
+    for rel in _files_under(ctx, ".adds/nm", keep) + _files_under(ctx, ".adds/nickel-mod-manager", keep):
+        txn.delete(rel, note="configuración de mods")
+    # 4. Apps and their files.
+    if opts["remove_apps"]:
+        for mid in ("app.koreader_plugins", "app.audiobook", "app.koreader", "app.cadmus", "app.inkboy"):
+            m = REGISTRY.get(mid)
+            if m and m.uninstall_fn and (mid in installed or (m.status_fn and not str(m.status(ctx.device)).startswith("no "))):
+                m.uninstall_fn(m, ctx)
+        if opts["remove_app_data"]:
+            for tree in APP_TREES:
+                for rel in _files_under(ctx, tree):
+                    txn.delete(rel, note="datos de la app")
+    # 5. Fonts, dictionaries and sleep screens that were added to the Kobo.
+    if opts["remove_extras"]:
+        for rel in _files_under(ctx, "fonts") + _files_under(ctx, ".kobo/custom-dict") + _files_under(ctx, ".kobo/screensaver"):
+            txn.delete(rel, note="agregado al Kobo")
+    # 6. Settings that stock firmware does not have.
+    if opts["reset_settings"]:
+        conf_edit(ctx, removes=STOCK_CONF_KEYS, note="ajustes de mods: valores de fábrica")
+    # 7. Kobo AIO's own files; the engine then drops its state file instead of rewriting it.
+    for rel in _files_under(ctx, ".adds/kobo-aio"):
+        txn.delete(rel, note="archivos de Kobo AIO")
+    ctx.state["installed"] = {}
+    ctx.state["_stock"] = True
+    others = sorted(p.name for p in (root / ".adds").iterdir()
+                    if p.is_dir() and p.name not in KNOWN_ADDS) if (root / ".adds").is_dir() else []
+    if others:
+        txn.note(f"Quedan carpetas de mods que Kobo AIO no reconoce ({', '.join(others)}): el restablecimiento de "
+                 "fábrica del Kobo las elimina.")
+    txn.note("Expulsa el Kobo: al reiniciar, cada mod se desinstala solo. Tus libros y tu progreso no se tocan.")
+
+
+register(Module(
+    id="maint.stock", category="Mantenimiento", title="Volver a stock (quitar todos los mods)",
+    description="Deja el Kobo como de fábrica: desinstala los mods de Nickel (también los que pusiste con otras "
+                "herramientas), las apps, las fuentes y diccionarios agregados, los ajustes de mods y los parches "
+                "del sistema. Respalda todo antes y no toca tus libros. Para venderlo, después usa el "
+                "restablecimiento de fábrica del propio Kobo.",
+    risk="medio", persistent=False, reboot=True, order=98,
+    options=[Option("remove_apps", "Quitar apps (KOReader, Cadmus, Ink-boy) y plugins", "bool", True),
+             Option("remove_app_data", "Borrar también los datos de esas apps (ajustes, partidas)", "bool", True),
+             Option("remove_extras", "Quitar fuentes, diccionarios y pantallas de reposo agregados", "bool", True),
+             Option("reset_settings", "Volver los ajustes de mods a los de fábrica", "bool", True),
+             Option("restore_system", "Restaurar el sistema original si aplicaste parches", "bool", True)],
+    apply_fn=_stock_apply,
+))

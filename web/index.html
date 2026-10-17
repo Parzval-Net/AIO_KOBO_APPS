@@ -291,6 +291,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
     <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></symbol>
+    <symbol id="i-factory" viewBox="0 0 24 24"><rect x="5.5" y="2.5" width="13" height="19" rx="2.5"/><path d="M14.6 9.6a3.4 3.4 0 1 0 .9 2.6"/><path d="M15.4 7.6v2.3h-2.3"/></symbol>
     <symbol id="i-upgrade" viewBox="0 0 24 24"><rect x="4.5" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 16V8.5M7.6 11.4l2.9-2.9 2.9 2.9M8 19h5"/><path d="M19.5 3v4.5M17.25 5.25h4.5"/></symbol>
     <symbol id="i-wand" viewBox="0 0 24 24"><path d="m4 20 11-11M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2ZM19 11l.6 1.4L21 13l-1.4.6L19 15l-.6-1.4L17 13l1.4-.6L19 11Z"/></symbol>
     <symbol id="i-books" viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="m16 5 3.5-1 2.5 15-3.5 1z"/></symbol>
@@ -399,6 +400,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">En el lector stock, con portada</span></button>
       <button class="tile" data-lib="lib.dictionaries"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-dict"/></svg></span><b>Diccionarios</b><span class="small muted">Español e inglés gratis</span></button>
       <button class="tile" data-quick="maint.backup"><span class="badge" style="color:var(--c2)"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg></span><b>Respaldar</b><span class="small muted">Libros y progreso al computador</span></button>
+      <button class="tile" data-stock><span class="badge" style="color:var(--c6)"><svg class="ic" aria-hidden="true"><use href="#i-factory"/></svg></span><b>Dejar de fábrica</b><span class="small muted">Quita los mods para vender o regalar tu Kobo</span></button>
     </div>
     <div class="card hidden" id="reviewCard" style="margin-top:16px">
       <div class="row spread"><h3>Revisión del Kobo</h3><button class="btn sm ghost" id="recheckBtn"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg>Revisar de nuevo</button></div>
@@ -456,6 +458,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <details><summary>¿Es seguro?</summary><p class="muted">Kobo AIO nunca modifica tus libros ni tu progreso de lectura. Antes de escribir te muestra exactamente qué va a cambiar, guarda una copia de cada archivo que toca y puedes revertir desde «Respaldos». Las descargas se verifican con su huella digital (SHA-256).</p></details>
       <details><summary>¿Qué pasa al expulsar el Kobo?</summary><p class="muted">Algunas mejoras (menú, inicio, tipografía, reloj) se instalan solas al expulsar: el Kobo se reinicia en 1 o 2 minutos. No lo desconectes mientras ves la barra de progreso en su pantalla.</p></details>
       <details><summary>¿Dónde está el menú nuevo?</summary><p class="muted">Después del reinicio aparece una pestaña nueva en la barra inferior del Kobo (por defecto «Kobo AIO») con tus atajos: suspender, importar libros, modo oscuro, WiFi y más.</p></details>
+      <details><summary>¿Vas a vender o regalar tu Kobo?</summary><p class="muted">Usa «Dejar de fábrica»: quita todos los mods (también los que instalaste con otras herramientas), las apps, las fuentes y los ajustes de mods, con respaldo previo. Después haz el restablecimiento de fábrica del propio Kobo para borrar tu cuenta y tus libros del equipo. <button class="btn sm" data-stock style="margin-top:8px">Ver los pasos</button></p></details>
       <details><summary>¿Cómo deshago todo?</summary><p class="muted">En «Respaldos», elige la instalación y toca «Revertir». Para quitar un módulo, búscalo en «Todos los módulos» y marca «Desinstalar».</p></details>
       <details><summary>¿Qué cómics puedo convertir?</summary><p class="muted">CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB con imágenes y carpetas de imágenes (JPG, PNG, WebP, GIF, BMP, TIFF). Se ajustan a la resolución de tu Kobo y quedan como KEPUB (paso de página rápido en el lector de Kobo) o CBZ (para KOReader). Para CBR instala <code>unar</code> y para PDF instala <code>pymupdf</code>; Kobo AIO te avisa si falta algo.</p></details>
       <details><summary>¿Funcionará si actualizo el firmware?</summary><p class="muted">Los mods se mantienen en las actualizaciones 4.x; los ajustes avanzados del sistema se pierden y hay que volver a aplicarlos. En firmware 5.x los mods del menú aún no funcionan y Kobo AIO los desactiva.</p></details>
@@ -584,6 +587,23 @@ const HOST_OS = /Android|iPhone|iPad/i.test(navigator.userAgent) ? "mobile"
   : /Win/i.test(navigator.platform || navigator.userAgent) ? "windows" : /Mac/i.test(navigator.platform || navigator.userAgent) ? "macos" : "linux";
 const desktopButtons = (os, cls = "btn primary") => (DESKTOP[os] || DESKTOP.windows).files.map(([label, f], i) =>
   `<a class="${i ? "btn" : cls}" href="${DESKTOP_URL}${f}" download>${icon("upload")}${esc(label)}</a>`).join("");
+function stockGuide() {
+  const d = state.device, backup = byId("maint.backup"), canBackup = d && backup && backup.compatible !== false;
+  dialog("Dejar tu Kobo de fábrica", "Para venderlo, regalarlo o empezar de cero", `
+    <ol class="steps">
+      <li><b>Respalda tus libros y tu progreso.</b> ${canBackup ? "Copia todo a tu computador con un clic." : "Copia tus libros a tu computador (la app de escritorio lo hace por ti)."}</li>
+      <li><b>Quita todos los mods.</b> Kobo AIO desinstala el menú, el inicio, la tipografía, las apps, las fuentes y los ajustes de mods, también los que pusiste con otras herramientas. Te muestra cada cambio antes y guarda una copia. No toca tus libros.</li>
+      <li><b>Expulsa el Kobo.</b> Se reinicia y cada mod se desinstala solo (1 a 2 minutos).</li>
+      <li><b>Si lo vas a vender o regalar:</b> en el Kobo ve a Más > Ajustes > Información del dispositivo > Avanzado y toca el restablecimiento de fábrica (Factory reset). Cierra tu cuenta y borra los libros y notas del equipo; lo que compraste en Kobo sigue en tu cuenta.</li>
+    </ol>
+    ${d ? "" : `<div class="finding info">${icon("info")}<div class="body small">Conecta tu Kobo para hacer los pasos 1 y 2.</div></div>`}
+    ${state.web === "zip" ? `<div class="finding warn">${icon("alert")}<div class="body small">Este navegador no puede borrar archivos del Kobo. Para quitar los mods usa Chrome o Edge, o la app de escritorio.</div></div>` : ""}`,
+    [["Cerrar", "", () => dlg.close()],
+     ...(canBackup ? [[`${icon("archive")}Respaldar`, "", () => openPlan(selectionFor(["maint.backup"]))]] : []),
+     [`${icon("factory")}Quitar todos los mods`, "primary", () => openPlan(selectionFor(["maint.stock"]))]]);
+}
+document.addEventListener("click", e => { if (e.target.closest("[data-stock]")) { e.preventDefault(); stockGuide(); } });
+
 function desktopDialog(reason) {
   const os = HOST_OS === "mobile" ? null : HOST_OS, d = os && DESKTOP[os];
   dialog(reason ? "Esta función usa la app de escritorio" : "Kobo AIO de escritorio", reason ? `Motivo: ${reason}` : "Todas las funciones, sin instalar Python ni nada más",
@@ -639,6 +659,7 @@ async function connectBrowser(given) {
 // Friendly names, icons and one-line benefits (technical name stays visible in expert mode).
 const META = {
   "conf.exclude_sync": ["Proteger la biblioteca", "shield", "c1", "Evita que el Kobo muestre archivos internos como libros"],
+  "maint.stock": ["Dejar de fábrica", "factory", "c6", "Quita todos los mods para vender o regalar tu Kobo"],
   "maint.backup": ["Respaldo al computador", "archive", "c2", "Copia libros, progreso y notas antes de cambiar nada"],
   "maint.clean_macos": ["Limpiar basura del Mac", "broom", "c2", "Borra los archivos ._ que deja macOS"],
   "maint.no_spotlight": ["Que el Mac no indexe el Kobo", "eye-off", "c2", "Spotlight deja de escribir en el lector"],
@@ -1203,8 +1224,8 @@ async function applyNow(sel = state.selection) {
     else Object.keys(sel).forEach(id => { if (state.lib[id] === sel[id]) delete state.lib[id]; });
     renderActionBar();
     if (res.zip) { zipDone(res); return; }
-    const tips = (res.log || []).filter(l => /^(Activa|Reinicia|Ábre|Nickel lo importará|Empareja)/.test(l));
-    dialog("¡Listo!", `${res.changes.length} cambios aplicados con respaldo`, `
+    const tips = (res.log || []).filter(l => /^(Activa|Reinicia|Ábre|Nickel lo importará|Empareja|Expulsa el Kobo: al reiniciar|Quedan carpetas|No se pudo restaurar)/.test(l));
+    dialog("¡Listo!", `${res.changes.length} cambio${res.changes.length === 1 ? "" : "s"} aplicado${res.changes.length === 1 ? "" : "s"} con respaldo`, `
       <div class="health ok" style="margin-top:0">${icon("check-circle")}<div><b>Instalación completa</b><div class="small">Todo quedó respaldado en tu computador.</div></div></div>
       ${res.needs_reboot ? `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo.</li><li>El Kobo instala las mejoras y <b>se reinicia solo</b> (1 a 2 minutos).</li><li>${res.results.some(r => r.id === "nm.menu" && r.ok) ? `Abajo verás la pestaña ${aioTab().replace("<b>", "<b class='tabchip'>")} con tus atajos.` : "Listo para leer."}</li></ol>` : ""}
       ${tips.map(l => `<div class="finding info">${icon("info")}<div class="body small">${esc(l)}</div></div>`).join("")}`,

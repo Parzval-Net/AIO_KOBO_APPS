@@ -54,7 +54,7 @@ En el navegador, cada función que necesita la app de escritorio lo indica ahí 
 | **Juegos** | Ink-boy: Game Boy y Game Boy Color nativo para e-ink (color Kaleido 3, 4 grises en Carta, modo turbo A2) |
 | **Biblioteca** | **Conversor de cómics y manga estilo KCC** para CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB, imágenes sueltas, carpetas y lotes, ajustado a cada panel (recorte, páginas dobles, color Kaleido, KEPUB de página fija o CBZ) · Envío de libros con EPUB a KEPUB (kepubify) · **Armador de audiolibros**: `.mp3z` para el lector stock (partes cortas y portada) o MP3 con capítulos para KOReader · Diccionarios Wiktionary o propios · Pantallas de reposo |
 | **Ajustes** | ExcludeSyncFolders bien escapado · Capturas, auto USB, apagado, horizontal · Modo sideload |
-| **Mantenimiento** | Respaldo de libros, progreso y mods al computador · Limpieza de `._*` y `.DS_Store` (valida la firma AppleDouble) · Desactivar Spotlight |
+| **Mantenimiento** | Respaldo de libros, progreso y mods al computador · **Dejar de fábrica**: quita todos los mods (también los de otras herramientas), apps, fuentes, diccionarios y ajustes de mods, con respaldo y vuelta atrás, y guía el restablecimiento de fábrica del Kobo para venderlo o regalarlo · Limpieza de `._*` y `.DS_Store` (valida la firma AppleDouble) · Desactivar Spotlight |
 
 ## Seguridad
 
@@ -73,6 +73,7 @@ En el navegador, cada función que necesita la app de escritorio lo indica ahí 
 - Rutas y marcadores de desinstalación confirmados en los binarios (por ejemplo `nh_info` de NickelHome: crear `.adds/nickel-home/uninstall`; nickel-screensaver: `.adds/screensaver/uninstall.txt`; NickelModManager: `.adds/nickel-mod-manager`).
 - Lector de audiolibros stock (`libmp3z.so`): orden, búsqueda de pistas, marcador y portada, ver *Notas*.
 - Íconos de la barra inferior de Nickel (recursos Qt del ejecutable `nickel` 4.45): PNG de 50×50 en gris con transparencia, contorno en reposo y relleno activo; los íconos del AIO siguen ese formato y se guardan fuera de `.adds/nm` porque NickelMenu lee como configuración todo lo que hay ahí.
+- Desinstalación de cada mod de Nickel leída de su `nh_info` (NickelHook): NickelMenu, NickelHome y nickel-screensaver se quitan al crear su marca; NickelTypeFix, NickelClock, NickelDissolve y NickelModManager, al borrarla. NickelModManager guarda copias de los mods y las repone tras actualizar el sistema, por eso «Dejar de fábrica» también las elimina.
 - Parche de firmware verificado byte a byte: solo cambia `ReadingSettings::lineHeightScalars()`, `ReadingFooter::update(...)` y la URL de actualización, según los parches elegidos.
 
 ## Línea de comandos

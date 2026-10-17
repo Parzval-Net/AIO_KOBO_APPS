@@ -1,5 +1,5 @@
 {
- "version": "1.2.0",
+ "version": "1.3.0",
  "device": null,
  "modules": [
   {
@@ -1255,6 +1255,62 @@
    "persistent": false,
    "engine_only": true,
    "engine_reason": "copia toda la biblioteca a tu computador"
+  },
+  {
+   "id": "maint.stock",
+   "category": "Mantenimiento",
+   "title": "Volver a stock (quitar todos los mods)",
+   "description": "Deja el Kobo como de fábrica: desinstala los mods de Nickel (también los que pusiste con otras herramientas), las apps, las fuentes y diccionarios agregados, los ajustes de mods y los parches del sistema. Respalda todo antes y no toca tus libros. Para venderlo, después usa el restablecimiento de fábrica del propio Kobo.",
+   "risk": "medio",
+   "recommended": false,
+   "requires": [],
+   "options": [
+    {
+     "id": "remove_apps",
+     "label": "Quitar apps (KOReader, Cadmus, Ink-boy) y plugins",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "remove_app_data",
+     "label": "Borrar también los datos de esas apps (ajustes, partidas)",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "remove_extras",
+     "label": "Quitar fuentes, diccionarios y pantallas de reposo agregados",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "reset_settings",
+     "label": "Volver los ajustes de mods a los de fábrica",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    },
+    {
+     "id": "restore_system",
+     "label": "Restaurar el sistema original si aplicaste parches",
+     "type": "bool",
+     "default": true,
+     "choices": [],
+     "help": ""
+    }
+   ],
+   "sources": [],
+   "license": "",
+   "reboot": true,
+   "can_uninstall": false,
+   "persistent": false
   },
   {
    "id": "nm.menu",

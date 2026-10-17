@@ -138,7 +138,10 @@ def _run_txn(dev, selection, uninstall, dry_run, progress, txn: Transaction, ctx
         txn.write_bytes(".kobo/KoboRoot.tgz", merged, note=f"se instala al expulsar y reiniciar: {labels}")
         ctx.state["pending_koboroot_sha"] = hashlib.sha256(merged).hexdigest()
 
-    if txn.changes:
+    if ctx.state.pop("_stock", False):   # back to stock: no trace of Kobo AIO is left on the device
+        if txn.exists(STATE_REL):
+            txn.delete(STATE_REL, note="registro del AIO")
+    elif txn.changes:
         ctx.state["aio_version"] = __version__
         ctx.state["updated"] = time.strftime("%Y-%m-%dT%H:%M:%S")
         txn.write_text(STATE_REL, json.dumps(ctx.state, ensure_ascii=False, indent=2), note="registro del AIO")

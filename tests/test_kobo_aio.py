@@ -697,6 +697,17 @@ class WebModeTests(TempKobo):
         self.assertEqual((self.root / ".kobo/Kobo/Kobo eReader.conf").read_bytes(), original)
         self.assertFalse((self.root / ".adds/kobo-aio/state.json").exists())
 
+    def test_stock_in_browser(self):
+        self.mount()
+        res = json.loads(self.web.run_json("apply", json.dumps({"maint.stock": {}})))
+        ops = {o["rel"]: o["op"] for o in res["sync"]}
+        self.assertEqual(ops.get(".adds/nm/uninstall"), "write")
+        self.assertEqual(ops.get(".adds/nm/mine"), "delete")
+        self.assertEqual(ops.get(".adds/koreader/big.bin"), "delete")
+        self.assertEqual(Path(res["backup_dir"], "files/.adds/koreader/big.bin").read_bytes(), b"k" * 2048)  # lazy file backed up
+        with self.assertRaisesRegex(AioError, "borrar"):
+            self.web.export_koboroot(json.dumps(res["sync"]))   # read-only browsers cannot delete
+
     def test_artifacts_same_origin_and_pinned(self):
         from kobo_aio.modules import _util
         self.mount()
@@ -820,6 +831,53 @@ class TabIconTests(TempKobo):
         im = Image.open(self.root / ".adds/kobo-aio/tab-icon.png")
         self.assertEqual((im.size, im.mode), ((50, 50), "LA"))
         self.assertGreater(im.getchannel("A").getextrema()[1], 200)
+
+
+class StockTests(TempKobo):
+    def test_back_to_stock(self):
+        r = self.root
+        files = {
+            ".adds/nm/kobo-aio-menu": "menu_item :main :x :cmd_spawn :true\n", ".adds/nm/mine": "x", ".adds/nm/doc": "doc",
+            ".adds/nickel-home/default": "x", ".adds/nickel-type-fix/uninstall": "", ".adds/nickelclock/uninstall": "",
+            ".adds/nickel-dissolve/uninstall": "", ".adds/nickel-mod-manager/uninstall": "",
+            ".adds/nickel-mod-manager/restore/Kobo.tgz": "copia", ".adds/screensaver/x.png": "x",
+            ".adds/koreader/koreader.sh": "#!/bin/sh", ".adds/koreader/settings.reader.lua": "x",
+            ".adds/kfmon/config/kfmon.ini": "x", ".adds/kobo-aio/state.json": json.dumps({"installed": {"mod.nickelmenu": {}}}),
+            ".adds/kobo-aio/tab-icon.png": "png", "fonts/KF_Literata-Regular.ttf": "ttf", "fonts/MiFuente.otf": "otf",
+            ".kobo/custom-dict/dicthtml-es.zip": "zip", ".kobo/KoboRoot.tgz": "pendiente",
+        }
+        for rel, data in files.items():
+            (r / rel).parent.mkdir(parents=True, exist_ok=True)
+            (r / rel).write_text(data)
+        conf = r / ".kobo/Kobo/Kobo eReader.conf"
+        conf.write_text(BROKEN_CONF + "\n[Reading]\nlastFont=Literata\n")
+        book = (r / "Verne, Julio/Viaje.kepub.epub").read_bytes()
+        dev = parse_version_file(r)
+        plan = engine.plan(dev, {"maint.stock": {}}, offline=True)
+        self.assertTrue(any("kfmon" in l for l in plan["log"]))
+        res = engine.apply(dev, {"maint.stock": {}}, offline=True)
+        gone = [".adds/nm/kobo-aio-menu", ".adds/nm/mine", ".adds/nickel-type-fix/uninstall", ".adds/nickelclock/uninstall",
+                ".adds/nickel-dissolve/uninstall", ".adds/nickel-mod-manager/uninstall",
+                ".adds/nickel-mod-manager/restore/Kobo.tgz", ".adds/koreader/koreader.sh",
+                ".adds/koreader/settings.reader.lua", ".adds/kobo-aio/state.json", ".adds/kobo-aio/tab-icon.png",
+                "fonts/KF_Literata-Regular.ttf", "fonts/MiFuente.otf", ".kobo/custom-dict/dicthtml-es.zip",
+                ".kobo/KoboRoot.tgz"]
+        self.assertEqual([g for g in gone if (r / g).exists()], [])
+        self.assertTrue((r / ".adds/nm/uninstall").is_file())            # NickelMenu flag
+        self.assertTrue((r / ".adds/nickel-home/uninstall").is_file())   # NickelHome flag
+        self.assertTrue((r / ".adds/screensaver/uninstall.txt").is_file())
+        self.assertTrue((r / ".adds/kfmon/config/kfmon.ini").is_file())  # unknown mods are left alone
+        text = conf.read_text()
+        for key in ("ExcludeSyncFolders", "Screenshots", "SideloadedMode"):
+            self.assertNotIn(key, text)
+        self.assertIn("lastFont=Literata", text)                          # user settings stay
+        self.assertEqual((r / "Verne, Julio/Viaje.kepub.epub").read_bytes(), book)
+        self.assertTrue(res["needs_reboot"])
+        txnmod.rollback(Path(res["manifest"]), r)                         # and it can all be undone
+        self.assertTrue((r / ".adds/nm/kobo-aio-menu").is_file())
+        self.assertTrue((r / ".kobo/KoboRoot.tgz").is_file())
+        self.assertIn("ExcludeSyncFolders", conf.read_text())
+        self.assertFalse((r / ".adds/nm/uninstall").exists())
 
 
 class WebCatalogTests(unittest.TestCase):
