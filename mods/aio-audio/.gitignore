@@ -1,0 +1,8 @@
+NickelHook/
+*.o
+*.moc
+*.so
+KoboRoot.tgz
+SHA256SUMS
+readelf.txt
+exports.txt

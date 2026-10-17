@@ -1,0 +1,49 @@
+name: Mod AIO Audio
+
+on:
+  push:
+    paths: ["mods/aio-audio/**", ".github/workflows/mod-aio-audio.yml"]
+  pull_request:
+    paths: ["mods/aio-audio/**", ".github/workflows/mod-aio-audio.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NICKELTC: ghcr.io/pgaskin/nickeltc:1.0
+  NICKELHOOK_COMMIT: bcd90ba94d90d22562fb64ef2920ed3323c1dae5
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: NickelHook (pinned)
+        working-directory: mods/aio-audio
+        run: |
+          git clone --quiet https://github.com/pgaskin/NickelHook NickelHook
+          git -C NickelHook -c advice.detachedHead=false checkout "$NICKELHOOK_COMMIT"
+      - name: Build with NickelTC
+        run: |
+          docker pull --quiet "$NICKELTC"
+          docker run --rm -u "$(id -u):$(id -g)" -v "$PWD/mods/aio-audio:/src" -w /src "$NICKELTC" \
+            sh -c 'make all koboroot && arm-nickel-linux-gnueabihf-readelf -d src/libaioaudio.so > readelf.txt &&
+                   arm-nickel-linux-gnueabihf-nm -D --defined-only src/libaioaudio.so > exports.txt'
+      - name: Check exports and package
+        working-directory: mods/aio-audio
+        run: |
+          grep -E "NEEDED|RPATH|RUNPATH" readelf.txt
+          for s in NickelHook _aio_reader _aio_setText _aio_setPixmap _aio_setMedia; do
+            grep -qw "$s" exports.txt || { echo "missing export $s"; exit 1; }
+          done
+          tar tzvf KoboRoot.tgz
+          sha256sum KoboRoot.tgz src/libaioaudio.so | tee SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aio-audio
+          path: |
+            mods/aio-audio/KoboRoot.tgz
+            mods/aio-audio/src/libaioaudio.so
+            mods/aio-audio/SHA256SUMS
+            mods/aio-audio/readelf.txt
