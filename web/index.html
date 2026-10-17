@@ -337,7 +337,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
         <div class="benefit"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg></span><div><b>Tu Kobo a tu manera</b><p class="small muted">Inicio sin publicidad, menú de atajos (modo oscuro, WiFi, suspender), KOReader y juegos de Game Boy.</p></div></div>
         <div class="benefit"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><div><b>Sin riesgo</b><p class="small muted">Ves cada cambio antes de aplicarlo, se respalda todo y puedes volver atrás. Nunca toca tus libros ni tu progreso.</p></div></div>
       </div>
-      <div class="card" id="start" style="margin-top:16px" aria-labelledby="hStart"></div>
+      <div class="card" id="start" style="margin-top:16px" aria-labelledby="hStart"><h3 id="hStart">Cómo empezar</h3><div class="row muted" style="margin-top:12px"><span class="spinner"></span>Buscando Kobo AIO en tu computador…</div></div>
     </div>
 
     <h3 class="sect">¿Qué quieres hacer?</h3>
@@ -444,7 +444,7 @@ const icon = (id, cls = "ic") => `<svg class="${cls}" aria-hidden="true"><use hr
 const SEVS = new Set(["critical", "warn", "info", "ok"]);
 const sevOf = s => SEVS.has(s) ? s : "info";
 const state = { helper: false, device: null, modules: [], installed: {}, selection: {}, uninstall: new Set(), open: new Set(),
-                doctor: null, view: "home", step: 1, profile: null, scope: "wizard", filter: "Todas", query: "" };
+                lib: {}, doctor: null, view: "home", step: 1, profile: null, scope: "wizard", filter: "Todas", query: "" };
 
 // Friendly names, icons and one-line benefits (technical name stays visible in expert mode).
 const META = {
@@ -550,7 +550,7 @@ document.addEventListener("click", e => {
   const l = e.target.closest("[data-lib]");
   if (l) { go("library"); requestAnimationFrame(() => { const c = $(`[data-task="${CSS.escape(l.dataset.lib)}"]`); c && c.scrollIntoView({ behavior: "smooth", block: "center" }); }); return; }
   const q = e.target.closest("[data-quick]");
-  if (q) { state.selection = {}; select(q.dataset.quick, true); openPlan(); }
+  if (q) openPlan(selectionFor([q.dataset.quick]));
 });
 
 function deviceArt(d, el) {
@@ -669,7 +669,7 @@ async function runDoctor() {
       <div style="flex:1;min-width:200px"><b>${worst === "ok" ? "Tu Kobo está en orden" : `${bad.length} ${bad.length === 1 ? "cosa por revisar" : "cosas por revisar"}`}</b>
       <div class="small">${worst === "ok" ? `${good.length} revisiones pasaron. Ya puedes mejorarlo.` : "Te explicamos cada una abajo."}</div></div>
       ${fixes.length ? `<button class="btn primary sm" id="fixAll">${icon("wand")}Arreglar ${fixes.length === 1 ? "esto" : `las ${fixes.length}`}</button>` : ""}`;
-    if (fixes.length) $("#fixAll").onclick = () => { state.selection = {}; fixes.forEach(f => select(f, true)); openPlan(); };
+    if (fixes.length) $("#fixAll").onclick = () => openPlan(selectionFor(fixes));
     const fRow = f => { const s = sevOf(f.severity); return `<div class="finding ${s}">${icon(SEVICON[s])}<div class="body"><b>${esc(f.title)}</b>
       ${f.detail ? `<div class="small muted">${esc(f.detail)}</div>` : ""}
       ${f.data && Array.isArray(f.data.missing) ? `<details class="tech"><summary>Ver los ${f.data.missing.length} libros</summary><div class="log">${esc(f.data.missing.join("\n"))}</div></details>` : ""}
@@ -678,7 +678,7 @@ async function runDoctor() {
     $("#findings").innerHTML = [...bad, ...info].map(fRow).join("") +
       (good.length ? `<details ${bad.length ? "" : "open"} style="margin-top:12px"><summary class="small" style="cursor:pointer">${good.length} cosas están bien</summary>
         <div class="oklist">${good.map(f => `<div>${icon("check")}<span>${esc(f.title)}</span></div>`).join("")}</div></details>` : "");
-    $$("[data-fix]").forEach(b => b.onclick = () => { state.selection = {}; select(b.dataset.fix, true); openPlan(); });
+    $$("[data-fix]").forEach(b => b.onclick = () => openPlan(selectionFor([b.dataset.fix])));
   } catch (e) {
     $("#findings").innerHTML = `<div class="finding critical">${icon("x-circle")}<div class="body"><b>No se pudo revisar el Kobo</b><div class="small">${esc(e.message)}</div></div></div>`;
   }
@@ -687,6 +687,13 @@ $("#recheckBtn").onclick = () => refresh();
 
 const byId = id => state.modules.find(m => m.id === id);
 const isInstalled = m => !!state.installed[m.id] || (/instalado|activo|correcto|familias/.test(m.status || "") && !/^no |inactivo/.test(m.status || ""));
+// Biblioteca keeps its own drafts (files to send): they must never leak into the wizard/expert selection or plan.
+const store = () => state.view === "library" ? state.lib : state.selection;
+function selectionFor(ids) {   // one-off selection (quick actions, «Arreglar») resolving requirements, without touching the user's
+  const keep = state.selection; state.selection = {};
+  ids.forEach(i => select(i, true));
+  const out = state.selection; state.selection = keep; return out;
+}
 function defaults(m) { const o = {}; m.options.forEach(op => o[op.id] = Array.isArray(op.default) ? [...op.default] : op.default); return o; }
 function select(id, on, presetOpts) {
   const m = byId(id); if (!m || m.compatible === false) return;
@@ -701,7 +708,7 @@ function select(id, on, presetOpts) {
 const requiredBy = id => state.modules.filter(x => state.selection[x.id] && (x.requires || []).includes(id)).map(x => meta(x).name);
 
 function optionHtml(m, op) {
-  const v = (state.selection[m.id] || {})[op.id] ?? op.default;
+  const v = (store()[m.id] || {})[op.id] ?? op.default;
   const nm = esc(`${m.id}::${op.id}`);
   if (op.type === "bool") return `<div class="opt"><label class="check"><input type="checkbox" data-opt="${nm}" ${v ? "checked" : ""}> ${esc(op.label)}</label></div>`;
   if (op.type === "choice") return `<div class="opt"><label class="l" for="o-${nm}">${esc(op.label)}</label><select id="o-${nm}" data-opt="${nm}">${op.choices.map(c => `<option value="${esc(c.value)}" ${String(c.value) === String(v) ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></div>`;
@@ -713,15 +720,16 @@ function optionHtml(m, op) {
   return "";
 }
 function bindOptions(scope, id) {
+  const st = store();
   $$("[data-opt]", scope).forEach(el => el.onchange = () => {
-    if (!state.selection[id]) return;
-    state.selection[id][el.dataset.opt.split("::")[1]] = el.type === "checkbox" ? el.checked : el.value; renderActionBar();
+    if (!st[id]) return;
+    st[id][el.dataset.opt.split("::")[1]] = el.type === "checkbox" ? el.checked : el.value; renderActionBar();
   });
   $$("[data-multi]", scope).forEach(el => el.onchange = () => {
-    if (!state.selection[id]) return;
-    state.selection[id][el.dataset.multi.split("::")[1]] = $$("[data-multi]", scope).filter(x => x.dataset.multi === el.dataset.multi && x.checked).map(x => x.value);
+    if (!st[id]) return;
+    st[id][el.dataset.multi.split("::")[1]] = $$("[data-multi]", scope).filter(x => x.dataset.multi === el.dataset.multi && x.checked).map(x => x.value);
   });
-  $$("[data-rm]", scope).forEach(b => b.onclick = () => { state.selection[id][b.dataset.rm.split("::")[1]].splice(Number(b.dataset.i), 1); rerender(); });
+  $$("[data-rm]", scope).forEach(b => b.onclick = () => { st[id][b.dataset.rm.split("::")[1]].splice(Number(b.dataset.i), 1); rerender(); });
   $$("[data-drop]", scope).forEach(zone => {
     const input = $("input", zone), op = zone.dataset.drop.split("::")[1];
     zone.onclick = e => { if (e.target !== input) input.click(); };
@@ -734,8 +742,10 @@ function bindOptions(scope, id) {
 }
 async function upload(id, op, files, zone) {
   if (!files || !files.length) return;
-  if (!state.selection[id]) select(id, true);
-  const list = state.selection[id][op] = state.selection[id][op] || [];
+  if (!state.helper) { toast("Abre Kobo AIO en tu computador para elegir archivos."); return; }
+  const st = store();
+  if (!st[id]) { if (st === state.selection) select(id, true); else st[id] = defaults(byId(id)); }
+  const list = st[id][op] = st[id][op] || [];
   let i = 0;
   for (const f of files) {
     i++;
@@ -825,8 +835,8 @@ async function renderReview() {
   catch (e) { box.innerHTML = `<div class="finding critical">${icon("x-circle")}<div class="body"><b>No se puede instalar todavía</b><div class="small">${esc(e.message)}</div></div></div>`; }
   renderActionBar();
 }
-async function planNow() {
-  const { job } = await api("/api/plan", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
+async function planNow(sel = state.selection) {
+  const { job } = await api("/api/plan", { method: "POST", json: { selection: sel, uninstall: sel === state.selection ? [...state.uninstall] : [] } });
   return waitJob(job);
 }
 const AREAS = [[/^\.kobo\/Kobo\//, "Ajustes del Kobo"], [/^\.kobo\/KoboRoot\.tgz$/, "Mejoras que se instalan al reiniciar"],
@@ -860,7 +870,7 @@ function reviewHtml(res) {
 }
 
 function renderActionBar() {
-  const bar = $("#actionbar"), ids = Object.keys(state.selection).filter(id => !id.startsWith("lib.") || state.view !== "wizard");
+  const bar = $("#actionbar"), ids = Object.keys(state.selection);
   const show = state.view === "wizard" || (state.view === "expert" && (ids.length || state.uninstall.size));
   bar.classList.toggle("hidden", !show);
   if (!show) return;
@@ -877,7 +887,7 @@ function renderActionBar() {
     next.innerHTML = state.step < 3 ? (state.step === 2 && !state.device ? `${icon("usb")}Conecta tu Kobo` : `Continuar${icon("arrow-r")}`) : `${icon("check")}Aplicar en mi Kobo`;
     next.disabled = (state.step >= 2 && !state.device) || (state.step === 1 && !state.profile) || (state.step >= 2 && !n && !state.uninstall.size)
       || (state.step === 3 && !state.reviewOk);
-    next.onclick = () => { if (state.step < 3) { state.step++; renderWizard(); renderActionBar(); window.scrollTo({ top: 0, behavior: "smooth" }); } else applyNow(); };
+    next.onclick = () => { if (state.step < 3) { state.step++; renderWizard(); renderActionBar(); window.scrollTo({ top: 0, behavior: "smooth" }); } else applyNow(state.selection); };
   } else {
     $("#abTitle").textContent = `${ids.length} seleccionado${ids.length === 1 ? "" : "s"}${state.uninstall.size ? ` · ${state.uninstall.size} a quitar` : ""}`;
     $("#abSub").textContent = ids.map(i => byId(i) ? meta(byId(i)).name : i).join(" · ");
@@ -885,7 +895,7 @@ function renderActionBar() {
     back.onclick = () => { state.selection = {}; state.uninstall.clear(); rerender(); };
     if (!state.device) $("#abSub").textContent = "Conecta tu Kobo para revisar y aplicar";
     next.innerHTML = `Revisar cambios${icon("arrow-r")}`; next.disabled = !state.device;
-    next.onclick = openPlan;
+    next.onclick = () => openPlan(state.selection);
   }
 }
 
@@ -897,18 +907,19 @@ function dialog(title, sub, body, buttons) {
   if (!dlg.open) dlg.showModal();
   (ft.querySelector(".primary") || ft.lastElementChild)?.focus();
 }
-async function openPlan() {
+async function openPlan(sel = state.selection) {
   if (!state.device) { toast("Conecta tu Kobo primero."); return; }
   dialog("Preparando…", "Todavía no se escribe nada", '<div class="row"><span class="spinner"></span>Calculando cambios</div>', [["Cancelar", "", () => dlg.close()]]);
   try {
-    const res = await planNow();
-    dialog("Revisa antes de aplicar", state.device.name, reviewHtml(res), [["Cancelar", "", () => dlg.close()], [`${icon("check")}Aplicar en mi Kobo`, "primary", applyNow]]);
+    const res = await planNow(sel);
+    dialog("Revisa antes de aplicar", state.device.name, reviewHtml(res), [["Cancelar", "", () => dlg.close()], [`${icon("check")}Aplicar en mi Kobo`, "primary", () => applyNow(sel)]]);
   } catch (e) {
     dialog("No se pudo preparar", "", `<div class="finding critical">${icon("x-circle")}<div class="body">${esc(e.message)}</div></div>`, [["Cerrar", "primary", () => dlg.close()]]);
   }
 }
-async function applyNow() {
-  const mods = Object.keys(state.selection).map(byId).filter(Boolean);
+async function applyNow(sel = state.selection) {
+  const main = sel === state.selection;
+  const mods = Object.keys(sel).map(byId).filter(Boolean);
   dialog("Aplicando en tu Kobo…", state.device ? state.device.name : "", `<p class="muted small" style="margin-top:0">No desconectes el Kobo. Si algo falla, los cambios se revierten solos.</p>
     <div class="progress" role="progressbar" aria-label="Progreso" aria-valuemin="0" aria-valuemax="${mods.length}" aria-valuenow="0" id="pbar"><i></i></div>
     <ul class="modlist" id="plist" style="margin-top:10px">${mods.map(m => `<li data-p="${esc(m.title)}"><span class="badge" style="color:${meta(m).color}">${icon(meta(m).icon)}</span>${esc(meta(m).name)}<span class="st muted">en espera</span></li>`).join("")}</ul>
@@ -928,9 +939,10 @@ async function applyNow() {
     const bar = $("#pbar"); if (bar) { bar.setAttribute("aria-valuenow", done); $("i", bar).style.width = `${Math.round(done / Math.max(1, mods.length) * 100)}%`; }
   };
   try {
-    const { job } = await api("/api/apply", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
+    const { job } = await api("/api/apply", { method: "POST", json: { selection: sel, uninstall: main ? [...state.uninstall] : [] } });
     const res = await waitJob(job, onLog);
-    state.selection = {}; state.uninstall.clear(); state.step = 1; state.profile = null; state.open.clear();
+    if (main) { state.selection = {}; state.uninstall.clear(); state.step = 1; state.profile = null; state.open.clear(); }
+    else Object.keys(sel).forEach(id => { if (state.lib[id] === sel[id]) delete state.lib[id]; });
     renderActionBar();
     const tips = (res.log || []).filter(l => /^(Activa|Reinicia|Ábre|Nickel lo importará|Empareja)/.test(l));
     dialog("¡Listo!", `${res.changes.length} cambios aplicados con respaldo`, `
@@ -957,7 +969,7 @@ function renderLibrary() {
   const lib = state.modules.filter(m => m.id.startsWith("lib.") && m.compatible !== false);
   $("#libTasks").innerHTML = lib.map(m => {
     const mt = meta(m);
-    if (!state.selection[m.id]) state.selection[m.id] = defaults(m);
+    if (!state.lib[m.id]) state.lib[m.id] = defaults(m);
     const fileOps = m.options.filter(o => o.type === "files"), other = m.options.filter(o => o.type !== "files");
     return `<article class="card task" data-task="${esc(m.id)}">
       <div class="head"><span class="badge" style="color:${mt.color}">${icon(mt.icon, "ic lg")}</span>
@@ -973,10 +985,10 @@ function renderLibrary() {
     const id = card.dataset.task;
     bindOptions(card, id);
     $("[data-send]", card).onclick = () => {
-      const m = byId(id), sel = state.selection[id] || {};
+      const m = byId(id), sel = state.lib[id] || {};
       const needs = m.options.find(o => o.type === "files");
       if (needs && !(sel[needs.id] || []).length && !(id === "lib.dictionaries" && (sel.wiktionary || []).length)) { toast("Primero agrega archivos."); return; }
-      state.selection = { [id]: sel }; openPlan();
+      openPlan({ [id]: sel });
     };
   });
 }
