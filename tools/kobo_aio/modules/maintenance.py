@@ -106,8 +106,8 @@ def _files_under(ctx, rel: str, keep=()) -> list[str]:
     root = ctx.device.root / rel
     if not root.is_dir():
         return []
-    return [str(f.relative_to(ctx.device.root)) for f in sorted(root.rglob("*"))
-            if f.is_file() and str(f.relative_to(ctx.device.root)) not in keep]
+    rels = (f.relative_to(ctx.device.root).as_posix() for f in sorted(root.rglob("*")) if f.is_file())
+    return [r for r in rels if r not in keep]   # POSIX paths, also on Windows (keep holds POSIX paths)
 
 
 def _stock_apply(mod, ctx, opts):
@@ -143,15 +143,16 @@ def _stock_apply(mod, ctx, opts):
     for rel in _files_under(ctx, ".adds/nm", keep) + _files_under(ctx, ".adds/nickel-mod-manager", keep):
         txn.delete(rel, note="configuración de mods")
     # 4. Apps and their files.
-    if opts["remove_apps"]:
+    if opts["remove_apps"] and opts["remove_app_data"]:
+        # Whole app folders go, so there is no need to download each package to know which files are its own.
+        for tree in APP_TREES:
+            for rel in _files_under(ctx, tree):
+                txn.delete(rel, note="app y sus datos")
+    elif opts["remove_apps"]:
         for mid in ("app.koreader_plugins", "app.audiobook", "app.koreader", "app.cadmus", "app.inkboy"):
             m = REGISTRY.get(mid)
             if m and m.uninstall_fn and (mid in installed or (m.status_fn and not str(m.status(ctx.device)).startswith("no "))):
-                m.uninstall_fn(m, ctx)
-        if opts["remove_app_data"]:
-            for tree in APP_TREES:
-                for rel in _files_under(ctx, tree):
-                    txn.delete(rel, note="datos de la app")
+                m.uninstall_fn(m, ctx)   # keeps user data; KOReader/Cadmus need their package to list their files
     # 5. Fonts, dictionaries and sleep screens that were added to the Kobo.
     if opts["remove_extras"]:
         for rel in _files_under(ctx, "fonts") + _files_under(ctx, ".kobo/custom-dict") + _files_under(ctx, ".kobo/screensaver"):
