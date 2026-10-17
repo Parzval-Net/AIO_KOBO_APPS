@@ -28,6 +28,7 @@ class Finding:
     detail: str = ""
     fix: str = ""        # module/action id that fixes it, if any
     data: dict = field(default_factory=dict)
+    tech: str = ""       # technical detail for advanced users (shown collapsed)
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
@@ -74,16 +75,20 @@ def scan_volume(root: Path) -> dict:
 def check_exclude_sync(ini: QtIni) -> Finding:
     raw = ini.get_raw("FeatureSettings", "ExcludeSyncFolders")
     if raw is None:
-        return Finding("exclude_sync", "warn", "ExcludeSyncFolders no está definido",
-                       "Nickel indexará carpetas ocultas como .adds (ROMs, scripts, imágenes).", "conf.exclude_sync")
+        return Finding("exclude_sync", "warn", "La biblioteca no está protegida",
+                       "El Kobo podría mostrar como libros los archivos internos de tus mods (ROMs, scripts, imágenes).",
+                       "conf.exclude_sync", tech="[FeatureSettings] ExcludeSyncFolders no está definido")
     if raw == EXCLUDE_SYNC_RAW:
-        return Finding("exclude_sync", "ok", "ExcludeSyncFolders correcto")
+        return Finding("exclude_sync", "ok", "Biblioteca protegida",
+                       tech="ExcludeSyncFolders con el escape correcto de Qt")
     if "\\" not in raw or "\\\\" not in raw:
-        return Finding("exclude_sync", "critical", "ExcludeSyncFolders corrupto",
-                       f"Valor actual: {raw}. Sin las barras invertidas dobles Nickel oculta todas las subcarpetas "
-                       "y saca esos libros de la biblioteca.", "conf.exclude_sync", {"raw": raw})
-    return Finding("exclude_sync", "info", "ExcludeSyncFolders personalizado", f"Valor actual: {raw}",
-                   "conf.exclude_sync", {"raw": raw})
+        return Finding("exclude_sync", "critical", "Tus libros en carpetas pueden desaparecer",
+                       "Un ajuste dañado hace que el Kobo esconda los libros guardados en subcarpetas y los saque de "
+                       "la biblioteca. Corrígelo antes de copiar libros.", "conf.exclude_sync", {"raw": raw},
+                       tech=f"ExcludeSyncFolders mal escapado: {raw}")
+    return Finding("exclude_sync", "info", "Protección de biblioteca personalizada",
+                   "Tiene un valor distinto al recomendado. Si todo se ve bien, puedes dejarlo.",
+                   "conf.exclude_sync", {"raw": raw}, tech=f"ExcludeSyncFolders={raw}")
 
 
 def check_library(root: Path, scan: dict) -> list[Finding]:
@@ -97,21 +102,24 @@ def check_library(root: Path, scan: dict) -> list[Finding]:
             missing = sorted(expected - present)
             if missing:
                 out.append(Finding("calibre_missing", "critical" if len(missing) > 3 else "warn",
-                                   f"{len(missing)} libro(s) de Calibre no están en el Kobo",
-                                   "metadata.calibre los registra pero el archivo no existe. No escribas en el "
-                                   "Kobo antes de intentar recuperarlos (tools/recover_kobo_fat32.py).",
-                                   data={"missing": missing}))
+                                   f"Faltan {len(missing)} libro(s) que Calibre envió",
+                                   "Calibre los registra en el Kobo, pero los archivos ya no están. Vuelve a enviarlos "
+                                   "desde Calibre. Si no tienes copia, no copies nada al Kobo antes de intentar "
+                                   "recuperarlos.", data={"missing": missing},
+                                   tech="Listados en metadata.calibre sin archivo; recuperación: tools/recover_kobo_fat32.py"))
             else:
-                out.append(Finding("calibre_missing", "ok", f"Los {len(expected)} libros de Calibre están presentes"))
+                out.append(Finding("calibre_missing", "ok", f"Los {len(expected)} libros de Calibre están en el Kobo"))
         except (ValueError, OSError) as exc:
-            out.append(Finding("calibre_missing", "warn", "metadata.calibre ilegible", str(exc)))
+            out.append(Finding("calibre_missing", "warn", "No se pudo leer el índice de Calibre", tech=str(exc)))
     return out
 
 
 def check_database(root: Path, scan: dict) -> list[Finding]:
     db = root / ".kobo" / "KoboReader.sqlite"
     if not db.is_file():
-        return [Finding("db", "warn", "No se encontró KoboReader.sqlite")]
+        return [Finding("db", "warn", "No se encontró la base de datos del Kobo",
+                        "Puede pasar en un Kobo recién reseteado. Enciéndelo y vuelve a conectarlo.",
+                        tech=".kobo/KoboReader.sqlite no existe")]
     out: list[Finding] = []
     with tempfile.TemporaryDirectory() as tmp:
         # Work on a copy (with WAL/SHM) so the device database is never opened for writing.
@@ -126,17 +134,21 @@ def check_database(root: Path, scan: dict) -> list[Finding]:
                 "SELECT count(*) FROM content WHERE ContentType=6 AND ContentID LIKE 'file:///mnt/onboard/%'"
             ).fetchone()[0]
         except sqlite3.DatabaseError as exc:
-            return [Finding("db", "critical", "KoboReader.sqlite dañada", str(exc))]
+            return [Finding("db", "critical", "La base de datos del Kobo está dañada",
+                            "Tu progreso de lectura y tus notas podrían perderse. Respalda antes de hacer cambios.",
+                            tech=f"KoboReader.sqlite: {exc}")]
         finally:
             conn.close()
     size_mb = db.stat().st_size / (1024 * 1024)
     out.append(Finding("db_integrity", "ok" if integrity == "ok" else "critical",
-                       "Base de datos íntegra" if integrity == "ok" else "Base de datos con errores",
-                       f"quick_check={integrity}, tamaño {size_mb:.1f} MB"))
+                       "Progreso y notas en buen estado" if integrity == "ok" else "La base de datos tiene errores",
+                       "" if integrity == "ok" else "Respalda antes de hacer cambios y considera revisarla con Kobo Utilities.",
+                       tech=f"KoboReader.sqlite quick_check={integrity}, {size_mb:.1f} MB"))
     on_disk = len(scan["books"])
     if on_disk and sideloaded < on_disk:
-        out.append(Finding("db_sideloaded", "info", f"Nickel indexó {sideloaded} de {on_disk} libros en disco",
-                           "Es normal justo después de copiar libros: se importan al expulsar el Kobo."))
+        out.append(Finding("db_sideloaded", "info", f"{on_disk - sideloaded} libro(s) nuevos por importar",
+                           "Es normal después de copiar libros: aparecerán al expulsar el Kobo.",
+                           tech=f"Nickel indexó {sideloaded} de {on_disk} archivos de libro"))
     return out
 
 
@@ -144,14 +156,14 @@ def check_junk(scan: dict, root: Path) -> list[Finding]:
     out = []
     n = len(scan["junk"])
     out.append(Finding("macos_junk", "ok" if n == 0 else "warn",
-                       "Sin archivos basura de macOS" if n == 0 else f"{n} archivo(s) basura de macOS (._*, .DS_Store)",
-                       "" if n == 0 else "No dañan libros, pero ensucian el volumen y pueden confundir a otros lectores.",
-                       "maint.clean_macos" if n else ""))
+                       "Sin archivos basura del Mac" if n == 0 else f"{n} archivo(s) basura que dejó tu Mac",
+                       "" if n == 0 else "No dañan tus libros, pero ocupan espacio y pueden confundir a otros lectores.",
+                       "maint.clean_macos" if n else "", tech="Archivos AppleDouble (._*) y .DS_Store"))
     spot = (root / ".Spotlight-V100").exists() and not (root / ".metadata_never_index").exists()
     out.append(Finding("spotlight", "warn" if spot else "ok",
-                       "Spotlight indexa el Kobo" if spot else "Spotlight desactivado para el Kobo",
-                       "macOS escribe índices en el lector en cada conexión." if spot else "",
-                       "maint.no_spotlight" if spot else ""))
+                       "Tu Mac está indexando el Kobo" if spot else "Tu Mac no indexa el Kobo",
+                       "Spotlight escribe archivos en el lector cada vez que lo conectas." if spot else "",
+                       "maint.no_spotlight" if spot else "", tech=".Spotlight-V100 sin .metadata_never_index"))
     return out
 
 
@@ -159,22 +171,25 @@ def check_space(root: Path) -> Finding:
     usage = shutil.disk_usage(root)
     free_gb = usage.free / 1024**3
     sev = "ok" if free_gb > 1 else ("warn" if free_gb > 0.3 else "critical")
-    return Finding("space", sev, f"Espacio libre: {free_gb:.1f} GB de {usage.total / 1024**3:.1f} GB")
+    return Finding("space", sev, f"{free_gb:.1f} GB libres de {usage.total / 1024**3:.1f} GB",
+                   "" if sev == "ok" else "Libera espacio antes de instalar apps o convertir cómics.")
 
 
 def check_mods(root: Path) -> list[Finding]:
     out = []
     adds = root / ".adds"
     mods = sorted(p.name for p in adds.iterdir() if p.is_dir()) if adds.is_dir() else []
-    out.append(Finding("mods", "info", "Mods detectados: " + (", ".join(mods) if mods else "ninguno"),
-                       data={"mods": mods}))
+    out.append(Finding("mods", "ok", f"{len(mods)} extra(s) instalados" if mods else "Sin extras instalados",
+                       data={"mods": mods}, tech="Carpetas en .adds: " + (", ".join(mods) if mods else "ninguna")))
     if (root / ".kobo" / "KoboRoot.tgz").is_file():
-        out.append(Finding("koboroot_pending", "info", "Hay un KoboRoot.tgz pendiente",
-                           "Se instalará al expulsar el Kobo y reiniciarse."))
+        out.append(Finding("koboroot_pending", "info", "Hay mejoras esperando instalarse",
+                           "Expulsa el Kobo: se instalarán solas y el lector se reiniciará (1 a 2 minutos).",
+                           tech=".kobo/KoboRoot.tgz pendiente"))
     nm_dir = adds / "nm"
     if nm_dir.is_dir() and not (nm_dir / "doc").is_file():
-        out.append(Finding("nickelmenu", "warn", "Hay configuración de NickelMenu pero NickelMenu no parece instalado",
-                           "NickelMenu crea .adds/nm/doc en su primer arranque.", "mod.nickelmenu"))
+        out.append(Finding("nickelmenu", "warn", "El menú de atajos no está instalado",
+                           "Hay atajos configurados, pero falta NickelMenu para mostrarlos.", "mod.nickelmenu",
+                           tech="Existe .adds/nm pero no .adds/nm/doc"))
     return out
 
 
@@ -182,10 +197,19 @@ def run_doctor(device: KoboDevice) -> dict:
     root = device.root
     findings: list[Finding] = []
     if not device.is_known:
-        findings.append(Finding("device", "warn", f"Modelo no reconocido ({device.model_id})",
-                                "Las funciones específicas del modelo se desactivan."))
+        findings.append(Finding("device", "warn", "Modelo de Kobo no reconocido",
+                                "Las funciones específicas de cada modelo quedan desactivadas por seguridad.",
+                                tech=f"ID de hardware {device.model_id}"))
     else:
-        findings.append(Finding("device", "ok", f"{device.name} con firmware {device.firmware or '?'}"))
+        findings.append(Finding("device", "ok", f"{device.name} reconocido", tech=f"Firmware {device.firmware or '?'}"))
+    if device.firmware_tuple[:2] == (4, 46):
+        findings.append(Finding("firmware446", "info", "Firmware 4.46 (reciente)",
+                                "Los mods funcionan, pero los ajustes avanzados del sistema aún no están disponibles para esta versión.",
+                                tech=f"Firmware {device.firmware}: parches 4.46 preliminares en la comunidad"))
+    if device.firmware_tuple and device.firmware_tuple >= (5,):
+        findings.append(Finding("firmware5", "warn", "Firmware 5 o superior",
+                                "Los mods del menú de Nickel aún no funcionan en esta versión; se desactivan.",
+                                tech=f"Firmware {device.firmware} (Qt6)"))
     scan = scan_volume(root)
     findings.append(check_exclude_sync(QtIni.load(root / CONF_REL)))
     findings += check_library(root, scan)

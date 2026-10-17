@@ -4,7 +4,7 @@ Todo en uno para lectores **Kobo**: mods de Nickel, apps, fuentes, menús, parch
 
 **Interfaz web:** https://parzval-net.github.io/AIO_KOBO_APPS/ (se conecta al motor local de tu computador; no sube nada a internet)
 
-> Probado en Kobo Libra Colour (N428, firmware 4.45.23697). El catálogo se adapta solo a cada modelo y firmware: lo que no es compatible aparece desactivado y explica por qué.
+> Probado en Kobo Libra Colour (N428, firmware 4.45.23697) y validado en simulación con los 29 modelos Kobo y 4 líneas de firmware (116 combinaciones, `make matrix`). El catálogo se adapta solo a cada modelo y firmware.
 
 ---
 
@@ -21,13 +21,15 @@ Requisitos: Python 3.9+ y Pillow (`pip3 install Pillow`; el lanzador lo instala 
 
 | Área | Módulos |
 |---|---|
-| **Diagnóstico** | Detecta modelo y firmware, `ExcludeSyncFolders` corrupto, libros de Calibre que faltan, integridad de `KoboReader.sqlite` (sobre una copia), basura de macOS, Spotlight, espacio libre y errores en configs de NickelMenu (linter según la spec oficial) |
-| **Sistema** | NickelMenu 0.6.0 · Inicio minimalista (NickelHome) · **Parches de firmware con kobopatch** (interlineado, márgenes, fuentes, encabezados, suspensión, bloqueo de actualizaciones…), con opción de restaurar los originales |
-| **Lectura** | Fuentes para e-reader (ebook-fonts, 44 familias) · Tipografía mejorada (NickelTypeFix) · Reloj y batería (NickelClock) · Animación de página (NickelDissolve, MTK) |
+| **Interfaz** | Asistente «Mejorar mi Kobo» en 3 pasos con perfiles (Esencial, Minimalista, Lectura cuidada, Todo incluido), lenguaje simple, modo claro/oscuro con contraste WCAG 2.2 AA y modo experto con buscador |
+| **Se adapta a tu modelo** | Reconoce los 29 modelos Kobo (Touch a Libra Colour): ilustración con la proporción real, botones y lápiz; capacidades (resolución, color, Bluetooth, modo oscuro); oculta lo incompatible por hardware o firmware y muestra vistas previas ilustrativas en color o grises según la pantalla |
+| **Diagnóstico** | Detecta modelo y firmware (avisa 4.46 y bloquea 5.x/6.x), `ExcludeSyncFolders` corrupto, libros de Calibre que faltan, integridad de `KoboReader.sqlite` (sobre una copia), basura de macOS, Spotlight, espacio libre y errores en configs de NickelMenu: sintaxis según la spec oficial, atajos a scripts inexistentes, duplicados, claves en conflicto y servicios sin contraseña |
+| **Sistema** | NickelMenu 0.6.0 · Inicio minimalista (NickelHome) · Gestor de mods en el propio Kobo (NickelModManager) · **Parches de firmware con kobopatch** (interlineado, márgenes, fuentes, encabezados, suspensión, bloqueo de actualizaciones…), con opción de restaurar los originales |
+| **Lectura** | Fuentes para e-reader (ebook-fonts, 44 familias) · Tipografía mejorada (NickelTypeFix 1.0) · Reloj y batería (NickelClock) · Animación de página (NickelDissolve, MTK) |
 | **Menú** | Atajos validados (suspender, reiniciar, importar libros, modo oscuro, WiFi, capturas, juegos ocultos, búsqueda en RAE/Wikipedia/traductor, respaldo de la base de datos, ReKindle) · Reorden de pestañas · Tarjeta del propietario |
-| **Apps** | KOReader · Cadmus · **Audiolibros** (audiobook.koplugin para KOReader, con Bluetooth en la Libra Colour) |
+| **Apps** | KOReader + plugins (Project: Title, App Store, sincronización con Kobo, Hardcover, LocalSend) · Cadmus 0.12 · **Audiolibros** (formato `.mp3z` del lector stock o audiobook.koplugin en KOReader) |
 | **Juegos** | Ink-boy: Game Boy y Game Boy Color nativo para e-ink (color Kaleido 3, 4 grises en Carta, modo turbo A2) |
-| **Biblioteca** | **Conversor de cómics y manga estilo KCC** ajustado a cada panel (recorte, páginas dobles, color Kaleido, KEPUB de página fija o CBZ) · Envío de libros con EPUB a KEPUB (kepubify) · **Armador de audiolibros**: MP3 con capítulos y portada · Diccionarios Wiktionary o propios · Pantallas de reposo |
+| **Biblioteca** | **Conversor de cómics y manga estilo KCC** para CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB, imágenes sueltas, carpetas y lotes, ajustado a cada panel (recorte, páginas dobles, color Kaleido, KEPUB de página fija o CBZ) · Envío de libros con EPUB a KEPUB (kepubify) · **Armador de audiolibros**: MP3 con capítulos y portada · Diccionarios Wiktionary o propios · Pantallas de reposo |
 | **Ajustes** | ExcludeSyncFolders bien escapado · Capturas, auto USB, apagado, horizontal · Modo sideload |
 | **Mantenimiento** | Respaldo de libros, progreso y mods al computador · Limpieza de `._*` y `.DS_Store` (valida la firma AppleDouble) · Desactivar Spotlight |
 
@@ -40,6 +42,12 @@ Requisitos: Python 3.9+ y Pillow (`pip3 install Pillow`; el lanzador lo instala 
 - **`KoboRoot.tgz` validado.** Los mods solo pueden instalar en `usr/local/Kobo/imageformats/` y `.adds/`. Los parches de firmware solo pueden reemplazar los 4 binarios objetivo, con el mismo tamaño que el original y ELF ARM válido. Si queda un `KoboRoot.tgz` pendiente, se fusiona en vez de perderse.
 - **Bloqueo por firmware.** Los mods de Nickel se desactivan en firmware 5.x/6.x (Qt6), porque ahí no funcionan.
 - **Motor local acotado.** Escucha solo en `127.0.0.1`, rechaza DNS rebinding y orígenes ajenos (solo acepta la propia UI y GitHub Pages), y exige un header propio en cada operación de escritura.
+
+## Validado con ingeniería inversa (REA + Ghidra)
+
+- Los 7 mods de Nickel y Ink-boy son ELF ARM 32 bits EABI5 hard-float; los mods enlazan Qt5, por eso se bloquean en firmware 5.x/6.x (Qt6).
+- Rutas y marcadores de desinstalación confirmados en los binarios (por ejemplo `nh_info` de NickelHome: crear `.adds/nickel-home/uninstall`; nickel-screensaver: `.adds/screensaver/uninstall.txt`; NickelModManager: `.adds/nickel-mod-manager`).
+- Parche de firmware verificado byte a byte: solo cambia `ReadingSettings::lineHeightScalars()`, `ReadingFooter::update(...)` y la URL de actualización, según los parches elegidos.
 
 ## Línea de comandos
 
@@ -64,6 +72,7 @@ python3 -m kobo_aio rollback ~/Kobo-AIO/backups/<serie>/<fecha>/manifest.json
 
 ```bash
 make aio-test          # tests del AIO (Python, sin dependencias externas salvo Pillow)
+make matrix            # valida los 29 modelos Kobo x 4 firmwares (4.6, 4.38, 4.45, 6.0) con instalación real simulada
 make test              # Ink-boy: suites C++, simulador y tests del AIO
 make kobo              # compila Ink-boy para ARM (zig)
 ```

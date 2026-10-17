@@ -13,15 +13,18 @@ CONF_REL = ".kobo/Kobo/Kobo eReader.conf"
 ONBOARD = "/mnt/onboard"
 
 # Pinned third-party artifacts. Versions/SHA-256 cross-checked against the KoboPatch Web UI lockfile
-# (MIT, github.com/nicoverbruggen/kobopatch-webui/installables.lock @ be94f5b) and re-hashed locally.
+# (MIT, github.com/nicoverbruggen/kobopatch-webui/installables.lock @ be94f5b) or the GitHub release digests,
+# and re-hashed locally. Updated 2026-10-17: NickelTypeFix 1.0, Cadmus 0.12.0, NickelModManager 0.3.
 ART = {
     "nickelmenu": Artifact("https://github.com/pgaskin/NickelMenu/releases/download/v0.6.0/KoboRoot.tgz",
                            "322ff9aa863860e8f5f7e0b55cae561c54bf95983b9bce1d19819d1225d064af", "KoboRoot.tgz", 66939),
     "nickelclock": Artifact("https://github.com/shermp/NickelClock/releases/download/v0.4.0/NickelClock-v0.4.0.zip",
                             "3b55a98cc52bb0434a745affca66a3d4c0f3a346b3cc6be095c04409213d3808",
                             "NickelClock-v0.4.0.zip", 38385),
-    "nickeltypefix": Artifact("https://github.com/nicoverbruggen/NickelTypeFix/releases/download/v0.7/KoboRoot.tgz",
-                              "0ee155a09b0d8c7780ef0eba4c0f0778824e3ce5921135a987dddeed80c97688", "KoboRoot.tgz", 27563),
+    "nickeltypefix": Artifact("https://github.com/nicoverbruggen/NickelTypeFix/releases/download/v1.0/KoboRoot.tgz",
+                              "d1fbbfbc3f8214259ca4ae05ea1f30bdec2f011793b222ae5543843a6a4f43ef", "KoboRoot.tgz", 80827),
+    "nickelmodmanager": Artifact("https://github.com/nicoverbruggen/NickelModManager/releases/download/v0.3/KoboRoot.tgz",
+                                 "17593550bd4f7c26ca1c277b0852bc175deba5a3409f20c71d0afdac7758084b", "KoboRoot.tgz", 122065),
     "nickeldissolve": Artifact("https://github.com/nicoverbruggen/NickelDissolve/releases/download/v0.7/KoboRoot.tgz",
                                "d543c90ffac8f5cc49b66df1b3d68b0335dbd8d69984745ba533d2c4ea8f27c6", "KoboRoot.tgz", 28200),
     "nickelhome": Artifact("https://github.com/nicoverbruggen/NickelHome/releases/download/v0.6/KoboRoot.tgz",
@@ -29,8 +32,8 @@ ART = {
     "koreader": Artifact("https://github.com/koreader/koreader/releases/download/v2026.07.1/koreader-kobo-v2026.07.1.zip",
                          "0f36a62ce73b12516f969e4ad7862cc06920afb03c7bd4db29a0d990bdd84b2f",
                          "koreader-kobo-v2026.07.1.zip", 42370936),
-    "cadmus": Artifact("https://github.com/OGKevin/cadmus/releases/download/v0.11.0/cadmus-kobo.tar.gz",
-                       "2dddf585ca174c28f6ba85a6ac4b21cef559c84e7fc659925ecb81a4c808492e", "cadmus-kobo.tar.gz", 30243464),
+    "cadmus": Artifact("https://github.com/OGKevin/cadmus/releases/download/v0.12.0/cadmus-kobo.tar.gz",
+                       "cbf9934569185037685c2fa8727c529375e713d782fd8a4f572ad6dd13c2b94d", "cadmus-kobo.tar.gz", 40726763),
     "fonts-core": Artifact("https://github.com/nicoverbruggen/ebook-fonts/releases/download/v2026.08.05/kobo-core-fonts.zip",
                            "1be75f10d19d68f790716105a7b42c1481f35ee911e132e32182a98c0cc875f3",
                            "kobo-core-fonts.zip", 5812011),

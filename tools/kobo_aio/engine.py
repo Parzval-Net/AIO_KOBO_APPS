@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from pathlib import Path
@@ -15,7 +16,23 @@ from .txn import Transaction, rollback
 
 def catalog(dev: KoboDevice | None = None) -> list[dict]:
     from . import modules  # noqa: F401  (registers built-in modules)
-    return [m.to_dict(dev) for m in REGISTRY.values()]
+    items = [m.to_dict(dev) for m in REGISTRY.values()]
+    if dev is not None:
+        # A module whose requirement cannot be installed on this device is not compatible either.
+        by_id = {i["id"]: i for i in items}
+        changed = True
+        while changed:
+            changed = False
+            for it in items:
+                if not it.get("compatible"):
+                    continue
+                bad = [by_id[r] for r in it["requires"] if r in by_id and not by_id[r].get("compatible")]
+                if bad:
+                    it["compatible"] = False
+                    it["incompatible_reason"] = f"Necesita {bad[0]['title']}, que no es compatible con tu modelo"
+                    it["status"] = "n/a"
+                    changed = True
+    return items
 
 
 def _really_installed(installed: dict, dev: KoboDevice) -> dict:
@@ -70,10 +87,15 @@ def _run_txn(dev, selection, uninstall, dry_run, progress, txn: Transaction, ctx
         results.append({"id": mid, "action": "uninstall", "ok": True})
 
     order = resolve_order(list(selection), _really_installed(installed, dev))
+    skipped: set[str] = set()
     for mid in order:
         mod = REGISTRY[mid]
         ok, why = mod.compatible(dev)
+        blocked = [r for r in mod.requires if r in skipped]
+        if ok and blocked:
+            ok, why = False, f"Necesita {REGISTRY[blocked[0]].title}, que no se puede instalar en tu modelo"
         if not ok:
+            skipped.add(mid)
             results.append({"id": mid, "action": "skip", "ok": False, "reason": why})
             continue
         opts = mod.resolved_options(selection.get(mid))
@@ -93,14 +115,17 @@ def _run_txn(dev, selection, uninstall, dry_run, progress, txn: Transaction, ctx
         labels = ", ".join(l for l, _ in parts)
         pending = txn.read_bytes(".kobo/KoboRoot.tgz")
         if pending:
-            try:
-                validate_koboroot(pending, "KoboRoot.tgz pendiente")
-            except AioError as exc:
-                raise AioError(f"Hay un KoboRoot.tgz pendiente que no es de mods ({exc}). Expulsa el Kobo y deja "
-                               "que termine de instalarse antes de continuar.") from exc
+            own = ctx.state.get("pending_koboroot_sha") == hashlib.sha256(pending).hexdigest()
+            if not own:  # a package we did not build: only plain mod paths may be merged
+                try:
+                    validate_koboroot(pending, "KoboRoot.tgz pendiente")
+                except AioError as exc:
+                    raise AioError("Hay una actualización esperando instalarse en el Kobo que no viene de Kobo AIO. "
+                                   "Expulsa el Kobo, deja que se reinicie y vuelve a conectarlo.") from exc
             labels += " + lo que ya estaba pendiente"
         merged = merge_koboroots(parts, pending)
         txn.write_bytes(".kobo/KoboRoot.tgz", merged, note=f"se instala al expulsar y reiniciar: {labels}")
+        ctx.state["pending_koboroot_sha"] = hashlib.sha256(merged).hexdigest()
 
     if txn.changes:
         ctx.state["aio_version"] = __version__

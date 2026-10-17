@@ -26,16 +26,29 @@ from pathlib import Path
 from PIL import Image, ImageEnhance, ImageOps
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
-ARCHIVE_EXTS = {".cbz", ".zip", ".cbr", ".rar", ".cb7", ".7z", ".pdf"}
+ARCHIVE_EXTS = {".cbz", ".zip", ".cbr", ".rar", ".cb7", ".7z", ".cbt", ".tar", ".pdf", ".epub"}
+SUPPORTED_HELP = "CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB, imágenes sueltas o carpetas"
 
-# (width, height, colour panel, KCC profile) per Kobo hardware id. Sources: KCC README profiles, FBInk.
-PANELS = {
-    "390": (1264, 1680, True, "KoLC"), "393": (1072, 1448, True, "KoCC"),
-    "376": (1072, 1448, False, "KoC"), "386": (1072, 1448, False, "KoC"), "391": (1072, 1448, False, "KoC"),
-    "395": (1072, 1448, False, "KoC"), "384": (1264, 1680, False, "KoL"), "388": (1264, 1680, False, "KoL"),
-    "377": (1440, 1920, False, "KoF"), "380": (1440, 1920, False, "KoF"), "383": (1440, 1920, False, "KoS"),
-    "387": (1404, 1872, False, "KoE"), "389": (1404, 1872, False, "KoE"), "382": (758, 1024, False, "KoN"),
-}
+# KCC profile per Kobo hardware id (README "Profiles"); panel size and colour come from device.KOBO_MODELS.
+KCC_PROFILES = {"390": "KoLC", "393": "KoCC", "376": "KoC", "386": "KoC", "391": "KoC", "395": "KoC", "384": "KoL",
+                "388": "KoL", "377": "KoF", "380": "KoF", "383": "KoS", "387": "KoE", "389": "KoE", "382": "KoN",
+                "371": "KoGHD", "373": "KoAO", "381": "KoAO", "370": "KoAH2O", "350": "KoAHD", "360": "KoA",
+                "330": "KoG", "310": "KoMT", "320": "KoMT", "340": "KoMT"}
+
+
+def _panel(model_id: str):
+    from .device import KOBO_MODELS
+    m = KOBO_MODELS.get(model_id) or KOBO_MODELS["390"]
+    return m["width"], m["height"], m["color"], KCC_PROFILES.get(model_id, "KoL")
+
+
+class _Panels(dict):
+    def get(self, key, default=None):  # backwards compatible PANELS.get(model_id, fallback)
+        from .device import KOBO_MODELS
+        return _panel(key) if key in KOBO_MODELS else default
+
+
+PANELS = _Panels()
 GRAY16 = [i * 17 for i in range(16)]
 
 
@@ -62,12 +75,56 @@ def _skip(name: str) -> bool:
     return any(p.startswith((".", "__MACOSX")) for p in parts) or Path(name).suffix.lower() not in IMG_EXTS
 
 
+def _epub_pages(zf: zipfile.ZipFile) -> list[tuple[str, bytes]]:
+    """Images of a (comic) EPUB in reading order: OPF spine -> xhtml pages -> <img>/<image> sources."""
+    import posixpath
+    import xml.etree.ElementTree as ET
+    names = set(zf.namelist())
+    try:
+        container = ET.fromstring(zf.read("META-INF/container.xml"))
+        opf_path = next(e.get("full-path") for e in container.iter() if e.tag.endswith("rootfile"))
+        opf = ET.fromstring(zf.read(opf_path))
+    except Exception:  # noqa: BLE001 - malformed EPUB: fall back to natural order of images
+        imgs = sorted((n for n in names if not _skip(n)), key=natural_key)
+        return [(n, zf.read(n)) for n in imgs]
+    base = posixpath.dirname(opf_path)
+    items = {e.get("id"): e.get("href") for e in opf.iter() if e.tag.endswith("item")}
+    order, seen = [], set()
+    for ref in (e for e in opf.iter() if e.tag.endswith("itemref")):
+        href = items.get(ref.get("idref"))
+        if not href:
+            continue
+        page = posixpath.normpath(posixpath.join(base, href))
+        if page not in names:
+            continue
+        html = zf.read(page).decode("utf-8", errors="replace")
+        for m in re.finditer(r'(?:src|xlink:href|href)\s*=\s*["\']([^"\']+\.(?:jpe?g|png|webp|gif|bmp))["\']', html, re.I):
+            img = posixpath.normpath(posixpath.join(posixpath.dirname(page), m.group(1)))
+            if img in names and img not in seen:
+                seen.add(img)
+                order.append(img)
+    if not order:
+        order = sorted((n for n in names if not _skip(n)), key=natural_key)
+    return [(n, zf.read(n)) for n in order]
+
+
 def read_pages(src: Path) -> list[tuple[str, bytes]]:
     src = Path(src)
+    if src.is_file() and src.suffix.lower() in IMG_EXTS:
+        return [(src.name, src.read_bytes())]
     if src.is_dir():
         files = [p for p in src.rglob("*") if p.is_file() and not _skip(str(p.relative_to(src)))]
         return [(str(p.relative_to(src)), p.read_bytes()) for p in sorted(files, key=lambda p: natural_key(str(p)))]
     ext = src.suffix.lower()
+    if ext == ".epub":
+        with zipfile.ZipFile(src) as zf:
+            return _epub_pages(zf)
+    if ext in (".cbt", ".tar"):
+        import tarfile
+        with tarfile.open(src) as tf:
+            members = sorted((m for m in tf.getmembers() if m.isfile() and not _skip(m.name)),
+                             key=lambda m: natural_key(m.name))
+            return [(m.name, tf.extractfile(m).read()) for m in members]
     if ext in (".cbz", ".zip"):
         with zipfile.ZipFile(src) as zf:
             names = sorted((n for n in zf.namelist() if not n.endswith("/") and not _skip(n)), key=natural_key)
@@ -91,7 +148,21 @@ def read_pages(src: Path) -> list[tuple[str, bytes]]:
             cmd = [tool, "-q", "-o", tmp, str(src)] if tool.endswith("unar") else [tool, "x", "-y", f"-o{tmp}", str(src)]
             subprocess.run(cmd, check=True, capture_output=True)
             return read_pages(Path(tmp))
-    raise RuntimeError(f"Formato no soportado: {src.name}")
+    raise RuntimeError(f"Formato no soportado: {src.name}. Acepta {SUPPORTED_HELP}.")
+
+
+def expand_inputs(paths: list[Path]) -> list[Path]:
+    """A folder full of comic files is a batch; a folder of images is one comic."""
+    out: list[Path] = []
+    for p in paths:
+        p = Path(p)
+        if p.is_dir():
+            comics = sorted((c for c in p.iterdir() if c.is_file() and c.suffix.lower() in ARCHIVE_EXTS
+                             and not c.name.startswith(".")), key=lambda c: natural_key(c.name))
+            out.extend(comics if comics else [p])
+        else:
+            out.append(p)
+    return out
 
 
 def _is_color(img: Image.Image) -> bool:

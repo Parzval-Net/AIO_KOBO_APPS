@@ -57,7 +57,7 @@ CORE_CPP_SRCS := \
 BUILD_DIR := build
 DIST_DIR  := dist/Kobo-InkBoy
 
-.PHONY: all host test aio-test aio demo-roms kobo bundle auto-install installer-web clean
+.PHONY: all host test aio-test matrix aio demo-roms kobo bundle auto-install installer-web clean
 
 all: host demo-roms test
 
@@ -95,6 +95,10 @@ test: host
 aio-test:
 	@echo "[AIO] Running Kobo AIO test suite..."
 	@$(PYTHON) -m unittest discover -s tests -p 'test_kobo_aio.py'
+
+matrix:
+	@echo "[AIO] Validating every Kobo model x firmware (uses the download cache)..."
+	@KOBO_AIO_ONLINE=1 $(PYTHON) tests/model_matrix.py
 
 aio:
 	@cd tools && $(PYTHON) -m kobo_aio serve

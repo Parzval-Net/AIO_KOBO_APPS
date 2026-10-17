@@ -5,193 +5,423 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Kobo AIO</title>
-<meta name="description" content="Todo en uno para lectores Kobo: NickelMenu, mods, fuentes, KOReader, cómics, diccionarios, Ink-boy y mantenimiento, con respaldo y rollback.">
+<meta name="description" content="Mejora tu Kobo en minutos: menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros, diccionarios y más. Con respaldo y vuelta atrás.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='6' y='2' width='20' height='28' rx='4' fill='%231E1C18'/%3E%3Crect x='9' y='5' width='14' height='19' rx='1.5' fill='%23F3EFE6'/%3E%3C/svg%3E">
 <style>
+/* Design tokens: "paper & ink" palette. Every text/background pair verified >= 4.5:1 (WCAG 2.2 AA) in both themes. */
 :root{
-  --paper:#f4f1ea;--surface:#fbfaf6;--sunk:#ece8de;--ink:#1b1a17;--ink2:#45433d;--ink3:#6f6c64;
-  --rule:#d8d3c6;--rule2:#b9b3a4;--accent:#1f4e79;--accent-ink:#fff;--ok:#2f6b45;--warn:#8a5a12;--err:#a3322a;
-  --ok-bg:#e3efe6;--warn-bg:#f6ead2;--err-bg:#f6e0dd;--info-bg:#e4ebf3;--r:14px;--r2:9px;
-  --shadow:0 1px 0 rgba(27,26,23,.04),0 8px 24px -12px rgba(27,26,23,.18);
-  --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;--sans:system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --paper:#F3EFE6;--surface:#FBF9F4;--sunk:#ECE7DC;--ink:#1E1C18;--ink2:#47433B;--ink3:#6A655B;
+  --rule:#DCD5C6;--rule2:#B9B1A1;--accent:#1F4E6E;--accent-2:#2C6690;--accent-ink:#FFFFFF;--accent-soft:#E2EAF0;
+  --ok:#2E6544;--warn:#80530F;--err:#9E2F27;--ok-bg:#E1EDE3;--warn-bg:#F5E8CF;--err-bg:#F6DFDB;--info-bg:#E2EAF0;
+  --c1:#3E6A57;--c2:#7A5A2E;--c3:#3F5F86;--c4:#7A4A5E;--c5:#5C5A8A;--c6:#3E6E72;
+  --r:16px;--r2:10px;--shadow:0 1px 0 rgba(30,28,24,.04),0 10px 30px -18px rgba(30,28,24,.35);
+  --focus:0 0 0 2px var(--surface),0 0 0 4px var(--accent);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --paper:#141413;--surface:#1c1c1a;--sunk:#232320;--ink:#ece9e1;--ink2:#c9c5ba;--ink3:#9a968b;--rule:#2f2e2a;
-  --rule2:#46443e;--accent:#8db8e3;--accent-ink:#0f1a24;--ok:#8cc9a1;--warn:#e2b768;--err:#ef9a90;
-  --ok-bg:#1d2a21;--warn-bg:#2c2416;--err-bg:#2e1d1b;--info-bg:#1b2430}}
-:root[data-theme="dark"]{--paper:#141413;--surface:#1c1c1a;--sunk:#232320;--ink:#ece9e1;--ink2:#c9c5ba;--ink3:#9a968b;
-  --rule:#2f2e2a;--rule2:#46443e;--accent:#8db8e3;--accent-ink:#0f1a24;--ok:#8cc9a1;--warn:#e2b768;--err:#ef9a90;
-  --ok-bg:#1d2a21;--warn-bg:#2c2416;--err-bg:#2e1d1b;--info-bg:#1b2430}
+  --paper:#141412;--surface:#1C1B18;--sunk:#24231F;--ink:#EDE9E0;--ink2:#C9C4B8;--ink3:#A29C90;--rule:#2F2D28;
+  --rule2:#4A473F;--accent:#9CC4E4;--accent-2:#B8D6EE;--accent-ink:#0E1A24;--accent-soft:#18232D;--ok:#8FCBA2;
+  --warn:#E3B867;--err:#F09C92;--ok-bg:#1C2A21;--warn-bg:#2C2416;--err-bg:#2E1D1B;--info-bg:#18232D;
+  --c1:#9CCBB5;--c2:#E0BE8A;--c3:#A9C3E6;--c4:#E2A9C0;--c5:#BDBBEB;--c6:#9ED1D4;--shadow:0 10px 30px -18px rgba(0,0,0,.8)}}
+:root[data-theme="dark"]{--paper:#141412;--surface:#1C1B18;--sunk:#24231F;--ink:#EDE9E0;--ink2:#C9C4B8;--ink3:#A29C90;
+  --rule:#2F2D28;--rule2:#4A473F;--accent:#9CC4E4;--accent-2:#B8D6EE;--accent-ink:#0E1A24;--accent-soft:#18232D;
+  --ok:#8FCBA2;--warn:#E3B867;--err:#F09C92;--ok-bg:#1C2A21;--warn-bg:#2C2416;--err-bg:#2E1D1B;--info-bg:#18232D;
+  --c1:#9CCBB5;--c2:#E0BE8A;--c3:#A9C3E6;--c4:#E2A9C0;--c5:#BDBBEB;--c6:#9ED1D4;--shadow:0 10px 30px -18px rgba(0,0,0,.8)}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
-a{color:var(--accent)}
-button,select,input{font:inherit;color:inherit}
-.wrap{max-width:1080px;margin:0 auto;padding:0 16px 120px}
-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:22px 0 14px;border-bottom:1px solid var(--rule)}
-.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
-.logo{width:34px;height:34px;border-radius:9px;background:var(--ink);color:var(--paper);display:grid;place-items:center;
-  font:700 15px var(--serif)}
-h1{font:600 22px var(--serif);margin:0;letter-spacing:.2px}
-h2{font:600 19px var(--serif);margin:0 0 4px}
-h3{font:600 15px var(--sans);margin:0}
-.muted{color:var(--ink3)}
-.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--rule);
-  background:var(--surface);font-size:13px;white-space:nowrap}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ink3)}
+html,body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-underline-offset:2px}
+button,select,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:8px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.skip:focus{position:fixed;left:12px;top:12px;width:auto;height:auto;clip:auto;z-index:99;background:var(--surface);padding:10px 14px;border-radius:10px}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 120px}
+h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.1px;margin:0}
+h1{font-size:21px}h2{font-size:22px;line-height:1.25}h3{font-size:17px}
+.muted{color:var(--ink3)}.small{font-size:14px}.tiny{font-size:13px}
+.ic{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic.lg{width:26px;height:26px}
+
+header.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--paper) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--rule)}
+header .bar{max-width:1120px;margin:0 auto;padding:12px 16px 6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto;text-decoration:none;color:inherit}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--ink);display:grid;place-items:center}
+.logo i{display:block;width:16px;height:21px;border-radius:2px;background:var(--paper)}
+.chip-st{display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:4px 12px;border-radius:999px;border:1px solid var(--rule);background:var(--surface);font-size:14px;white-space:nowrap}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--ink3);flex:none}
 .dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
-nav.tabs{display:flex;gap:4px;margin:16px 0;overflow-x:auto;scrollbar-width:none}
-nav.tabs button{border:1px solid transparent;background:none;padding:8px 14px;border-radius:999px;cursor:pointer;color:var(--ink2);white-space:nowrap}
-nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
-.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
-.btn{border:1px solid var(--rule2);background:var(--surface);padding:8px 14px;border-radius:var(--r2);cursor:pointer}
-.btn:hover{border-color:var(--ink3)}
-.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.btn.danger{color:var(--err);border-color:var(--err)}
+.iconbtn{display:inline-grid;place-items:center;width:38px;height:38px;border-radius:10px;border:1px solid var(--rule);background:var(--surface);cursor:pointer}
+nav.main{max-width:1120px;margin:0 auto;padding:0 8px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav.main button{display:inline-flex;align-items:center;gap:8px;border:0;background:none;padding:10px 12px 12px;cursor:pointer;color:var(--ink2);white-space:nowrap;border-bottom:2px solid transparent;font-size:15px;min-height:44px}
+nav.main button[aria-current="page"]{color:var(--ink);border-bottom-color:var(--ink);font-weight:600}
+
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:20px;box-shadow:var(--shadow)}
+.stack>*+*{margin-top:14px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 18px;border-radius:12px;border:1px solid var(--rule2);background:var(--surface);cursor:pointer;font-weight:500;text-decoration:none;color:var(--ink)}
+.btn:hover{border-color:var(--ink3);background:var(--sunk)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
+.btn.ghost{border-color:transparent;background:none}
+.btn.danger{color:var(--err);border-color:currentColor;background:none}
+.btn.sm{min-height:36px;padding:6px 12px;font-size:14px;border-radius:10px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
-.btn.small{padding:4px 10px;font-size:13px}
-.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.finding{display:flex;gap:12px;padding:10px 12px;border-radius:var(--r2);margin:6px 0;align-items:flex-start}
-.finding.critical{background:var(--err-bg)}.finding.warn{background:var(--warn-bg)}.finding.info{background:var(--info-bg)}
-.finding.ok{background:var(--ok-bg)}
-.sev{font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.6px;padding:2px 7px;border-radius:6px;min-width:66px;text-align:center}
-.critical .sev{background:var(--err);color:#fff}.warn .sev{background:var(--warn);color:#fff}
-.info .sev{background:var(--accent);color:var(--accent-ink)}.ok .sev{background:var(--ok);color:#fff}
-.finding .body{flex:1;min-width:0}
-.finding details{font-size:13px;margin-top:4px}
-.mod{border:1px solid var(--rule);border-radius:var(--r);padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
-.mod.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
-.mod.off{opacity:.55}
-.mod .top{display:flex;gap:10px;align-items:flex-start}
-.mod input[type=checkbox].pick{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--sunk);color:var(--ink2)}
-.chip.inst{background:var(--ok-bg);color:var(--ok)}.chip.alto{background:var(--err-bg);color:var(--err)}
-.chip.medio{background:var(--warn-bg);color:var(--warn)}.chip.rec{background:var(--info-bg);color:var(--accent)}
-.opts{border-top:1px dashed var(--rule);padding-top:8px;display:none;flex-direction:column;gap:8px}
-.mod.sel .opts{display:flex}
-.opt label{font-size:13px;color:var(--ink2);display:block;margin-bottom:2px}
-.opt select,.opt input[type=text]{width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--rule2);background:var(--paper)}
-.multi{max-height:170px;overflow:auto;border:1px solid var(--rule);border-radius:8px;padding:6px 8px;background:var(--paper)}
-.multi label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink);margin:2px 0}
-.drop{border:1.5px dashed var(--rule2);border-radius:10px;padding:12px;text-align:center;font-size:13px;color:var(--ink3);cursor:pointer}
-.drop.over{border-color:var(--accent);color:var(--accent)}
-.files{font-size:12px;font-family:var(--mono);margin:6px 0 0;padding:0;list-style:none}
-.files li{display:flex;justify-content:space-between;gap:8px}
-.cat{margin:22px 0 8px;display:flex;align-items:baseline;gap:10px}
-.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--rule);padding:12px 16px;
-  box-shadow:0 -8px 24px -16px rgba(0,0,0,.3);z-index:5}
-.bar .in{max-width:1080px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-dialog{border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:760px;width:calc(100% - 32px);padding:0}
-dialog::backdrop{background:rgba(0,0,0,.45)}
-dialog .hd{padding:16px 18px;border-bottom:1px solid var(--rule)}
-dialog .bd{padding:14px 18px;max-height:60vh;overflow:auto}
-dialog .ft{padding:12px 18px;border-top:1px solid var(--rule);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
-.log{font:12px/1.5 var(--mono);background:var(--sunk);border-radius:8px;padding:10px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word}
-.chg{font:12px/1.6 var(--mono);display:flex;gap:8px}
-.chg b{min-width:72px;font-weight:600}
-.chg .write{color:var(--ok)}.chg .delete{color:var(--err)}
-.empty{padding:28px;text-align:center;color:var(--ink3)}
-.steps{counter-reset:s;list-style:none;padding:0;margin:10px 0}
-.steps li{counter-increment:s;padding:8px 0 8px 40px;position:relative}
-.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:28px;height:28px;border-radius:50%;
-  background:var(--ink);color:var(--paper);display:grid;place-items:center;font-weight:600}
-code,kbd{font-family:var(--mono);font-size:13px;background:var(--sunk);padding:1px 6px;border-radius:5px}
-pre.cmd{font:13px var(--mono);background:var(--sunk);padding:10px 12px;border-radius:8px;overflow:auto}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;line-height:1.3;padding:3px 9px;border-radius:999px;background:var(--sunk);color:var(--ink2)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.err{background:var(--err-bg);color:var(--err)}.pill.info{background:var(--info-bg);color:var(--accent)}
+.view{padding-top:22px}
 .hidden{display:none!important}
-.spinner{width:14px;height:14px;border:2px solid var(--rule2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr))}
+.empty{padding:28px;text-align:center;color:var(--ink3)}
+.spinner{width:18px;height:18px;border:2px solid var(--rule2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media (max-width:560px){.grid{grid-template-columns:1fr}h1{font-size:19px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+code,kbd{font-family:var(--mono);font-size:.88em;background:var(--sunk);padding:1px 6px;border-radius:5px}
+
+.hero{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:center}
+.ereader{width:132px;height:178px;border-radius:16px;background:linear-gradient(160deg,#2a2824,#141310);padding:12px 12px 22px;box-shadow:0 18px 30px -16px rgba(0,0,0,.55);position:relative}
+.ereader .screen{height:100%;border-radius:4px;background:#ECE7DA;color:#2B2925;padding:10px;display:flex;flex-direction:column;gap:5px;font:10px/1.3 var(--serif)}
+.ereader .screen b{font-size:12px}
+.ereader .screen i{display:block;height:4px;border-radius:2px;background:#C9C2B2}
+.ereader .screen i:nth-child(odd){width:86%}
+.ereader.off .screen{background:#CFC9BB}
+.ereader::after{content:"";position:absolute;right:-3px;top:46px;width:3px;height:34px;border-radius:0 3px 3px 0;background:#2a2824}
+.ereader{transition:width .2s,height .2s}
+.ereader .btns{position:absolute;right:-4px;top:38%;display:flex;flex-direction:column;gap:6px}
+.ereader .btns i{display:block;width:4px;height:22px;border-radius:0 3px 3px 0;background:#3a3732}
+.ereader .pen{position:absolute;left:-14px;bottom:10px;width:6px;height:90px;border-radius:3px;background:linear-gradient(#5a5650,#2a2824);transform:rotate(-8deg)}
+.ereader.color .screen{background:linear-gradient(135deg,#efe3dc,#e3ecf0 55%,#e8efe2)}
+.ereader.color .screen i:nth-child(3){background:#d9a99a}.ereader.color .screen i:nth-child(5){background:#9ab7c9}
+.caps{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.mini{position:relative;border-radius:10px;background:linear-gradient(160deg,#2a2824,#141310);padding:8px 8px 14px;box-shadow:0 10px 20px -12px rgba(0,0,0,.5)}
+.mini .scr{position:relative;width:100%;height:100%;border-radius:3px;background:#ECE7DA;color:#22201C;overflow:hidden;font:9px/1.3 var(--serif)}
+.mini.bw .scr{filter:grayscale(1)}
+.previews{display:flex;gap:18px;flex-wrap:wrap;justify-content:center;align-items:flex-end}
+.previews figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+.previews figcaption{font-size:13px;color:var(--ink3)}
+.pv-bar{position:absolute;left:0;right:0;bottom:0;height:12%;display:flex;justify-content:space-around;align-items:center;border-top:1px solid #bcb5a6;background:#e6e0d2;font:7px var(--sans)}
+.pv-bar b{background:#22201C;color:#ECE7DA;padding:1px 3px;border-radius:2px;font-weight:600}
+.pv-row{position:absolute;left:6%;right:6%;border-radius:3px}
+.pv-txt{position:absolute;left:8%;right:8%}
+.pv-txt i{display:block;height:3px;border-radius:2px;background:#8d8676;margin:0 0 4px}
+.pv-txt.j i{width:100%}
+.pv-pix{position:absolute;inset:8% 10% 38%;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.06) 3px 4px),repeating-linear-gradient(90deg,transparent 0 3px,rgba(0,0,0,.06) 3px 4px),linear-gradient(#9bbc0f,#8bac0f);border:2px solid #22201C}
+.pvbtn{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px 2px;font-size:14px;min-height:32px;display:inline-flex;gap:6px;align-items:center}
+.health{display:flex;gap:14px;align-items:flex-start;padding:16px;border-radius:14px;background:var(--sunk);margin-top:14px;flex-wrap:wrap}
+.health.ok{background:var(--ok-bg)}.health.warn{background:var(--warn-bg)}.health.critical{background:var(--err-bg)}
+.health>.ic{width:28px;height:28px}
+.health.ok>.ic{color:var(--ok)}.health.warn>.ic{color:var(--warn)}.health.critical>.ic{color:var(--err)}
+.tiles{display:grid;gap:12px;grid-template-columns:repeat(3,1fr);margin-top:16px}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:480px){.tiles{grid-template-columns:1fr}}
+.tile{display:flex;flex-direction:column;gap:6px;text-align:left;padding:16px;border-radius:14px;border:1px solid var(--rule);background:var(--surface);cursor:pointer;min-height:118px}
+.tile:hover{border-color:var(--ink3)}
+.tile .badge{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;background:var(--sunk);color:var(--ink)}
+.tile b{font-family:var(--serif);font-size:16.5px}
+.tile.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.tile.primary .badge{background:rgba(255,255,255,.16);color:inherit}
+.tile.primary .muted{color:inherit;opacity:.88}
+.finding{display:flex;gap:12px;padding:14px;border-radius:12px;border:1px solid var(--rule);background:var(--surface);align-items:flex-start;flex-wrap:wrap}
+.finding+.finding{margin-top:8px}
+.finding>.ic{margin-top:2px}
+.finding.critical{border-color:color-mix(in srgb,var(--err) 35%,var(--rule));background:var(--err-bg)}
+.finding.critical>.ic{color:var(--err)}
+.finding.warn{border-color:color-mix(in srgb,var(--warn) 30%,var(--rule));background:var(--warn-bg)}
+.finding.warn>.ic{color:var(--warn)}
+.finding.info>.ic{color:var(--accent)}.finding.ok>.ic{color:var(--ok)}
+.finding .body{flex:1;min-width:200px}
+.finding .body b{display:block}
+details.tech{margin-top:6px;font-size:13.5px;color:var(--ink3)}
+details.tech summary{cursor:pointer;width:max-content;max-width:100%}
+.oklist{display:grid;gap:6px 18px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));margin-top:10px}
+.oklist div{display:flex;gap:8px;align-items:center;font-size:14.5px}
+.oklist .ic{color:var(--ok);width:18px;height:18px}
+
+.stepper{display:flex;gap:8px;list-style:none;padding:0;margin:0 0 18px;flex-wrap:wrap}
+.stepper li{display:flex;align-items:center;gap:8px;color:var(--ink3);font-size:15px}
+.stepper li+li::before{content:"";width:28px;height:1px;background:var(--rule2)}
+.stepper .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--rule2);font-weight:600;font-size:13px}
+.stepper li[aria-current="step"]{color:var(--ink);font-weight:600}
+.stepper li[aria-current="step"] .n{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.stepper li.done .n{background:var(--ok);border-color:var(--ok);color:#fff}
+.profiles{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));margin-top:14px}
+.profile{position:relative;text-align:left;padding:18px;border-radius:14px;border:1.5px solid var(--rule);background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:8px}
+.profile:hover{border-color:var(--ink3)}
+.profile[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:var(--accent-soft)}
+.profile .tag{position:absolute;top:14px;right:14px}
+.profile ul{margin:4px 0 0;padding-left:18px;font-size:14px;color:var(--ink2)}
+.group{margin-top:22px}
+.group>h3{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.mrow{display:grid;grid-template-columns:auto auto 1fr auto;gap:14px;align-items:start;padding:14px;border:1px solid var(--rule);border-radius:12px;background:var(--surface)}
+.mrow+.mrow{margin-top:8px}
+.mrow.on{border-color:color-mix(in srgb,var(--accent) 55%,var(--rule))}
+.mrow.off{opacity:.6}
+.mrow .badge,.modlist .badge{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--sunk);flex:none}
+.mrow .name{font-weight:600}
+.mrow .meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.switch{position:relative;width:46px;height:28px;flex:none;margin-top:4px}
+.switch input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer;z-index:1}
+.switch span{position:absolute;inset:0;border-radius:999px;background:var(--rule2);transition:background .15s}
+.switch span::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.switch input:checked+span{background:var(--accent)}
+.switch input:checked+span::after{transform:translateX(18px)}
+.switch input:focus-visible+span{box-shadow:var(--focus)}
+.switch input:disabled{cursor:not-allowed}
+.opts{grid-column:3/5;display:none;flex-direction:column;gap:12px;padding-top:12px;border-top:1px dashed var(--rule);margin-top:4px}
+.mrow.on.open .opts{display:flex}
+.optbtn{background:none;border:0;color:var(--accent);cursor:pointer;padding:6px 2px;font-size:14px;min-height:32px}
+.opt .l{display:block;font-size:14px;color:var(--ink2);margin-bottom:6px;font-weight:500}
+.opt select,.opt input[type=text]{width:100%;min-height:42px;padding:8px 10px;border-radius:10px;border:1px solid var(--rule2);background:var(--paper)}
+.opt .check{display:flex;gap:10px;align-items:center;min-height:32px;cursor:pointer}
+.opt .check input{width:20px;height:20px;accent-color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips label{position:relative;cursor:pointer}
+.chips input{position:absolute;opacity:0;inset:0;margin:0;cursor:pointer}
+.chips span{display:inline-flex;align-items:center;min-height:34px;padding:5px 12px;border-radius:999px;border:1px solid var(--rule2);background:var(--paper);font-size:14px}
+.chips input:checked+span{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.chips input:focus-visible+span{box-shadow:var(--focus)}
+.drop{display:flex;flex-direction:column;align-items:center;gap:6px;border:1.5px dashed var(--rule2);border-radius:12px;padding:18px;text-align:center;color:var(--ink2);cursor:pointer;background:var(--paper)}
+.drop:hover,.drop.over{border-color:var(--accent);color:var(--accent)}
+.files{list-style:none;margin:8px 0 0;padding:0;font-size:14px}
+.files li{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;background:var(--sunk)}
+.files li+li{margin-top:4px}
+.files li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.files button{border:0;background:none;cursor:pointer;color:var(--ink3);min-width:28px;min-height:28px}
+.actionbar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:var(--surface);border-top:1px solid var(--rule);box-shadow:0 -12px 30px -22px rgba(0,0,0,.45)}
+.actionbar .in{max-width:1120px;margin:0 auto;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.actionbar .sum{flex:1;min-width:160px}
+.actionbar .sum .tiny{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.summary{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));margin:14px 0}
+.summary div{padding:14px;border-radius:12px;background:var(--sunk)}
+.summary b{display:block;font-family:var(--serif);font-size:24px}
+.modlist{list-style:none;padding:0;margin:0}
+.modlist li{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid var(--rule)}
+.modlist li:last-child{border-bottom:0}
+.modlist .st{margin-left:auto;font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
+.chg{font:12.5px/1.65 var(--mono);display:flex;gap:10px}
+.chg b{min-width:78px;font-weight:600}.chg .write{color:var(--ok)}.chg .delete{color:var(--err)}
+.log{font:12.5px/1.55 var(--mono);background:var(--sunk);border-radius:10px;padding:12px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-word;color:var(--ink2)}
+.progress{height:8px;border-radius:999px;background:var(--sunk);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+
+.task{display:flex;flex-direction:column;gap:12px}
+.task .head{display:flex;gap:12px;align-items:flex-start}
+.task .badge{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;flex:none;background:var(--sunk)}
+.task details{border-top:1px solid var(--rule);padding-top:10px}
+.task details summary{cursor:pointer;color:var(--accent);font-size:14.5px;min-height:28px}
+.task .optsbox{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.task .send{margin-top:auto}
+
+.search{display:flex;gap:10px;align-items:center;min-height:46px;padding:0 14px;border:1px solid var(--rule2);border-radius:12px;background:var(--surface);flex:1;min-width:220px}
+.search input{border:0;background:none;outline:none;flex:1;min-height:44px}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.filters button{min-height:36px;padding:5px 12px;border-radius:999px;border:1px solid var(--rule2);background:var(--surface);cursor:pointer;font-size:14px}
+.filters button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+
+dialog{border:1px solid var(--rule);border-radius:18px;background:var(--surface);color:var(--ink);max-width:720px;width:calc(100% - 24px);padding:0;box-shadow:0 30px 80px -30px rgba(0,0,0,.5)}
+dialog::backdrop{background:rgba(20,18,15,.5)}
+dialog .hd{padding:20px 22px 12px}
+dialog .bd{padding:6px 22px 16px;max-height:62vh;overflow:auto}
+dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.toasts{position:fixed;right:16px;bottom:96px;z-index:50;display:flex;flex-direction:column;gap:8px;max-width:min(420px,calc(100% - 32px))}
+.toast{padding:12px 14px;border-radius:12px;background:var(--ink);color:var(--paper);box-shadow:var(--shadow);font-size:14.5px}
+.steps{counter-reset:s;list-style:none;padding:0;margin:12px 0}
+.steps li{counter-increment:s;padding:8px 0 8px 44px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:0;top:5px;width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-weight:600}
+.faq details{padding:12px 0;border-bottom:1px solid var(--rule)}
+.faq details:last-child{border-bottom:0}
+.faq summary{cursor:pointer;font-weight:600;min-height:28px}
+@media (max-width:700px){
+  .hero{grid-template-columns:1fr}.ereader{display:none}
+  .mrow{grid-template-columns:auto 1fr auto}.mrow .badge{display:none}.opts{grid-column:1/4}
+  h2{font-size:20px}.card{padding:16px}.chip-st .lbl{display:none}
+  .actionbar .sum{flex-basis:100%}
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-<header>
-  <div class="brand"><div class="logo">K</div><div><h1>Kobo AIO</h1><div class="muted" style="font-size:13px">Todo en uno para tu lector, con respaldo y vuelta atrás</div></div></div>
-  <span class="pill" id="helperPill"><span class="dot" id="helperDot"></span><span id="helperTxt">Buscando motor local…</span></span>
-  <span class="pill" id="devPill"><span class="dot" id="devDot"></span><span id="devTxt">Sin Kobo</span></span>
-  <button class="btn small" id="themeBtn" aria-label="Cambiar tema">◐</button>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+    <symbol id="i-x-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/></symbol>
+    <symbol id="i-wand" viewBox="0 0 24 24"><path d="m4 20 11-11M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2ZM19 11l.6 1.4L21 13l-1.4.6L19 15l-.6-1.4L17 13l1.4-.6L19 11Z"/></symbol>
+    <symbol id="i-books" viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="m16 5 3.5-1 2.5 15-3.5 1z"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5v.4M12 17h.01"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></symbol>
+    <symbol id="i-type" viewBox="0 0 24 24"><path d="M4 7V5h16v2M9 19h6M12 5v14"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M4 19a2 2 0 0 1 2-2h13"/></symbol>
+    <symbol id="i-book-plus" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="M12 7v6M9 10h6"/></symbol>
+    <symbol id="i-headphones" viewBox="0 0 24 24"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="5" height="7" rx="1.5"/><rect x="16" y="14" width="5" height="7" rx="1.5"/></symbol>
+    <symbol id="i-gamepad" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="5"/><path d="M7 10v5M4.5 12.5h5M15 11h.01M18 13.5h.01"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/></symbol>
+    <symbol id="i-dict" viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2V5Z"/><path d="m9 13 2.5-6 2.5 6M9.8 11h3.4"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+    <symbol id="i-broom" viewBox="0 0 24 24"><path d="M19 3 11 11M9 13l-5 1 1 6 6 1 1-5-3-3Z"/><path d="m11 11 2 2"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.1A9.8 9.8 0 0 1 12 6c5 0 9 6 9 6a15 15 0 0 1-3 3.5M6.6 6.6C4.2 8.1 3 12 3 12s4 6 9 6a8.7 8.7 0 0 0 4.3-1.1"/></symbol>
+    <symbol id="i-id" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16a3 3 0 0 1 6 0M15 10h3M15 13h3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></symbol>
+    <symbol id="i-eject" viewBox="0 0 24 24"><path d="m12 5 7 9H5l7-9ZM5 19h14"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-5-5"/></symbol>
+    <symbol id="i-usb" viewBox="0 0 24 24"><path d="M12 2v14M9 5l3-3 3 3M7 11v2a2 2 0 0 0 2 2h3M17 9v3a2 2 0 0 1-2 2h-3"/><circle cx="12" cy="19" r="2.5"/></symbol>
+    <symbol id="i-arrow-r" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-arrow-l" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+  </defs>
+</svg>
+
+<a class="sr skip" href="#main">Saltar al contenido</a>
+<header class="top">
+  <div class="bar">
+    <a class="brand" href="#" data-go="home" aria-label="Kobo AIO, inicio"><span class="logo" aria-hidden="true"><i></i></span><h1>Kobo AIO</h1></a>
+    <span class="chip-st" id="helperChip" title="Motor local"><span class="dot" id="helperDot"></span><span class="lbl" id="helperTxt">Buscando motor…</span></span>
+    <span class="chip-st" id="devChip"><span class="dot" id="devDot"></span><span id="devTxt">Sin Kobo</span></span>
+    <button class="iconbtn" id="themeBtn" aria-label="Cambiar a modo oscuro"></button>
+  </div>
+  <nav class="main" aria-label="Secciones">
+    <button data-go="home" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Inicio</button>
+    <button data-go="wizard"><svg class="ic" aria-hidden="true"><use href="#i-wand"/></svg>Mejorar mi Kobo</button>
+    <button data-go="library"><svg class="ic" aria-hidden="true"><use href="#i-books"/></svg>Biblioteca</button>
+    <button data-go="expert"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg>Todos los módulos</button>
+    <button data-go="backups"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg>Respaldos</button>
+    <button data-go="help"><svg class="ic" aria-hidden="true"><use href="#i-help"/></svg>Ayuda</button>
+  </nav>
 </header>
 
-<section id="setup" class="card hidden" aria-labelledby="hSetup">
-  <h2 id="hSetup">Empieza en 1 minuto</h2>
-  <p class="muted">Esta página no sube nada a internet. Las instalaciones las hace un motor local en tu computador, que lee y escribe el Kobo por USB, guarda respaldos y puede deshacer cada cambio.</p>
-  <ol class="steps">
-    <li>Descarga Kobo AIO: <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">ZIP</a> o <code>git clone https://github.com/Parzval-Net/AIO_KOBO_APPS</code></li>
-    <li>macOS: doble clic en <code>Kobo AIO.command</code> (la primera vez: clic derecho &gt; Abrir). Linux/Windows: <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code></li>
-    <li>Conecta el Kobo por USB y toca <b>Conectar</b> en su pantalla. Esta página se conecta sola.</li>
-  </ol>
-  <div class="row"><button class="btn primary" id="retryBtn">Reintentar conexión</button><a class="btn" href="http://127.0.0.1:8765/">Abrir la versión local</a><span class="muted" style="font-size:13px">Requiere Python 3.9+ y Pillow. Si tu navegador bloquea la conexión desde esta página (Safari), usa la versión local.</span></div>
-</section>
-
-<nav class="tabs" role="tablist" id="tabs">
-  <button role="tab" data-tab="home" aria-selected="true">Diagnóstico</button>
-  <button role="tab" data-tab="install">Instalar y ajustar</button>
-  <button role="tab" data-tab="library">Biblioteca</button>
-  <button role="tab" data-tab="backups">Respaldos</button>
-  <button role="tab" data-tab="about">Acerca de</button>
-</nav>
-
-<main>
-  <section data-panel="home">
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div><h2 id="devName">Conecta tu Kobo</h2><div class="muted" id="devMeta">Detección automática de modelo y firmware</div></div>
-        <div class="row"><button class="btn" id="doctorBtn">Volver a revisar</button><button class="btn primary" id="fixAllBtn" disabled>Corregir lo recomendado</button></div>
+<div class="wrap" id="main" tabindex="-1">
+  <section id="setup" class="view hidden" aria-labelledby="hSetup">
+    <div class="card hero">
+      <div class="ereader off" aria-hidden="true"><div class="screen"><b>Kobo AIO</b><i></i><i></i><i></i><i></i></div></div>
+      <div class="stack">
+        <h2 id="hSetup">Mejora tu Kobo en minutos</h2>
+        <p class="muted" style="margin:0">Menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros y más. Todo se instala desde tu computador, con respaldo automático y vuelta atrás. Nada se sube a internet.</p>
+        <ol class="steps">
+          <li><b>Descarga Kobo AIO</b> · <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">ZIP</a> (o clona el repositorio)</li>
+          <li><b>Ábrelo:</b> en Mac, doble clic en <code>Kobo AIO.command</code> (la primera vez: clic derecho, Abrir). En Windows o Linux: <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code></li>
+          <li><b>Conecta tu Kobo</b> por USB y toca «Conectar» en su pantalla.</li>
+        </ol>
+        <div class="row"><button class="btn primary" id="retryBtn"><svg class="ic" aria-hidden="true"><use href="#i-usb"/></svg>Buscar de nuevo</button><a class="btn" href="http://127.0.0.1:8765/">Abrir la versión local</a></div>
+        <p class="tiny muted" style="margin:0">Requiere Python 3.9+ (el lanzador instala Pillow si falta). Si tu navegador bloquea la conexión desde esta página, usa «Abrir la versión local».</p>
       </div>
-      <div id="findings" style="margin-top:12px"><div class="empty">Sin datos todavía.</div></div>
     </div>
   </section>
 
-  <section data-panel="install" class="hidden">
-    <div class="card row" style="justify-content:space-between">
-      <div><h2>Mods, apps y ajustes</h2><div class="muted">Marca lo que quieras. Antes de escribir verás la lista exacta de cambios.</div></div>
-      <div class="row"><button class="btn" id="recBtn">Seleccionar recomendados</button><button class="btn" id="clearBtn">Limpiar</button></div>
+  <section class="view" data-view="home" aria-labelledby="hHome">
+    <div class="card hero">
+      <div class="ereader off" id="ereader" aria-hidden="true"><div class="screen"><b id="eModel">Kobo</b><span id="eFw"></span><i></i><i></i><i></i><i></i><i></i></div></div>
+      <div>
+        <h2 id="hHome">Conecta tu Kobo</h2>
+        <p class="muted" id="homeSub" style="margin:6px 0 0">Conéctalo por USB y toca «Conectar» en su pantalla.</p>
+        <div class="health hidden" id="health" role="status" aria-live="polite"></div>
+      </div>
     </div>
-    <div id="catalog"></div>
-  </section>
-
-  <section data-panel="library" class="hidden">
-    <div class="card"><h2>Biblioteca</h2><div class="muted">Convierte y envía cómics, libros, diccionarios y fondos de reposo. Solo agrega archivos nuevos: nunca pisa tus libros.</div></div>
-    <div id="libraryMods" class="grid"></div>
-  </section>
-
-  <section data-panel="backups" class="hidden">
-    <div class="card">
-      <h2>Respaldos y vuelta atrás</h2>
-      <p class="muted">Cada instalación guarda los archivos originales en <code>~/Kobo-AIO/backups</code>. Puedes revertirla aunque se haya interrumpido.</p>
-      <div id="backups"><div class="empty">Conecta tu Kobo para ver sus respaldos.</div></div>
+    <div class="tiles">
+      <button class="tile primary" data-go="wizard"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-wand"/></svg></span><b>Mejorar mi Kobo</b><span class="small muted">Asistente en 3 pasos con lo recomendado</span></button>
+      <button class="tile" data-lib="lib.comics"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><b>Cómics y manga</b><span class="small muted">Convierte para tu pantalla</span></button>
+      <button class="tile" data-lib="lib.books"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-book-plus"/></svg></span><b>Agregar libros</b><span class="small muted">EPUB a KEPUB, más rápido</span></button>
+      <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">Con portada y capítulos</span></button>
+      <button class="tile" data-lib="lib.dictionaries"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-dict"/></svg></span><b>Diccionarios</b><span class="small muted">Español e inglés gratis</span></button>
+      <button class="tile" data-quick="maint.backup"><span class="badge" style="color:var(--c2)"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg></span><b>Respaldar</b><span class="small muted">Libros y progreso al computador</span></button>
     </div>
-  </section>
-
-  <section data-panel="about" class="hidden">
-    <div class="card">
-      <h2>Acerca de Kobo AIO</h2>
-      <p>Reúne en un solo lugar lo mejor del ecosistema Kobo, con versiones fijadas por SHA-256 y reglas de seguridad: solo escribe en rutas de mods, respalda antes de cambiar, valida cada <code>KoboRoot.tgz</code> y bloquea mods incompatibles con firmware 5.x.</p>
-      <h3 style="margin-top:12px">Créditos y licencias</h3>
-      <ul id="credits" class="muted" style="font-size:14px"></ul>
-      <p class="muted" style="font-size:13px">Inspirado en <a href="https://kp.nicoverbruggen.be">KoboPatch Web UI</a> (MIT) y <a href="https://github.com/Parzval-Net/NickelMenu-Builder">NickelMenu Builder</a> (MIT). Kobo es marca de Rakuten Kobo; este proyecto no está afiliado.</p>
+    <div class="card" style="margin-top:16px">
+      <div class="row spread"><h3>Revisión del Kobo</h3><button class="btn sm ghost" id="recheckBtn"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg>Revisar de nuevo</button></div>
+      <div id="findings" style="margin-top:12px"><div class="empty">Esperando un Kobo…</div></div>
     </div>
   </section>
-</main>
+
+  <section class="view hidden" data-view="wizard" aria-labelledby="hWiz">
+    <ol class="stepper" id="stepper" aria-label="Pasos">
+      <li data-step="1"><span class="n">1</span>Elige un estilo</li>
+      <li data-step="2"><span class="n">2</span>Ajusta</li>
+      <li data-step="3"><span class="n">3</span>Revisa y aplica</li>
+    </ol>
+    <div data-wstep="1">
+      <h2 id="hWiz">¿Cómo quieres tu Kobo?</h2>
+      <p class="muted" style="margin:6px 0 0">Elige un punto de partida. En el siguiente paso puedes activar o quitar cualquier cosa.</p>
+      <div class="profiles" id="profiles"></div>
+    </div>
+    <div data-wstep="2" class="hidden">
+      <h2>Ajusta a tu gusto</h2>
+      <p class="muted" style="margin:6px 0 0">Lo activado se instalará. Toca «Opciones» para personalizar o «Vista previa» para ver cómo queda. Solo ves lo compatible con tu modelo.</p>
+      <div id="groups"></div>
+    </div>
+    <div data-wstep="3" class="hidden" id="review"></div>
+  </section>
+
+  <section class="view hidden" data-view="library" aria-labelledby="hLib">
+    <h2 id="hLib">Biblioteca</h2>
+    <p class="muted" style="margin:6px 0 0">Arrastra tus archivos y envíalos al Kobo. Solo se agregan archivos nuevos: nunca se reemplazan tus libros.</p>
+    <div class="grid" id="libTasks" style="margin-top:16px"></div>
+  </section>
+
+  <section class="view hidden" data-view="expert" aria-labelledby="hExp">
+    <h2 id="hExp">Todos los módulos</h2>
+    <p class="muted" style="margin:6px 0 0">Para usuarios avanzados: cada módulo con sus opciones, fuentes y licencia. Aquí también puedes desinstalar.</p>
+    <div class="row" style="margin:14px 0">
+      <label class="search"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span class="sr">Buscar módulos</span><input id="q" type="search" placeholder="Buscar: fuentes, reloj, cómics…"></label>
+    </div>
+    <div class="filters" id="filters" role="group" aria-label="Filtrar por categoría"></div>
+    <div id="incompatToggle" style="margin-top:10px"></div>
+    <div id="expertList" style="margin-top:14px"></div>
+  </section>
+
+  <section class="view hidden" data-view="backups" aria-labelledby="hBk">
+    <h2 id="hBk">Respaldos y vuelta atrás</h2>
+    <p class="muted" style="margin:6px 0 0">Cada instalación guarda una copia de lo que cambia. Puedes revertirla aunque se haya cortado a mitad de camino. Solo se revierten los archivos que no cambiaron después.</p>
+    <div class="card" style="margin-top:14px"><div id="backups"><div class="empty">Conecta tu Kobo para ver sus respaldos.</div></div></div>
+  </section>
+
+  <section class="view hidden" data-view="help" aria-labelledby="hHelp">
+    <h2 id="hHelp">Ayuda</h2>
+    <div class="card faq" style="margin-top:14px">
+      <details open><summary>¿Es seguro?</summary><p class="muted">Kobo AIO nunca modifica tus libros ni tu progreso de lectura. Antes de escribir te muestra exactamente qué va a cambiar, guarda una copia de cada archivo que toca y puedes revertir desde «Respaldos». Las descargas se verifican con su huella digital (SHA-256).</p></details>
+      <details><summary>¿Qué pasa al expulsar el Kobo?</summary><p class="muted">Algunas mejoras (menú, inicio, tipografía, reloj) se instalan solas al expulsar: el Kobo se reinicia en 1 o 2 minutos. No lo desconectes mientras ves la barra de progreso en su pantalla.</p></details>
+      <details><summary>¿Dónde está el menú nuevo?</summary><p class="muted">Después del reinicio aparece una pestaña nueva en la barra inferior del Kobo (por defecto «Kobo AIO») con tus atajos: suspender, importar libros, modo oscuro, WiFi y más.</p></details>
+      <details><summary>¿Cómo deshago todo?</summary><p class="muted">En «Respaldos», elige la instalación y toca «Revertir». Para quitar un módulo, búscalo en «Todos los módulos» y marca «Desinstalar».</p></details>
+      <details><summary>¿Qué cómics puedo convertir?</summary><p class="muted">CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB con imágenes y carpetas de imágenes (JPG, PNG, WebP, GIF, BMP, TIFF). Se ajustan a la resolución de tu Kobo y quedan como KEPUB (paso de página rápido en el lector de Kobo) o CBZ (para KOReader). Para CBR instala <code>unar</code> y para PDF instala <code>pymupdf</code>; Kobo AIO te avisa si falta algo.</p></details>
+      <details><summary>¿Funcionará si actualizo el firmware?</summary><p class="muted">Los mods se mantienen en las actualizaciones 4.x; los ajustes avanzados del sistema se pierden y hay que volver a aplicarlos. En firmware 5.x los mods del menú aún no funcionan y Kobo AIO los desactiva.</p></details>
+      <details><summary>Audiolibros: ¿por qué dice experimental?</summary><p class="muted">El lector de Kobo solo reproduce oficialmente audiolibros de su tienda. Kobo AIO usa un formato interno (.mp3z) que Nickel reproduce por Bluetooth, pero sin retomar la posición. Si no te funciona, usa la opción KOReader.</p></details>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <h3>Créditos y licencias</h3>
+      <ul id="credits" class="muted small" style="columns:2 260px;margin:10px 0 0;padding-left:18px"></ul>
+      <p class="tiny muted">Inspirado en <a href="https://kp.nicoverbruggen.be">KoboPatch Web UI</a> y <a href="https://github.com/Parzval-Net/NickelMenu-Builder">NickelMenu Builder</a>. Kobo es marca de Rakuten Kobo; este proyecto no está afiliado. Código: <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS">GitHub</a>.</p>
+    </div>
+  </section>
 </div>
 
-<div class="bar hidden" id="bar"><div class="in">
-  <span id="selCount" class="muted">0 seleccionados</span>
-  <span id="selList" class="muted" style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-  <button class="btn primary" id="planBtn" disabled>Revisar cambios</button>
+<div class="actionbar hidden" id="actionbar"><div class="in">
+  <div class="sum"><b id="abTitle"></b><div class="tiny muted" id="abSub"></div></div>
+  <button class="btn" id="abBack"></button>
+  <button class="btn primary" id="abNext"></button>
 </div></div>
 
-<dialog id="dlg">
-  <div class="hd"><h2 id="dlgTitle">Cambios</h2><div class="muted" id="dlgSub"></div></div>
+<dialog id="dlg" aria-labelledby="dlgTitle">
+  <div class="hd"><h2 id="dlgTitle"></h2><div class="muted small" id="dlgSub"></div></div>
   <div class="bd" id="dlgBody"></div>
   <div class="ft" id="dlgFoot"></div>
 </dialog>
+<div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
 <script>
 "use strict";
-// The helper is ALWAYS local: a ?helper= override may only point to 127.0.0.1/localhost (dev/testing ports).
-const HELPER = (() => {
+const HELPER = (() => {   // the engine is ALWAYS local; ?helper= may only point to 127.0.0.1/localhost
   const q = new URLSearchParams(location.search).get("helper");
   if (q && /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(q)) return q;
   return (location.hostname === "127.0.0.1" || location.hostname === "localhost") && location.port ? "" : "http://127.0.0.1:8765";
@@ -200,10 +430,60 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
 const safeUrl = u => { try { const x = new URL(String(u)); return x.protocol === "https:" ? x.href : "#"; } catch (_) { return "#"; } };
-const SEV = new Set(["critical", "warn", "info", "ok"]);
-const sev = s => SEV.has(s) ? s : "info";
-const state = { helper:false, device:null, modules:[], installed:{}, selection:{}, uninstall:new Set(), doctor:null };
-const LIB_CATS = new Set(["Biblioteca", "Personalización"]);
+const icon = (id, cls = "ic") => `<svg class="${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const SEVS = new Set(["critical", "warn", "info", "ok"]);
+const sevOf = s => SEVS.has(s) ? s : "info";
+const state = { helper: false, device: null, modules: [], installed: {}, selection: {}, uninstall: new Set(), open: new Set(),
+                doctor: null, view: "home", step: 1, profile: null, scope: "wizard", filter: "Todas", query: "" };
+
+// Friendly names, icons and one-line benefits (technical name stays visible in expert mode).
+const META = {
+  "conf.exclude_sync": ["Proteger la biblioteca", "shield", "c1", "Evita que el Kobo muestre archivos internos como libros"],
+  "maint.backup": ["Respaldo al computador", "archive", "c2", "Copia libros, progreso y notas antes de cambiar nada"],
+  "maint.clean_macos": ["Limpiar basura del Mac", "broom", "c2", "Borra los archivos ._ que deja macOS"],
+  "maint.no_spotlight": ["Que el Mac no indexe el Kobo", "eye-off", "c2", "Spotlight deja de escribir en el lector"],
+  "mod.nickelmenu": ["Menú de atajos", "menu", "c3", "Base para lanzar apps y atajos desde el lector"],
+  "nm.menu": ["Atajos rápidos", "zap", "c3", "Suspender, importar libros, modo oscuro, WiFi y más"],
+  "nm.owner": ["Si lo pierdes", "id", "c3", "Muestra cómo contactarte si alguien lo encuentra"],
+  "mod.nickelhome": ["Inicio sin publicidad", "home", "c3", "Oculta recomendaciones y promociones de la tienda"],
+  "conf.sideloaded": ["Modo sin cuenta Kobo", "user", "c3", "Inicio centrado en tus libros, sin tienda"],
+  "mod.nickeltypefix": ["Mejor tipografía", "type", "c4", "Kerning, ligaduras y justificado más parejo"],
+  "fonts.ebook": ["Fuentes para leer", "type", "c4", "Familias pensadas para tinta electrónica"],
+  "mod.nickelclock": ["Reloj y batería", "clock", "c4", "La hora y la carga mientras lees"],
+  "mod.nickeldissolve": ["Animación al pasar página", "sparkle", "c4", "Transición suave entre páginas"],
+  "conf.preferences": ["Preferencias rápidas", "sliders", "c4", "Capturas, USB automático y apagado"],
+  "app.koreader": ["KOReader", "book", "c5", "Lector avanzado para PDF, cómics y más"],
+  "app.cadmus": ["Cadmus", "book", "c5", "Lector minimalista y rápido"],
+  "app.audiobook": ["Audiolibros en KOReader", "headphones", "c5", "Reproductor con capítulos y Bluetooth"],
+  "app.inkboy": ["Game Boy (Ink-boy)", "gamepad", "c6", "Juega Game Boy y GBC en tinta electrónica"],
+  "fw.kobopatch": ["Ajustes avanzados del sistema", "cpu", "c2", "Interlineado, márgenes y más (parches de firmware)"],
+  "mod.nickelmodmanager": ["Gestor de mods en el Kobo", "sliders", "c1", "Activa o desactiva cada mod desde el propio lector"],
+  "app.koreader_plugins": ["Plugins para KOReader", "grid", "c5", "Portadas, tienda de plugins, sincronización y envío por WiFi"],
+  "lib.comics": ["Cómics y manga", "layers", "c4", "Cualquier formato a tu pantalla: recorta, divide páginas dobles y conserva el color"],
+  "lib.books": ["Agregar libros", "book-plus", "c3", "Convierte EPUB a KEPUB para que abran más rápido"],
+  "lib.audiobooks": ["Audiolibros", "headphones", "c5", "Une pistas y agrega portada y capítulos"],
+  "lib.dictionaries": ["Diccionarios", "dict", "c1", "Wiktionary en español e inglés, o los tuyos"],
+  "lib.sleep": ["Pantallas de reposo", "image", "c6", "Tus imágenes a la resolución exacta del Kobo"],
+};
+const meta = m => { const x = META[m.id] || [m.title, "grid", "c3", m.description]; return { name: x[0], icon: x[1], color: `var(--${x[2]})`, benefit: x[3] }; };
+const GROUPS = [
+  ["Protección y respaldo", "shield", ["maint.backup", "conf.exclude_sync", "maint.clean_macos", "maint.no_spotlight", "mod.nickelmodmanager"]],
+  ["Inicio y menú", "home", ["mod.nickelhome", "mod.nickelmenu", "nm.menu", "conf.sideloaded", "nm.owner"]],
+  ["Lectura", "book", ["mod.nickeltypefix", "fonts.ebook", "mod.nickelclock", "mod.nickeldissolve", "conf.preferences"]],
+  ["Apps y juegos", "gamepad", ["app.koreader", "app.koreader_plugins", "app.cadmus", "app.audiobook", "app.inkboy"]],
+  ["Avanzado", "cpu", ["fw.kobopatch"]],
+];
+const BASE = ["maint.backup", "conf.exclude_sync", "mod.nickelmenu", "nm.menu", "mod.nickelhome", "mod.nickeltypefix", "fonts.ebook", "maint.clean_macos", "maint.no_spotlight"];
+const PROFILES = [
+  { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad", "Menú de atajos", "Mejor tipografía y fuentes", "Respaldo y limpieza"], mods: BASE },
+  { id: "minimal", name: "Lector minimalista", desc: "Solo tus libros, sin tienda.", items: ["Todo lo esencial", "Modo sin cuenta Kobo", "Pestañas simplificadas"], mods: [...BASE, "conf.sideloaded"],
+    opts: { "nm.menu": { simple_tabs: true, hide_discover: true } } },
+  { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock"],
+    opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
+  { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Game Boy (Ink-boy)", "Animación de página"], mods: [...BASE, "mod.nickelclock", "app.koreader", "app.koreader_plugins", "app.inkboy", "mod.nickeldissolve"],
+    opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
+  { id: "custom", name: "A mi manera", desc: "Empieza en blanco y elige tú.", items: ["Sin nada marcado", "Ideal si ya conoces los mods"], mods: [] },
+];
 
 async function api(path, opts = {}) {
   const init = { ...opts, headers: { ...(opts.headers || {}) } };
@@ -211,47 +491,88 @@ async function api(path, opts = {}) {
   if (init.json !== undefined) { init.body = JSON.stringify(init.json); init.headers["Content-Type"] = "application/json"; delete init.json; }
   const r = await fetch(HELPER + path, init);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  if (!r.ok) throw new Error(data.error || `Error ${r.status}`);
   return data;
 }
 async function waitJob(id, onLog) {
   for (;;) {
-    const j = await api(`/api/jobs/${id}`);
-    onLog && onLog(j.log);
+    const j = await api(`/api/jobs/${encodeURIComponent(id)}`);
+    onLog && onLog(j.log || []);
     if (j.state === "done") return j.result;
     if (j.state === "error") throw new Error(j.error);
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 500));
   }
 }
+function toast(msg) {
+  const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; $("#toasts").append(t);
+  setTimeout(() => t.remove(), 4500);
+}
 
-// ---------- theme ----------
+function isDark() { return (document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")) === "dark"; }
+function applyThemeIcon() {
+  $("#themeBtn").innerHTML = icon(isDark() ? "sun" : "moon");
+  $("#themeBtn").setAttribute("aria-label", isDark() ? "Cambiar a modo claro" : "Cambiar a modo oscuro");
+}
 $("#themeBtn").onclick = () => {
-  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  const next = cur === "dark" ? "light" : "dark";
-  document.documentElement.dataset.theme = next;
-  try { localStorage.setItem("aio-theme", next); } catch (_) {}
+  document.documentElement.dataset.theme = isDark() ? "light" : "dark";
+  try { localStorage.setItem("aio-theme", document.documentElement.dataset.theme); } catch (_) {}
+  applyThemeIcon();
 };
-try { const t = localStorage.getItem("aio-theme"); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+try { const t = localStorage.getItem("aio-theme"); if (t === "dark" || t === "light") document.documentElement.dataset.theme = t; } catch (_) {}
+applyThemeIcon();
 
-// ---------- tabs ----------
-$$("#tabs button").forEach(b => b.onclick = () => {
-  $$("#tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
-  $$("[data-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.panel !== b.dataset.tab));
-  if (b.dataset.tab === "backups") loadBackups();
+function go(view) {
+  state.view = view;
+  $$("nav.main button").forEach(b => b.dataset.go === view ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current"));
+  $$("[data-view]").forEach(v => v.classList.toggle("hidden", v.dataset.view !== view || !state.helper));
+  $("#setup").classList.toggle("hidden", state.helper);
+  if (view === "wizard") { state.scope = "wizard"; renderWizard(); }
+  if (view === "library") renderLibrary();
+  if (view === "expert") { state.scope = "expert"; renderExpert(); }
+  if (view === "backups") loadBackups();
+  if (view === "help") renderCredits();
+  renderActionBar();
+}
+document.addEventListener("click", e => {
+  const pv = e.target.closest("[data-preview]"); if (pv) { e.preventDefault(); showPreview(pv.dataset.preview); return; }
+  const g = e.target.closest("[data-go]");
+  if (g) { e.preventDefault(); go(g.dataset.go); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  const l = e.target.closest("[data-lib]");
+  if (l) { go("library"); requestAnimationFrame(() => { const c = $(`[data-task="${CSS.escape(l.dataset.lib)}"]`); c && c.scrollIntoView({ behavior: "smooth", block: "center" }); }); return; }
+  const q = e.target.closest("[data-quick]");
+  if (q) { state.selection = {}; select(q.dataset.quick, true); openPlan(); }
 });
 
-// ---------- connection ----------
-function setPill(dot, txt, kind, text) { $(dot).className = "dot " + kind; $(txt).textContent = text; }
+function deviceArt(d, el) {
+  const w = d && d.width ? d.width : 1264, h = d && d.height ? d.height : 1680;
+  const W = 124, H = Math.round(W * h / w) + 22;
+  el.style.width = `${W}px`; el.style.height = `${H}px`;
+  el.classList.toggle("color", !!(d && d.color));
+  el.querySelectorAll(".btns,.pen").forEach(x => x.remove());
+  if (d && d.page_buttons) el.insertAdjacentHTML("beforeend", '<span class="btns"><i></i><i></i></span>');
+  if (d && d.stylus) el.insertAdjacentHTML("beforeend", '<span class="pen"></span>');
+}
+function capsHtml(d) {
+  if (!d) return "";
+  const c = [];
+  if (d.width) c.push(`<span class="pill">${d.width}×${d.height} · ${d.ppi} ppp</span>`);
+  c.push(d.color ? '<span class="pill info">Pantalla a color</span>' : '<span class="pill">Blanco y negro</span>');
+  if (d.page_buttons) c.push('<span class="pill">Botones de página</span>');
+  if (d.bluetooth) c.push('<span class="pill">Bluetooth (audio)</span>');
+  if (d.stylus) c.push('<span class="pill">Lápiz</span>');
+  c.push(d.dark_mode ? '<span class="pill">Modo oscuro</span>' : '<span class="pill">Sin modo oscuro</span>');
+  return c.join("");
+}
+function setChip(dot, txt, kind, text) { $(dot).className = "dot " + kind; $(txt).textContent = text; }
 async function connect() {
   try {
     const s = await api("/api/status");
     state.helper = true;
-    setPill("#helperDot", "#helperTxt", "ok", `Motor local ${s.version}`);
-    $("#setup").classList.add("hidden");
+    setChip("#helperDot", "#helperTxt", "ok", `Motor local ${s.version}`);
   } catch (_) {
     state.helper = false;
-    setPill("#helperDot", "#helperTxt", "err", "Motor local no detectado");
-    $("#setup").classList.remove("hidden");
+    setChip("#helperDot", "#helperTxt", "err", "Motor local no encontrado");
+    go(state.view);
     return;
   }
   await refresh();
@@ -261,223 +582,454 @@ $("#retryBtn").onclick = connect;
 async function refresh() {
   const cat = await api("/api/catalog");
   state.device = cat.device; state.modules = cat.modules; state.installed = cat.installed || {};
-  if (state.device) {
-    setPill("#devDot", "#devTxt", state.device.known ? "ok" : "warn", `${state.device.name} · ${state.device.firmware}`);
-    $("#devName").textContent = state.device.name;
-    $("#devMeta").textContent = `Firmware ${state.device.firmware} · ${state.device.color ? "Pantalla a color" : "Pantalla B/N"} · ${state.device.soc.toUpperCase()}`;
+  const d = state.device;
+  $$(".tile[data-lib], .tile[data-quick]").forEach(t => { const m = byId(t.dataset.lib || t.dataset.quick); t.classList.toggle("hidden", !!(m && m.compatible === false)); });
+  if (d) {
+    setChip("#devDot", "#devTxt", d.known ? "ok" : "warn", d.name);
+    $("#hHome").textContent = d.name;
+    $("#homeSub").innerHTML = `Firmware ${esc(d.firmware || "desconocido")}${d.year ? ` · modelo ${esc(d.year)}` : ""}<div class="caps">${capsHtml(d)}</div>`;
+    deviceArt(d, $("#ereader"));
+    $("#eModel").textContent = d.name.replace(/^Kobo /, "");
+    $("#eFw").textContent = d.firmware || "";
+    $("#ereader").classList.remove("off");
+    runDoctor();
   } else {
-    setPill("#devDot", "#devTxt", "", "Sin Kobo");
-    $("#devName").textContent = "Conecta tu Kobo";
-    $("#devMeta").textContent = "Conéctalo por USB y toca «Conectar» en su pantalla";
+    setChip("#devDot", "#devTxt", "", "Sin Kobo");
+    $("#hHome").textContent = "Conecta tu Kobo";
+    $("#homeSub").textContent = "Conéctalo por USB y toca «Conectar» en su pantalla. Se detecta solo.";
+    deviceArt(null, $("#ereader"));
+    $("#ereader").classList.add("off");
+    $("#health").classList.add("hidden");
+    $("#findings").innerHTML = '<div class="empty">Esperando un Kobo…</div>';
   }
-  renderCatalog(); renderCredits();
-  if (state.device) runDoctor(); else $("#findings").innerHTML = '<div class="empty">Esperando un Kobo…</div>';
+  go(state.view);
 }
 
-// ---------- doctor ----------
+const SEVICON = { critical: "x-circle", warn: "alert", info: "info", ok: "check-circle" };
 async function runDoctor() {
-  $("#findings").innerHTML = '<div class="row muted"><span class="spinner"></span> Revisando el Kobo (solo lectura)…</div>';
+  $("#findings").innerHTML = '<div class="row muted"><span class="spinner"></span>Revisando tu Kobo (solo lectura)…</div>';
   try {
     const rep = await api("/api/doctor");
     state.doctor = rep;
-    const lint = (rep.nickelmenu_lint || []).map(i => ({ severity: "warn", title: `NickelMenu: ${i.file} línea ${i.line}`, detail: `${i.error} · ${i.text}`, fix: i.file === "webui-preset" || i.file.startsWith("kobo-aio") ? "nm.menu" : "" }));
-    const all = [...rep.findings.filter(f => f.severity !== "ok"), ...lint, ...rep.findings.filter(f => f.severity === "ok")];
-    $("#findings").innerHTML = all.map(f => `
-      <div class="finding ${sev(f.severity)}"><span class="sev">${({critical:"crítico",warn:"aviso",info:"info",ok:"ok"})[sev(f.severity)]}</span>
-      <div class="body"><b>${esc(f.title)}</b>${f.detail ? `<div class="muted" style="font-size:13px">${esc(f.detail)}</div>` : ""}
-      ${f.data && f.data.missing ? `<details><summary>Ver ${f.data.missing.length} archivos</summary><div class="log">${esc(f.data.missing.join("\n"))}</div></details>` : ""}</div>
-      ${f.fix && byId(f.fix) ? `<button class="btn small" data-fix="${esc(f.fix)}">Corregir</button>` : ""}</div>`).join("");
-    $$("[data-fix]").forEach(b => b.onclick = () => { select(b.dataset.fix, true); openPlan(); });
-    const fixes = [...new Set(all.filter(f => f.fix && (f.severity === "critical" || f.severity === "warn")).map(f => f.fix))].filter(byId);
-    $("#fixAllBtn").disabled = !fixes.length;
-    $("#fixAllBtn").onclick = () => { fixes.forEach(f => select(f, true)); openPlan(); };
+    const lint = (rep.nickelmenu_lint || []).map(i => ({ severity: i.level === "info" ? "info" : "warn",
+      title: i.title || "Hay un atajo del menú con problemas", detail: i.hint || "", tech: `${i.file} línea ${i.line}: ${i.error}`,
+      fix: i.file === "webui-preset" || String(i.file).startsWith("kobo-aio") ? "nm.menu" : "" }));
+    const all = [...rep.findings, ...lint];
+    const bad = all.filter(f => f.severity === "critical" || f.severity === "warn");
+    const info = all.filter(f => f.severity === "info");
+    const good = all.filter(f => f.severity === "ok");
+    const worst = all.some(f => f.severity === "critical") ? "critical" : bad.length ? "warn" : "ok";
+    const fixes = [...new Set(bad.map(f => f.fix).filter(f => f && byId(f) && byId(f).compatible !== false))];
+    const h = $("#health"); h.className = "health " + worst;
+    h.innerHTML = `${icon(SEVICON[worst])}
+      <div style="flex:1;min-width:200px"><b>${worst === "ok" ? "Tu Kobo está en orden" : `${bad.length} ${bad.length === 1 ? "cosa por revisar" : "cosas por revisar"}`}</b>
+      <div class="small">${worst === "ok" ? `${good.length} revisiones pasaron. Ya puedes mejorarlo.` : "Te explicamos cada una abajo."}</div></div>
+      ${fixes.length ? `<button class="btn primary sm" id="fixAll">${icon("wand")}Arreglar ${fixes.length === 1 ? "esto" : `las ${fixes.length}`}</button>` : ""}`;
+    if (fixes.length) $("#fixAll").onclick = () => { state.selection = {}; fixes.forEach(f => select(f, true)); openPlan(); };
+    const fRow = f => { const s = sevOf(f.severity); return `<div class="finding ${s}">${icon(SEVICON[s])}<div class="body"><b>${esc(f.title)}</b>
+      ${f.detail ? `<div class="small muted">${esc(f.detail)}</div>` : ""}
+      ${f.data && Array.isArray(f.data.missing) ? `<details class="tech"><summary>Ver los ${f.data.missing.length} libros</summary><div class="log">${esc(f.data.missing.join("\n"))}</div></details>` : ""}
+      ${f.tech ? `<details class="tech"><summary>Detalle técnico</summary>${esc(f.tech)}</details>` : ""}</div>
+      ${f.fix && byId(f.fix) && byId(f.fix).compatible !== false ? `<button class="btn sm" data-fix="${esc(f.fix)}">Arreglar</button>` : ""}</div>`; };
+    $("#findings").innerHTML = [...bad, ...info].map(fRow).join("") +
+      (good.length ? `<details ${bad.length ? "" : "open"} style="margin-top:12px"><summary class="small" style="cursor:pointer">${good.length} cosas están bien</summary>
+        <div class="oklist">${good.map(f => `<div>${icon("check")}<span>${esc(f.title)}</span></div>`).join("")}</div></details>` : "");
+    $$("[data-fix]").forEach(b => b.onclick = () => { state.selection = {}; select(b.dataset.fix, true); openPlan(); });
   } catch (e) {
-    $("#findings").innerHTML = `<div class="finding critical"><span class="sev">error</span><div class="body">${esc(e.message)}</div></div>`;
+    $("#findings").innerHTML = `<div class="finding critical">${icon("x-circle")}<div class="body"><b>No se pudo revisar el Kobo</b><div class="small">${esc(e.message)}</div></div></div>`;
   }
 }
-$("#doctorBtn").onclick = () => refresh();
+$("#recheckBtn").onclick = () => refresh();
 
-// ---------- catalog ----------
 const byId = id => state.modules.find(m => m.id === id);
+const isInstalled = m => !!state.installed[m.id] || (/instalado|activo|correcto|familias/.test(m.status || "") && !/^no |inactivo/.test(m.status || ""));
 function defaults(m) { const o = {}; m.options.forEach(op => o[op.id] = Array.isArray(op.default) ? [...op.default] : op.default); return o; }
-function select(id, on) {
+function select(id, on, presetOpts) {
   const m = byId(id); if (!m || m.compatible === false) return;
-  if (on) { state.selection[id] = state.selection[id] || defaults(m); (m.requires || []).forEach(r => { if (!state.installed[r]) select(r, true); }); }
-  else delete state.selection[id];
-  renderCatalog();
+  if (on) {
+    state.selection[id] = Object.assign(state.selection[id] || defaults(m), presetOpts || {});
+    (m.requires || []).forEach(r => { if (!state.installed[r]) select(r, true); });
+  } else {
+    delete state.selection[id];
+    state.modules.filter(x => state.selection[x.id] && (x.requires || []).includes(id)).forEach(x => delete state.selection[x.id]);
+  }
 }
+const requiredBy = id => state.modules.filter(x => state.selection[x.id] && (x.requires || []).includes(id)).map(x => meta(x).name);
+
 function optionHtml(m, op) {
   const v = (state.selection[m.id] || {})[op.id] ?? op.default;
   const nm = esc(`${m.id}::${op.id}`);
-  if (op.type === "bool") return `<div class="opt"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" data-opt="${nm}" ${v ? "checked" : ""}> ${esc(op.label)}</label></div>`;
-  if (op.type === "choice") return `<div class="opt"><label>${esc(op.label)}</label><select data-opt="${nm}">${op.choices.map(c => `<option value="${esc(c.value)}" ${String(c.value) === String(v) ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></div>`;
-  if (op.type === "multi") return `<div class="opt"><label>${esc(op.label)}</label><div class="multi">${op.choices.map(c => `<label><input type="checkbox" data-multi="${nm}" value="${esc(c.value)}" ${(v || []).includes(c.value) ? "checked" : ""}> ${esc(c.label)}</label>`).join("")}</div></div>`;
-  if (op.type === "text") return `<div class="opt"><label>${esc(op.label)}</label><input type="text" data-opt="${nm}" value="${esc(v)}"></div>`;
-  if (op.type === "files") return `<div class="opt"><label>${esc(op.label)}</label><div class="drop" data-drop="${nm}">Arrastra archivos aquí o haz clic para elegir<input type="file" multiple hidden></div><ul class="files">${(v || []).map(p => `<li><span>${esc(p.split("/").pop())}</span></li>`).join("")}</ul></div>`;
+  if (op.type === "bool") return `<div class="opt"><label class="check"><input type="checkbox" data-opt="${nm}" ${v ? "checked" : ""}> ${esc(op.label)}</label></div>`;
+  if (op.type === "choice") return `<div class="opt"><label class="l" for="o-${nm}">${esc(op.label)}</label><select id="o-${nm}" data-opt="${nm}">${op.choices.map(c => `<option value="${esc(c.value)}" ${String(c.value) === String(v) ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></div>`;
+  if (op.type === "multi") return `<fieldset class="opt" style="border:0;margin:0;padding:0"><legend class="l">${esc(op.label)}</legend><div class="chips">${op.choices.map(c => `<label><input type="checkbox" data-multi="${nm}" value="${esc(c.value)}" ${(v || []).includes(c.value) ? "checked" : ""}><span>${esc(c.label)}</span></label>`).join("")}</div></fieldset>`;
+  if (op.type === "text") return `<div class="opt"><label class="l" for="o-${nm}">${esc(op.label)}</label><input id="o-${nm}" type="text" data-opt="${nm}" value="${esc(v)}"></div>`;
+  if (op.type === "files") return `<div class="opt"><span class="l">${esc(op.label)}</span>
+    <div class="drop" data-drop="${nm}" tabindex="0" role="button" aria-label="Elegir archivos: ${esc(op.label)}">${icon("upload", "ic lg")}<span><b>Arrastra aquí</b> o haz clic para elegir</span><input type="file" multiple hidden></div>
+    <ul class="files">${(v || []).map((p, i) => `<li>${icon("check")}<span>${esc(String(p).split("/").pop())}</span><button type="button" data-rm="${nm}" data-i="${i}" aria-label="Quitar ${esc(String(p).split("/").pop())}">✕</button></li>`).join("")}</ul></div>`;
   return "";
 }
-function modCard(m) {
-  const sel = !!state.selection[m.id], inst = !!state.installed[m.id] || /instalado|activo|correcto|familias/.test(m.status || "") && !/no instalado|inactivo/.test(m.status || "");
-  const un = state.uninstall.has(m.id);
-  return `<article class="mod ${sel ? "sel" : ""} ${m.compatible === false ? "off" : ""}" data-mod="${esc(m.id)}">
-    <div class="top"><input class="pick" type="checkbox" ${sel ? "checked" : ""} ${m.compatible === false ? "disabled" : ""} aria-label="Seleccionar ${esc(m.title)}">
-      <div style="flex:1;min-width:0"><h3>${esc(m.title)}</h3>
-      <div class="chips" style="margin-top:4px">
-        ${m.recommended ? '<span class="chip rec">recomendado</span>' : ""}
-        ${m.risk !== "bajo" ? `<span class="chip ${m.risk === "alto" ? "alto" : "medio"}">riesgo ${esc(m.risk)}</span>` : ""}
-        ${m.status && m.status !== "desconocido" && m.status !== "n/a" ? `<span class="chip ${inst ? "inst" : ""}">${esc(m.status)}</span>` : ""}
-        ${m.reboot ? '<span class="chip">se instala al reiniciar</span>' : ""}
-        ${m.license ? `<span class="chip">${esc(m.license)}</span>` : ""}
-      </div></div></div>
-    <div class="muted" style="font-size:14px">${esc(m.description)}</div>
-    ${m.compatible === false ? `<div style="font-size:13px;color:var(--warn)">${esc(m.incompatible_reason)}</div>` : ""}
-    ${m.options.length ? `<div class="opts">${m.options.map(op => optionHtml(m, op)).join("")}</div>` : ""}
-    <div class="row" style="font-size:13px">
-      ${(m.sources || []).slice(0, 2).map(s => `<a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(s.replace(/^https:\/\/(www\.)?/, "").split("/").slice(0, 3).join("/"))}</a>`).join(" · ")}
-      ${m.can_uninstall && inst ? `<label style="margin-left:auto;display:flex;gap:6px;align-items:center;color:var(--err)"><input type="checkbox" data-un="${esc(m.id)}" ${un ? "checked" : ""}> Desinstalar</label>` : ""}
-    </div></article>`;
-}
-function renderCatalog() {
-  const groups = {};
-  state.modules.forEach(m => { (groups[m.category] = groups[m.category] || []).push(m); });
-  const order = ["Sistema", "Lectura", "Menú", "Apps", "Juegos", "Ajustes", "Mantenimiento"];
-  $("#catalog").innerHTML = order.filter(c => groups[c]).map(c => `<div class="cat"><h2>${esc(c)}</h2></div><div class="grid">${groups[c].map(modCard).join("")}</div>`).join("")
-    || '<div class="empty">Conecta el motor local para ver el catálogo.</div>';
-  const lib = state.modules.filter(m => LIB_CATS.has(m.category));
-  $("#libraryMods").innerHTML = lib.map(modCard).join("") || '<div class="empty">Conecta el motor local.</div>';
-  bindCards();
-  const ids = Object.keys(state.selection);
-  $("#bar").classList.toggle("hidden", !ids.length && !state.uninstall.size);
-  $("#selCount").textContent = `${ids.length} seleccionado${ids.length === 1 ? "" : "s"}${state.uninstall.size ? ` · ${state.uninstall.size} a desinstalar` : ""}`;
-  $("#selList").textContent = ids.map(i => byId(i)?.title).join(" · ");
-  $("#planBtn").disabled = !state.device || (!ids.length && !state.uninstall.size);
-}
-function bindCards() {
-  $$("[data-mod]").forEach(card => {
-    const id = card.dataset.mod;
-    $(".pick", card).onchange = e => select(id, e.target.checked);
-    $$("[data-opt]", card).forEach(el => el.onchange = () => {
-      const [, op] = el.dataset.opt.split("::");
-      state.selection[id][op] = el.type === "checkbox" ? el.checked : el.value;
-    });
-    $$("[data-multi]", card).forEach(el => el.onchange = () => {
-      const [, op] = el.dataset.multi.split("::");
-      state.selection[id][op] = $$("[data-multi]", card).filter(x => x.dataset.multi === el.dataset.multi && x.checked).map(x => x.value);
-    });
-    $$("[data-un]", card).forEach(el => el.onchange = () => { el.checked ? state.uninstall.add(id) : state.uninstall.delete(id); renderCatalog(); });
-    $$("[data-drop]", card).forEach(zone => {
-      const input = $("input", zone), [, op] = zone.dataset.drop.split("::");
-      zone.onclick = () => input.click();
-      input.onchange = () => upload(id, op, input.files, zone);
-      zone.ondragover = e => { e.preventDefault(); zone.classList.add("over"); };
-      zone.ondragleave = () => zone.classList.remove("over");
-      zone.ondrop = e => { e.preventDefault(); zone.classList.remove("over"); upload(id, op, e.dataTransfer.files, zone); };
-    });
+function bindOptions(scope, id) {
+  $$("[data-opt]", scope).forEach(el => el.onchange = () => {
+    if (!state.selection[id]) return;
+    state.selection[id][el.dataset.opt.split("::")[1]] = el.type === "checkbox" ? el.checked : el.value; renderActionBar();
+  });
+  $$("[data-multi]", scope).forEach(el => el.onchange = () => {
+    if (!state.selection[id]) return;
+    state.selection[id][el.dataset.multi.split("::")[1]] = $$("[data-multi]", scope).filter(x => x.dataset.multi === el.dataset.multi && x.checked).map(x => x.value);
+  });
+  $$("[data-rm]", scope).forEach(b => b.onclick = () => { state.selection[id][b.dataset.rm.split("::")[1]].splice(Number(b.dataset.i), 1); rerender(); });
+  $$("[data-drop]", scope).forEach(zone => {
+    const input = $("input", zone), op = zone.dataset.drop.split("::")[1];
+    zone.onclick = e => { if (e.target !== input) input.click(); };
+    zone.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } };
+    input.onchange = () => upload(id, op, input.files, zone);
+    zone.ondragover = e => { e.preventDefault(); zone.classList.add("over"); };
+    zone.ondragleave = () => zone.classList.remove("over");
+    zone.ondrop = e => { e.preventDefault(); zone.classList.remove("over"); upload(id, op, e.dataTransfer.files, zone); };
   });
 }
 async function upload(id, op, files, zone) {
   if (!files || !files.length) return;
+  if (!state.selection[id]) select(id, true);
   const list = state.selection[id][op] = state.selection[id][op] || [];
+  let i = 0;
   for (const f of files) {
-    zone.innerHTML = `<span class="row" style="justify-content:center"><span class="spinner"></span> Subiendo ${esc(f.name)} (${(f.size / 1048576).toFixed(1)} MB)…</span>`;
+    i++;
+    zone.innerHTML = `<span class="row"><span class="spinner"></span>Subiendo ${i} de ${files.length}: ${esc(f.name)} (${(f.size / 1048576).toFixed(1)} MB)</span>`;
     try { const r = await api("/api/upload", { method: "POST", body: f, headers: { "X-Filename": encodeURIComponent(f.name) } }); list.push(r.path); }
-    catch (e) { alert(`No se pudo subir ${f.name}: ${e.message}`); }
+    catch (e) { toast(`No se pudo subir ${f.name}: ${e.message}`); }
   }
-  renderCatalog();
+  toast(`${files.length} archivo${files.length === 1 ? "" : "s"} listo${files.length === 1 ? "" : "s"}`);
+  rerender();
 }
-$("#recBtn").onclick = () => { state.modules.filter(m => m.recommended && m.compatible !== false && !LIB_CATS.has(m.category)).forEach(m => select(m.id, true)); };
-$("#clearBtn").onclick = () => { state.selection = {}; state.uninstall.clear(); renderCatalog(); };
+function rerender() {
+  if (state.view === "wizard") renderWizard(); else if (state.view === "library") renderLibrary(); else if (state.view === "expert") renderExpert();
+  renderActionBar();
+}
 
-// ---------- plan / apply ----------
-const dlg = $("#dlg");
-function dialog(title, sub, body, buttons) {
-  $("#dlgTitle").textContent = title; $("#dlgSub").textContent = sub || ""; $("#dlgBody").innerHTML = body;
-  $("#dlgFoot").innerHTML = ""; buttons.forEach(([label, cls, fn]) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = fn; $("#dlgFoot").append(b); });
-  if (!dlg.open) dlg.showModal();
+function chipsFor(m) {
+  const out = [];
+  if (isInstalled(m)) out.push('<span class="pill ok">instalado</span>');
+  if (m.recommended && state.scope === "expert") out.push('<span class="pill info">recomendado</span>');
+  if (m.risk === "alto") out.push('<span class="pill err">riesgo alto</span>');
+  else if (m.risk === "medio") out.push('<span class="pill warn">experimental</span>');
+  if (m.reboot) out.push('<span class="pill">se instala al reiniciar</span>');
+  return out.join("");
 }
-function logView(lines) { return `<div class="log" id="jobLog">${esc((lines || []).join("\n")) || "…"}</div>`; }
-async function openPlan() {
-  if (!state.device) return alert("Conecta tu Kobo primero.");
-  dialog("Calculando cambios", "Simulación: todavía no se escribe nada", logView(["Preparando…"]), [["Cancelar", "", () => dlg.close()]]);
-  try {
-    const { job } = await api("/api/plan", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
-    const res = await waitJob(job, l => { const el = $("#jobLog"); if (el) el.textContent = l.join("\n"); });
-    const skips = res.results.filter(r => !r.ok);
-    const changes = res.changes;
-    const body = `${skips.length ? `<div class="finding warn"><span class="sev">omitidos</span><div class="body">${skips.map(s => `${esc(byId(s.id)?.title || s.id)}: ${esc(s.reason)}`).join("<br>")}</div></div>` : ""}
-      <p><b>${changes.length}</b> cambios en el Kobo${res.needs_reboot ? " · se completa al expulsar y reiniciar" : ""}. Se respaldan los originales.</p>
-      <div>${groupChanges(changes)}</div>
-      <details style="margin-top:10px"><summary>Detalle</summary>${logView(res.log)}</details>`;
-    dialog("Revisa antes de aplicar", state.device.name, body, [["Cancelar", "", () => dlg.close()], ["Aplicar en el Kobo", "primary", applyNow]]);
-  } catch (e) { dialog("No se pudo planificar", "", `<div class="finding critical"><span class="sev">error</span><div class="body">${esc(e.message)}</div></div>`, [["Cerrar", "", () => dlg.close()]]); }
+function modRow(m, opts = {}) {
+  const mt = meta(m), on = !!state.selection[m.id], off = m.compatible === false, req = requiredBy(m.id), open = state.open.has(m.id);
+  return `<div class="mrow ${on ? "on" : ""} ${off ? "off" : ""} ${open ? "open" : ""}" data-row="${esc(m.id)}">
+    <label class="switch"><input type="checkbox" ${on ? "checked" : ""} ${off ? "disabled" : ""} aria-label="${esc(mt.name)}"><span></span></label>
+    <span class="badge" style="color:${mt.color}">${icon(mt.icon)}</span>
+    <div><div class="name">${esc(mt.name)}</div><div class="small muted">${esc(off ? m.incompatible_reason : mt.benefit)}</div>
+      <div class="meta">${chipsFor(m)}${req.length && on ? `<span class="pill info">necesario para ${esc(req.join(", "))}</span>` : ""}${opts.tech ? `<span class="pill">${esc(m.title)}</span>` : ""}</div>
+      ${opts.tech ? `<details class="tech"><summary>Más información</summary>${esc(m.description)}<div style="margin-top:6px">${(m.sources || []).map(s => `<a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(s.replace(/^https:\/\/(www\.)?/, "").split("/").slice(0, 3).join("/"))}</a>`).join(" · ")}${m.license ? ` · ${esc(m.license)}` : ""}</div></details>` : ""}
+    </div>
+    <div class="row" style="gap:6px;justify-content:flex-end">
+      ${PREVIEW[m.id] ? `<button class="pvbtn" data-preview="${esc(m.id)}">Vista previa</button>` : ""}
+      ${m.options.length && on ? `<button class="optbtn" data-toggle-opts aria-expanded="${open}">${open ? "Ocultar opciones" : "Opciones"}</button>` : ""}
+      ${opts.tech && m.can_uninstall && isInstalled(m) ? `<label class="check tiny" style="display:flex;gap:6px;align-items:center;color:var(--err);min-height:32px"><input type="checkbox" data-un ${state.uninstall.has(m.id) ? "checked" : ""}> Desinstalar</label>` : ""}
+    </div>
+    ${m.options.length ? `<div class="opts">${m.options.map(op => optionHtml(m, op)).join("")}</div>` : ""}
+  </div>`;
 }
-$("#planBtn").onclick = openPlan;
-const AREAS = [[/^\.kobo\/Kobo\//, "Configuración de Nickel"], [/^\.kobo\/KoboRoot\.tgz$/, "Mods de sistema (se instalan al reiniciar)"],
-  [/^fonts\//, "Fuentes"], [/^\.adds\/nm\//, "Menú NickelMenu"], [/^\.adds\/koreader\//, "KOReader"], [/^\.adds\/cadmus\//, "Cadmus"],
+function bindRows(scope) {
+  $$("[data-row]", scope).forEach(row => {
+    const id = row.dataset.row;
+    $(".switch input", row).onchange = e => { select(id, e.target.checked); rerender(); };
+    const t = $("[data-toggle-opts]", row);
+    if (t) t.onclick = () => { state.open.has(id) ? state.open.delete(id) : state.open.add(id); rerender(); };
+    const u = $("[data-un]", row);
+    if (u) u.onchange = () => { u.checked ? state.uninstall.add(id) : state.uninstall.delete(id); renderActionBar(); };
+    bindOptions(row, id);
+  });
+}
+
+function renderWizard() {
+  if (!state.helper) return;
+  $$("#stepper li").forEach(li => { const n = Number(li.dataset.step); li.classList.toggle("done", n < state.step); n === state.step ? li.setAttribute("aria-current", "step") : li.removeAttribute("aria-current"); });
+  $$("[data-wstep]").forEach(s => s.classList.toggle("hidden", Number(s.dataset.wstep) !== state.step));
+  if (state.step === 1) {
+    $("#profiles").innerHTML = PROFILES.map(p => `<button class="profile" data-profile="${p.id}" aria-pressed="${state.profile === p.id}">
+      ${p.tag ? `<span class="pill info tag">${esc(p.tag)}</span>` : ""}<h3>${esc(p.name)}</h3><span class="small muted">${esc(p.desc)}</span>
+      <ul>${p.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></button>`).join("") +
+      `<p class="tiny muted" style="grid-column:1/-1;margin:4px 0 0">Las opciones se ajustan a tu ${esc(state.device ? state.device.name : "Kobo")}: lo que tu modelo no soporta no aparece.</p>`;
+    $$("[data-profile]").forEach(b => b.onclick = () => {
+      const p = PROFILES.find(x => x.id === b.dataset.profile);
+      state.profile = p.id; state.selection = {};
+      p.mods.forEach(id => select(id, true, (p.opts || {})[id]));
+      renderWizard(); renderActionBar();
+    });
+  }
+  const nm = byId("mod.nickelmenu"), hiddenN = state.modules.filter(m => m.compatible === false && !m.id.startsWith("lib.")).length;
+  const notice = nm && nm.compatible === false
+    ? `<div class="finding info" style="margin-top:14px">${icon("info")}<div class="body"><b>Tu ${esc(state.device ? state.device.name : "Kobo")} tiene ${hiddenN} opciones no disponibles</b><div class="small muted">${esc(nm.incompatible_reason)}. ${state.device && /^[5-9]\./.test(state.device.firmware || "") ? "Los mods del menú de Nickel aún no funcionan en firmware 5 o 6. Las herramientas de biblioteca (cómics, libros, fuentes, respaldo) sí están disponibles." : "Actualiza el firmware desde Ajustes > Información del dispositivo y vuelve a conectar el Kobo para habilitarlas."}</div></div></div>` : "";
+  if (state.step === 2) {
+    $("#groups").innerHTML = notice + GROUPS.map(([title, ic, ids]) => {
+      const mods = ids.map(byId).filter(m => m && m.compatible !== false); if (!mods.length) return "";
+      return `<section class="group"><h3>${icon(ic)}${esc(title)}</h3>${mods.map(m => modRow(m)).join("")}</section>`;
+    }).join("");
+    bindRows($("#groups"));
+  }
+  if (state.step === 3) renderReview();
+}
+async function renderReview() {
+  const box = $("#review");
+  if (!Object.keys(state.selection).length && !state.uninstall.size) { box.innerHTML = '<div class="card empty">No hay nada seleccionado. Vuelve al paso anterior.</div>'; return; }
+  box.innerHTML = `<div class="card"><div class="row"><span class="spinner"></span><span>Preparando la lista de cambios (todavía no se escribe nada)…</span></div></div>`;
+  state.reviewOk = false; renderActionBar();
+  try { box.innerHTML = `<div class="card">${reviewHtml(await planNow())}</div>`; state.reviewOk = true; }
+  catch (e) { box.innerHTML = `<div class="finding critical">${icon("x-circle")}<div class="body"><b>No se puede instalar todavía</b><div class="small">${esc(e.message)}</div></div></div>`; }
+  renderActionBar();
+}
+async function planNow() {
+  const { job } = await api("/api/plan", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
+  return waitJob(job);
+}
+const AREAS = [[/^\.kobo\/Kobo\//, "Ajustes del Kobo"], [/^\.kobo\/KoboRoot\.tgz$/, "Mejoras que se instalan al reiniciar"],
+  [/^fonts\//, "Fuentes"], [/^\.adds\/nm\//, "Menú de atajos"], [/^\.adds\/koreader\//, "KOReader"], [/^\.adds\/cadmus\//, "Cadmus"],
   [/^\.adds\/inkboy\//, "Ink-boy"], [/^\.kobo\/custom-dict\//, "Diccionarios"], [/^\.kobo\/screensaver\//, "Pantallas de reposo"],
-  [/^\.adds\//, "Archivos de mods"], [/\/\._|\.DS_Store$/, "Basura de macOS"], [/./, "Biblioteca"]];
+  [/^\.adds\//, "Archivos de los mods"], [/(^|\/)\._|\.DS_Store$/, "Basura del Mac"], [/./, "Biblioteca"]];
 function groupChanges(changes) {
   const groups = new Map();
   changes.forEach(c => { const a = AREAS.find(([re]) => re.test(c.rel))[1]; if (!groups.has(a)) groups.set(a, []); groups.get(a).push(c); });
   const verb = c => c.op === "delete" ? "borrar" : c.existed ? "actualizar" : "crear";
   return [...groups].map(([area, list]) => {
     const counts = {}; list.forEach(c => counts[verb(c)] = (counts[verb(c)] || 0) + 1);
-    const sum = Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(", ");
     const rows = list.slice(0, 300).map(c => `<div class="chg"><b class="${c.op === "delete" ? "delete" : "write"}">${verb(c)}</b><span>${esc(c.rel)}</span></div>`).join("");
-    return `<details ${list.length <= 4 ? "open" : ""} style="margin:4px 0"><summary><b>${esc(area)}</b> <span class="muted">· ${sum}</span></summary>${rows}${list.length > 300 ? `<div class="muted">…y ${list.length - 300} más</div>` : ""}</details>`;
+    return `<details style="margin:6px 0"><summary class="small" style="cursor:pointer"><b>${esc(area)}</b> <span class="muted">· ${Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(", ")}</span></summary>${rows}${list.length > 300 ? `<div class="muted tiny">…y ${list.length - 300} más</div>` : ""}</details>`;
   }).join("");
 }
+function reviewHtml(res) {
+  const applied = res.results.filter(r => r.action === "apply"), skipped = res.results.filter(r => !r.ok), removed = res.results.filter(r => r.action === "uninstall");
+  const backups = res.changes.filter(c => c.existed).length;
+  return `<h2>Esto es lo que va a pasar</h2>
+    <p class="muted" style="margin:6px 0 0">Revisa y confirma. Nada se ha escrito todavía en tu Kobo.</p>
+    <div class="summary">
+      <div><b>${applied.length}</b><span class="small">mejora${applied.length === 1 ? "" : "s"} a aplicar${removed.length ? ` · ${removed.length} a quitar` : ""}</span></div>
+      <div><b>${backups}</b><span class="small">archivo${backups === 1 ? "" : "s"} con copia de respaldo</span></div>
+      <div><b>${res.needs_reboot ? "Sí" : "No"}</b><span class="small">${res.needs_reboot ? "se reinicia al expulsar (1-2 min)" : "necesita reiniciar"}</span></div>
+    </div>
+    ${skipped.length ? `<div class="finding warn">${icon("alert")}<div class="body"><b>Se omitirá${skipped.length === 1 ? "" : "n"} ${skipped.length}</b><div class="small">${skipped.map(s => `${esc(byId(s.id) ? meta(byId(s.id)).name : s.id)}: ${esc(s.reason)}`).join("<br>")}</div></div></div>` : ""}
+    <ul class="modlist">${[...applied, ...removed].map(r => { const m = byId(r.id); if (!m) return ""; const mt = meta(m);
+      return `<li><span class="badge" style="color:${mt.color}">${icon(mt.icon)}</span><span>${esc(mt.name)}</span><span class="st muted">${r.action === "uninstall" ? "se quita" : r.changes ? `${r.changes} cambio${r.changes === 1 ? "" : "s"}` : m.reboot ? "se instala al reiniciar" : m.persistent === false ? "se ejecuta" : "ya está al día"}</span></li>`; }).join("")}</ul>
+    <details class="tech" style="margin-top:12px"><summary>Ver los ${res.changes.length} archivos que cambian</summary>${groupChanges(res.changes)}</details>`;
+}
+
+function renderActionBar() {
+  const bar = $("#actionbar"), ids = Object.keys(state.selection).filter(id => !id.startsWith("lib.") || state.view !== "wizard");
+  const show = state.helper && (state.view === "wizard" || (state.view === "expert" && (ids.length || state.uninstall.size)));
+  bar.classList.toggle("hidden", !show);
+  if (!show) return;
+  const back = $("#abBack"), next = $("#abNext");
+  if (state.view === "wizard") {
+    const n = ids.length;
+    $("#abTitle").textContent = state.step === 1 ? (state.profile ? `Estilo: ${PROFILES.find(p => p.id === state.profile).name}` : "Elige un estilo para continuar")
+      : state.step === 2 ? `${n} mejora${n === 1 ? "" : "s"} activada${n === 1 ? "" : "s"}` : "Último paso";
+    $("#abSub").textContent = state.step === 3 ? "Se respalda todo antes de escribir" : state.device ? state.device.name : "Conecta tu Kobo para continuar";
+    back.classList.toggle("hidden", state.step === 1);
+    back.innerHTML = `${icon("arrow-l")}Atrás`;
+    back.onclick = () => { state.step--; renderWizard(); renderActionBar(); };
+    next.innerHTML = state.step < 3 ? `Continuar${icon("arrow-r")}` : `${icon("check")}Aplicar en mi Kobo`;
+    next.disabled = !state.device || (state.step === 1 && !state.profile) || (state.step >= 2 && !n && !state.uninstall.size)
+      || (state.step === 3 && !state.reviewOk);
+    next.onclick = () => { if (state.step < 3) { state.step++; renderWizard(); renderActionBar(); window.scrollTo({ top: 0, behavior: "smooth" }); } else applyNow(); };
+  } else {
+    $("#abTitle").textContent = `${ids.length} seleccionado${ids.length === 1 ? "" : "s"}${state.uninstall.size ? ` · ${state.uninstall.size} a quitar` : ""}`;
+    $("#abSub").textContent = ids.map(i => byId(i) ? meta(byId(i)).name : i).join(" · ");
+    back.classList.remove("hidden"); back.textContent = "Limpiar";
+    back.onclick = () => { state.selection = {}; state.uninstall.clear(); rerender(); };
+    next.innerHTML = `Revisar cambios${icon("arrow-r")}`; next.disabled = !state.device;
+    next.onclick = openPlan;
+  }
+}
+
+const dlg = $("#dlg");
+function dialog(title, sub, body, buttons) {
+  $("#dlgTitle").textContent = title; $("#dlgSub").textContent = sub || ""; $("#dlgBody").innerHTML = body;
+  const ft = $("#dlgFoot"); ft.innerHTML = "";
+  buttons.forEach(([label, cls, fn]) => { const b = document.createElement("button"); b.className = "btn " + cls; b.innerHTML = label; b.onclick = fn; ft.append(b); });
+  if (!dlg.open) dlg.showModal();
+  (ft.querySelector(".primary") || ft.lastElementChild)?.focus();
+}
+async function openPlan() {
+  if (!state.device) { toast("Conecta tu Kobo primero."); return; }
+  dialog("Preparando…", "Todavía no se escribe nada", '<div class="row"><span class="spinner"></span>Calculando cambios</div>', [["Cancelar", "", () => dlg.close()]]);
+  try {
+    const res = await planNow();
+    dialog("Revisa antes de aplicar", state.device.name, reviewHtml(res), [["Cancelar", "", () => dlg.close()], [`${icon("check")}Aplicar en mi Kobo`, "primary", applyNow]]);
+  } catch (e) {
+    dialog("No se pudo preparar", "", `<div class="finding critical">${icon("x-circle")}<div class="body">${esc(e.message)}</div></div>`, [["Cerrar", "primary", () => dlg.close()]]);
+  }
+}
 async function applyNow() {
-  dialog("Aplicando…", "No desconectes el Kobo", logView(["Iniciando…"]), []);
+  const mods = Object.keys(state.selection).map(byId).filter(Boolean);
+  dialog("Aplicando en tu Kobo…", state.device ? state.device.name : "", `<p class="muted small" style="margin-top:0">No desconectes el Kobo. Si algo falla, los cambios se revierten solos.</p>
+    <div class="progress" role="progressbar" aria-label="Progreso" aria-valuemin="0" aria-valuemax="${mods.length}" aria-valuenow="0" id="pbar"><i></i></div>
+    <ul class="modlist" id="plist" style="margin-top:10px">${mods.map(m => `<li data-p="${esc(m.title)}"><span class="badge" style="color:${meta(m).color}">${icon(meta(m).icon)}</span>${esc(meta(m).name)}<span class="st muted">en espera</span></li>`).join("")}</ul>
+    <details class="tech"><summary>Registro detallado</summary><div class="log" id="jobLog"></div></details>`, []);
+  let lastLog = [];
+  const onLog = log => {
+    lastLog = log;
+    const el = $("#jobLog"); if (el) { el.textContent = log.join("\n"); el.scrollTop = el.scrollHeight; }
+    let done = 0;
+    $$("#plist li").forEach(li => {
+      const idx = log.findIndex(l => l === `Aplicando ${li.dataset.p}...`);
+      const finished = idx >= 0 && log.slice(idx + 1).some(l => l.startsWith("Aplicando "));
+      const st = $(".st", li);
+      if (finished) { st.innerHTML = icon("check"); st.style.color = "var(--ok)"; done++; }
+      else if (idx >= 0) st.innerHTML = '<span class="spinner"></span>trabajando';
+    });
+    const bar = $("#pbar"); if (bar) { bar.setAttribute("aria-valuenow", done); $("i", bar).style.width = `${Math.round(done / Math.max(1, mods.length) * 100)}%`; }
+  };
   try {
     const { job } = await api("/api/apply", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
-    const res = await waitJob(job, l => { const el = $("#jobLog"); if (el) { el.textContent = l.join("\n"); el.scrollTop = el.scrollHeight; } });
-    state.selection = {}; state.uninstall.clear(); renderCatalog();
-    dialog("Listo", `${res.changes.length} cambios aplicados`, `
-      <div class="finding ok"><span class="sev">ok</span><div class="body">Instalación completa.${res.manifest ? `<div class="muted" style="font-size:13px">Respaldo: ${esc(res.manifest)}</div>` : ""}</div></div>
-      ${res.needs_reboot ? '<div class="finding info"><span class="sev">siguiente</span><div class="body">Expulsa el Kobo: instalará los mods de sistema y se reiniciará solo (1-2 min).</div></div>' : ""}
-      <details><summary>Registro</summary>${logView(res.log)}</details>`,
-      [["Cerrar", "", () => { dlg.close(); refresh(); }], ["Expulsar Kobo", "primary", eject]]);
+    const res = await waitJob(job, onLog);
+    state.selection = {}; state.uninstall.clear(); state.step = 1; state.profile = null; state.open.clear();
+    renderActionBar();
+    const tips = (res.log || []).filter(l => /^(Activa|Reinicia|Ábre|Nickel lo importará|Empareja)/.test(l));
+    dialog("¡Listo!", `${res.changes.length} cambios aplicados con respaldo`, `
+      <div class="health ok" style="margin-top:0">${icon("check-circle")}<div><b>Instalación completa</b><div class="small">Todo quedó respaldado en tu computador.</div></div></div>
+      ${res.needs_reboot ? `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo.</li><li>El Kobo instala las mejoras y <b>se reinicia solo</b> (1 a 2 minutos).</li><li>Abajo verás una pestaña nueva con tus atajos.</li></ol>` : ""}
+      ${tips.map(l => `<div class="finding info">${icon("info")}<div class="body small">${esc(l)}</div></div>`).join("")}`,
+      [["Cerrar", "", () => { dlg.close(); refresh(); go("home"); }], [`${icon("eject")}Expulsar Kobo`, "primary", eject]]);
   } catch (e) {
-    dialog("Error al aplicar", "Puedes revertir desde Respaldos", `<div class="finding critical"><span class="sev">error</span><div class="body">${esc(e.message)}</div></div>`, [["Ver respaldos", "", () => { dlg.close(); $('[data-tab="backups"]').click(); }], ["Cerrar", "", () => dlg.close()]]);
+    dialog("No se completó", "Los cambios de esta corrida se revirtieron solos", `<div class="finding critical">${icon("x-circle")}<div class="body"><b>${esc(e.message)}</b><div class="small">Puedes intentar de nuevo o revisar «Respaldos».</div></div></div>
+      <details class="tech"><summary>Registro</summary><div class="log">${esc(lastLog.join("\n"))}</div></details>`,
+      [["Ver respaldos", "", () => { dlg.close(); go("backups"); }], ["Cerrar", "primary", () => dlg.close()]]);
   }
 }
 async function eject() {
-  try { const r = await api("/api/eject", { method: "POST", json: {} }); dialog("Kobo expulsado", "", `<p>${r.ok ? "Ya puedes desconectar el cable." : esc(r.output)}</p>`, [["Cerrar", "", () => { dlg.close(); refresh(); }]]); }
-  catch (e) { alert(e.message); }
+  try {
+    const r = await api("/api/eject", { method: "POST", json: {} });
+    dialog(r.ok ? "Puedes desconectar el Kobo" : "No se pudo expulsar", "", r.ok
+      ? `<div class="health ok" style="margin-top:0">${icon("check-circle")}<div><b>Kobo expulsado</b><div class="small">Desconecta el cable. Si había mejoras pendientes, el Kobo se reiniciará solo.</div></div></div>`
+      : `<div class="finding warn">${icon("alert")}<div class="body small">${esc(r.output)}</div></div>`, [["Cerrar", "primary", () => { dlg.close(); refresh(); }]]);
+  } catch (e) { toast(e.message); }
 }
 
-// ---------- backups ----------
+function renderLibrary() {
+  const lib = state.modules.filter(m => m.id.startsWith("lib.") && m.compatible !== false);
+  $("#libTasks").innerHTML = lib.map(m => {
+    const mt = meta(m);
+    if (!state.selection[m.id]) state.selection[m.id] = defaults(m);
+    const fileOps = m.options.filter(o => o.type === "files"), other = m.options.filter(o => o.type !== "files");
+    return `<article class="card task" data-task="${esc(m.id)}">
+      <div class="head"><span class="badge" style="color:${mt.color}">${icon(mt.icon, "ic lg")}</span>
+        <div><h3>${esc(mt.name)}</h3><div class="small muted">${esc(m.compatible === false ? m.incompatible_reason : mt.benefit)}</div>
+        ${m.risk === "medio" ? '<span class="pill warn" style="margin-top:6px">experimental</span>' : ""}
+        ${PREVIEW[m.id] ? `<div><button class="pvbtn" data-preview="${esc(m.id)}">Vista previa</button></div>` : ""}</div></div>
+      ${fileOps.slice(0, 1).map(op => optionHtml(m, op)).join("")}
+      ${other.length || fileOps.length > 1 ? `<details><summary>Opciones</summary><div class="optsbox">${[...fileOps.slice(1), ...other].map(op => optionHtml(m, op)).join("")}</div></details>` : ""}
+      <button class="btn primary send" data-send ${m.compatible === false || !state.device ? "disabled" : ""}>${icon("upload")}Enviar al Kobo</button>
+    </article>`;
+  }).join("") || '<div class="empty">Conecta el motor local.</div>';
+  $$("#libTasks [data-task]").forEach(card => {
+    const id = card.dataset.task;
+    bindOptions(card, id);
+    $("[data-send]", card).onclick = () => {
+      const m = byId(id), sel = state.selection[id] || {};
+      const needs = m.options.find(o => o.type === "files");
+      if (needs && !(sel[needs.id] || []).length && !(id === "lib.dictionaries" && (sel.wiktionary || []).length)) { toast("Primero agrega archivos."); return; }
+      state.selection = { [id]: sel }; openPlan();
+    };
+  });
+}
+
+function renderExpert() {
+  const cats = ["Todas", ...new Set(state.modules.map(m => m.category))];
+  $("#filters").innerHTML = cats.map(c => `<button aria-pressed="${state.filter === c}" data-cat="${esc(c)}">${esc(c)}</button>`).join("");
+  $$("#filters button").forEach(b => b.onclick = () => { state.filter = b.dataset.cat; renderExpert(); });
+  const q = state.query.trim().toLowerCase();
+  const hidden = state.modules.filter(m => m.compatible === false).length;
+  $("#incompatToggle").innerHTML = hidden ? `<label class="check small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="showIncompat" ${state.showIncompat ? "checked" : ""}> Mostrar ${hidden} no compatible${hidden === 1 ? "" : "s"} con tu ${esc(state.device ? state.device.name : "Kobo")}</label>` : "";
+  const si = $("#showIncompat"); if (si) si.onchange = () => { state.showIncompat = si.checked; renderExpert(); };
+  const list = state.modules.filter(m => (state.showIncompat || m.compatible !== false) && (state.filter === "Todas" || m.category === state.filter) &&
+    (!q || [m.title, m.description, meta(m).name, meta(m).benefit].join(" ").toLowerCase().includes(q)));
+  $("#expertList").innerHTML = list.map(m => modRow(m, { tech: true })).join("") || '<div class="empty">Nada coincide con tu búsqueda.</div>';
+  bindRows($("#expertList"));
+}
+$("#q").oninput = e => { state.query = e.target.value; renderExpert(); };
+
 async function loadBackups() {
   if (!state.device) return;
+  $("#backups").innerHTML = '<div class="row muted"><span class="spinner"></span>Cargando…</div>';
   try {
     const list = await api("/api/backups");
-    $("#backups").innerHTML = list.length ? list.map(b => `<div class="finding ${b.complete ? "info" : "warn"}"><span class="sev">${b.complete ? esc(b.label) : "incompleto"}</span>
-      <div class="body"><b>${esc(b.time)}</b> · ${Number(b.changes) || 0} cambios<div class="muted" style="font-size:12px;font-family:var(--mono)">${esc(b.path)}</div></div>
-      <button class="btn small danger" data-rb="${esc(b.path)}">Revertir</button></div>`).join("") : '<div class="empty">Aún no hay respaldos de este Kobo.</div>';
+    $("#backups").innerHTML = list.length ? `<ul class="modlist">${list.map(b => `<li><span class="badge">${icon(b.complete ? "archive" : "alert")}</span>
+      <div><b>${esc(String(b.time).replace("T", " "))}</b><div class="tiny muted">${Number(b.changes) || 0} cambios${b.complete ? "" : " · interrumpida"}</div></div>
+      <button class="btn sm danger st" data-rb="${esc(b.path)}">${icon("undo")}Revertir</button></li>`).join("")}</ul>`
+      : '<div class="empty">Aún no hay respaldos de este Kobo. Se crean solos con cada instalación.</div>';
     $$("[data-rb]").forEach(btn => btn.onclick = () => doRollback(btn.dataset.rb));
   } catch (e) { $("#backups").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 async function doRollback(path) {
-  const { job } = await api("/api/rollback", { method: "POST", json: { manifest: path, dry_run: true } });
-  const prev = await waitJob(job);
-  dialog("Revertir instalación", path, `<p>Se harán ${prev.actions.length} acciones:</p>${logView(prev.actions)}`, [["Cancelar", "", () => dlg.close()], ["Revertir", "danger", async () => {
-    const r = await api("/api/rollback", { method: "POST", json: { manifest: path } });
-    const done = await waitJob(r.job);
-    dialog("Revertido", "", logView(done.actions), [["Cerrar", "", () => { dlg.close(); refresh(); }]]);
-  }]]);
+  try {
+    const { job } = await api("/api/rollback", { method: "POST", json: { manifest: path, dry_run: true } });
+    const prev = await waitJob(job);
+    dialog("¿Revertir esta instalación?", "Solo se tocan archivos que no cambiaron después", prev.actions.length
+      ? `<div class="log">${esc(prev.actions.join("\n"))}</div>` : '<div class="empty">No hay nada que revertir: el Kobo ya está como antes.</div>',
+      [["Cancelar", "", () => dlg.close()], ...(prev.actions.length ? [[`${icon("undo")}Revertir`, "danger", async () => {
+        const r = await api("/api/rollback", { method: "POST", json: { manifest: path } });
+        const done = await waitJob(r.job);
+        dialog("Revertido", "", `<div class="log">${esc(done.actions.join("\n") || "Sin cambios")}</div>`, [["Cerrar", "primary", () => { dlg.close(); refresh(); }]]);
+      }]] : [])]);
+  } catch (e) { toast(e.message); }
+}
+
+// Illustrative previews drawn for the connected model (aspect ratio, colour vs. B/W). Not real screenshots.
+function pvScreen(inner, d, w = 150) {
+  const W = d && d.width ? d.width : 1264, H = d && d.height ? d.height : 1680;
+  const h = Math.round(w * H / W);
+  return `<div class="mini ${d && d.color ? "" : "bw"}" style="width:${w + 16}px;height:${h + 22}px"><div class="scr">${inner}</div></div>`;
+}
+const txt = (top, n, cls = "") => `<div class="pv-txt ${cls}" style="top:${top}%">${Array.from({ length: n }, (_, i) => `<i style="width:${cls ? 100 : 70 + (i * 37) % 30}%"></i>`).join("")}</div>`;
+const bar = (aio) => `<div class="pv-bar"><span>Inicio</span><span>Mis libros</span>${aio ? "<b>Kobo AIO</b>" : "<span>Descubrir</span>"}<span>Más</span></div>`;
+const book = (x, y, w, h, c) => `<div class="pv-row" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%;right:auto;background:${c};box-shadow:0 1px 2px rgba(0,0,0,.25)"></div>`;
+const PREVIEW = {
+  "mod.nickelhome": d => [[`${book(8, 8, 36, 30, "#7a5a8a")}${book(52, 8, 40, 14, "#c9a35a")}${book(52, 24, 40, 14, "#5a8a9a")}<div class="pv-row" style="top:42%;height:14%;background:#d8cfbd"></div><div class="pv-row" style="top:60%;height:24%;background:#cfc6b2"></div>${bar()}`, "Antes: recomendaciones y avisos"],
+    [`${book(8, 8, 36, 30, "#7a5a8a")}<div class="pv-txt" style="top:12%;left:50%">${"<i></i>".repeat(3)}</div><div class="pv-row" style="top:44%;height:30%;background:#e2dccd"></div>${bar()}`, "Después: solo tu lectura y Mis libros"]],
+  "mod.nickelmenu": d => [[`${txt(8, 10)}<div class="pv-row" style="top:46%;height:40%;background:#fff;border:1px solid #22201C;padding:4px;font:7px var(--sans)">Suspender<br>Importar libros<br>Modo oscuro<br>WiFi on/off<br>KOReader</div>${bar(true)}`, "Pestaña nueva con tus atajos"]],
+  "mod.nickeltypefix": d => [[`${txt(10, 9, "j")}<div class="pv-txt" style="top:58%;font:8px var(--serif)">El  justificado  dejaba  huecos  irregulares…</div>`, "Antes"], [`${txt(10, 9, "j")}<div class="pv-txt" style="top:58%;font:8px var(--serif)">El justificado ahora queda parejo y con ligaduras.</div>`, "Después"]],
+  "fonts.ebook": d => [[`<div class="pv-txt" style="top:8%;font:10px var(--serif);line-height:1.6">Libron Aa<br><span style="font-family:Georgia">Charis Aa</span><br><span style="font-family:Palatino">Palatium Aa</span><br><span style="font-family:system-ui">Jost Aa</span><br><span style="font-family:Verdana">Legible Next Aa</span></div>`, "Nuevas familias en el menú de fuentes"]],
+  "mod.nickelclock": d => [[`<div style="position:absolute;top:2%;left:6%;right:6%;display:flex;justify-content:space-between;font:8px var(--sans)"><span>▮▮▮ 82%</span><span>21:47</span></div>${txt(10, 14)}`, "Hora y batería mientras lees"]],
+  "mod.nickeldissolve": d => [[`${txt(8, 14)}<div style="position:absolute;inset:0;background:linear-gradient(90deg,rgba(236,231,218,0),rgba(236,231,218,.95) 60%)"></div>`, "Transición suave al pasar página"]],
+  "conf.sideloaded": d => [[`${book(8, 8, 26, 26, "#5a7a8a")}${book(38, 8, 26, 26, "#8a5a5a")}${book(68, 8, 26, 26, "#6a8a5a")}${book(8, 40, 26, 26, "#8a7a5a")}${book(38, 40, 26, 26, "#5a5a8a")}${bar()}`, "Inicio centrado en tus libros"]],
+  "nm.menu": d => PREVIEW["mod.nickelmenu"](d),
+  "app.koreader": d => [[`<div style="position:absolute;top:3%;left:6%;font:8px var(--sans)">📁 Biblioteca</div>${Array.from({ length: 6 }, (_, i) => `<div class="pv-row" style="top:${12 + i * 13}%;height:10%;border-bottom:1px solid #bcb5a6;font:7px var(--sans);padding-left:22%">Libro ${i + 1}<span style="position:absolute;left:0;top:0;width:16%;height:100%;background:#9a8f7a"></span></div>`).join("")}`, "Navegador de archivos de KOReader"]],
+  "app.koreader_plugins": d => [[`${book(8, 6, 26, 26, "#5a7a8a")}${book(38, 6, 26, 26, "#8a5a5a")}${book(68, 6, 26, 26, "#6a8a5a")}<div class="pv-row" style="top:38%;height:8%;font:7px var(--sans)">Project: Title · biblioteca visual</div><div class="pv-row" style="top:52%;height:30%;background:#fff;border:1px solid #22201C;font:7px var(--sans);padding:4px">LocalSend: esperando archivos…<br>App Store: 3 actualizaciones</div>`, "Plugins populares"]],
+  "app.inkboy": d => [[`<div class="pv-pix"></div><div style="position:absolute;bottom:13%;left:12%;width:22%;height:5%;background:#22201C;border-radius:2px"></div><div style="position:absolute;bottom:8%;left:20.5%;width:5%;height:15%;background:#22201C;border-radius:2px"></div><div style="position:absolute;bottom:12%;right:12%;display:flex;gap:6px"><span style="width:16px;height:16px;border-radius:50%;background:${d && d.color ? "#a3322a" : "#22201C"}"></span><span style="width:16px;height:16px;border-radius:50%;background:${d && d.color ? "#a3322a" : "#22201C"}"></span></div>`, d && d.color ? "Color en Kaleido 3" : "4 tonos de gris en tinta"]],
+  "lib.comics": d => [[`<div style="position:absolute;inset:4%;display:grid;grid-template:1fr 1fr/1fr 1fr;gap:4%"><div style="background:${d && d.color ? "#c46a5a" : "#5a5a5a"}"></div><div style="background:#bfb7a6"></div><div style="background:#bfb7a6;grid-column:1/3;"></div></div>`, `Ajustado a ${d && d.width ? `${d.width}×${d.height}` : "tu pantalla"}`]],
+  "lib.sleep": d => [[`<div style="position:absolute;inset:0;background:${d && d.color ? "linear-gradient(160deg,#5a7a9a,#c9a35a)" : "linear-gradient(160deg,#555,#ddd)"}"></div><div style="position:absolute;bottom:6%;left:0;right:0;text-align:center;font:8px var(--sans);color:#fff">Tu imagen</div>`, "Pantalla de reposo propia"]],
+  "lib.audiobooks": d => [[`${book(25, 8, 50, 40, "#5a5a8a")}<div class="pv-row" style="top:54%;height:4%;background:#bcb5a6"><span style="display:block;width:40%;height:100%;background:#22201C"></span></div><div class="pv-row" style="top:62%;text-align:center;font:9px var(--sans)">⏮ ⏯ ⏭</div><div class="pv-txt" style="top:74%;font:7px var(--sans)">Capítulo 3 · 12:41</div>`, "Portada y capítulos"]],
+  "app.audiobook": d => PREVIEW["lib.audiobooks"](d),
+  "lib.dictionaries": d => [[`${txt(8, 8)}<div class="pv-row" style="top:44%;height:38%;background:#fff;border:1px solid #22201C;font:7px var(--serif);padding:4px"><b>libro</b> m. Conjunto de hojas…<br><i>Wiktionary (Custom)</i></div>`, "Definición al mantener presionada una palabra"]],
+  "fw.kobopatch": d => [[`${txt(10, 12)}`, "Interlineado estándar"], [`<div class="pv-txt" style="top:10%">${"<i style='margin-bottom:2px'></i>".repeat(18)}</div>`, "Interlineado fino (parche)"]],
+  "maint.backup": d => [[`<div style="position:absolute;inset:0;display:grid;place-items:center;font:9px var(--sans);text-align:center">Libros · progreso · notas<br>→ tu computador</div>`, "Copia antes de cambiar nada"]],
+};
+function showPreview(id) {
+  const m = byId(id), d = state.device, f = PREVIEW[id];
+  if (!m || !f) return;
+  const shots = f(d);
+  dialog(`Vista previa: ${meta(m).name}`, `${d ? d.name : "Kobo"} · ilustración, el resultado real puede variar`,
+    `<div class="previews">${shots.map(([inner, cap]) => `<figure>${pvScreen(inner, d, shots.length > 1 ? 140 : 180)}<figcaption>${esc(cap)}</figcaption></figure>`).join("")}</div>
+     <p class="small muted" style="margin-top:16px">${esc(meta(m).benefit)}${d && !d.color ? ". Tu pantalla es en blanco y negro: la vista previa se muestra en grises." : ""}</p>`,
+    [["Cerrar", "primary", () => dlg.close()]]);
 }
 
 function renderCredits() {
   const seen = new Set();
   $("#credits").innerHTML = state.modules.filter(m => m.sources && m.sources.length).map(m => {
     const s = m.sources[0]; if (seen.has(s)) return ""; seen.add(s);
-    return `<li><a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(m.title)}</a>${m.license ? ` · ${esc(m.license)}` : ""}</li>`;
+    return `<li><a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(meta(m).name)}</a>${m.license ? ` · ${esc(m.license)}` : ""}</li>`;
   }).join("");
 }
 
 connect();
-setInterval(() => { if (!state.helper) connect(); else api("/api/devices").then(d => { const has = d.length > 0; if (has !== !!state.device) refresh(); }).catch(() => connect()); }, 5000);
+setInterval(() => {
+  if (!state.helper) { connect(); return; }
+  api("/api/devices").then(d => { if ((d.length > 0) !== !!state.device) refresh(); }).catch(() => connect());
+}, 5000);
 </script>
 </body>
 </html>

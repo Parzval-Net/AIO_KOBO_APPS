@@ -15,7 +15,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from ..comics import PANELS, ComicOptions, convert
+from ..comics import PANELS, SUPPORTED_HELP, ComicOptions, convert, expand_inputs
 from ..comics import safe_title
 from ..core import AioError, Artifact, Module, Option, download, register
 from ..txn import safe_component
@@ -52,9 +52,9 @@ def _dest_folder(opts, default: str) -> str:
 
 # -- Comics --------------------------------------------------------------------
 def _comics_apply(mod, ctx, opts):
-    files = _files(opts)
+    files = expand_inputs(_files(opts))
     if not files:
-        raise AioError("Selecciona al menos un cómic (CBZ, CBR, CB7, PDF o carpeta de imágenes)")
+        raise AioError(f"Selecciona al menos un cómic ({SUPPORTED_HELP})")
     folder = _dest_folder(opts, "Comics")
     copts = ComicOptions(manga=opts["manga"], spreads=opts["spreads"], crop=opts["crop"], color=opts["color"],
                          saturation=float(opts["saturation"]), gamma=float(opts["gamma"]),
@@ -320,7 +320,7 @@ register(Module(
     description="Reproductor de audiolibros y música para KOReader: MP3/M4B con capítulos, portada, temporizador, "
                 "Bluetooth propio (compatible con la pila MediaTek de la Libra Colour) y lectura sincronizada. "
                 "Paquete de 173 MB (incluye voces TTS y ffmpeg).",
-    risk="medio", requires=["app.koreader"],
+    risk="medio", requires=["app.koreader"], needs_bluetooth=True,
     sources=["https://github.com/stradichenko/audiobook.koplugin"], license="AGPL-3.0",
     apply_fn=_abk_plugin_apply, uninstall_fn=_abk_plugin_uninstall,
     status_fn=lambda m, d: "instalado" if (d.root / ".adds/koreader/plugins/audiobook.koplugin").is_dir() else "no instalado",
@@ -362,7 +362,7 @@ register(Module(
     description="Prepara tus audiolibros con portada. Stock: formato oculto .mp3z que Nickel reproduce por "
                 "Bluetooth (experimental; sin retomar posición). Alternativa: MP3 con capítulos para KOReader. La "
                 "portada sale de la carpeta (cover/folder.jpg), de las pistas o la que subas. Solo audio sin DRM propio.",
-    risk="bajo", persistent=False,
+    risk="bajo", persistent=False, needs_bluetooth=True,
     options=[Option("target", "Reproducir con", "choice", "nickel",
                     [("nickel", "Lector stock Nickel (.mp3z, experimental)"),
                      ("koreader", "KOReader + audiobook.koplugin (MP3 con capítulos)")]),

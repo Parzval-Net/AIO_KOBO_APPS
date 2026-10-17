@@ -7,23 +7,44 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Model IDs are the last 3 digits of the hardware UUID in .kobo/version.
-# Source: FBInk device table (lib/FBInk/fbink.h, DEVICE_KOBO_* enum).
-# soc: "mtk" = MediaTek (hwtcon), "nxp" = i.MX (mxcfb), "sunxi" = Allwinner.
+# Sources: FBInk device table (lib/FBInk/fbink.h, DEVICE_KOBO_* enum and per-device quirks), KCC Kobo profiles
+# (resolutions), Kobo help center (Bluetooth/audiobooks, Dark mode lists) via KoboPatch Web UI kobo/dark-mode.js.
+# soc: "nxp" = i.MX (mxcfb), "sunxi" = Allwinner, "mtk" = MediaTek (hwtcon).
+def _m(name, codename, soc, w, h, ppi, color=False, buttons=False, bt=False, stylus=False, dark=True, year=0):
+    return {"name": name, "codename": codename, "soc": soc, "color": color, "page_buttons": buttons,
+            "width": w, "height": h, "ppi": ppi, "bluetooth": bt, "stylus": stylus, "dark_mode": dark, "year": year}
+
+
 KOBO_MODELS: dict[str, dict] = {
-    "376": {"name": "Kobo Clara HD", "codename": "nova", "soc": "nxp", "color": False, "page_buttons": False},
-    "377": {"name": "Kobo Forma", "codename": "frost", "soc": "nxp", "color": False, "page_buttons": True},
-    "380": {"name": "Kobo Forma 32GB", "codename": "frost32", "soc": "nxp", "color": False, "page_buttons": True},
-    "382": {"name": "Kobo Nia", "codename": "luna", "soc": "nxp", "color": False, "page_buttons": False},
-    "383": {"name": "Kobo Sage", "codename": "cadmus", "soc": "sunxi", "color": False, "page_buttons": True},
-    "384": {"name": "Kobo Libra H2O", "codename": "storm", "soc": "nxp", "color": False, "page_buttons": True},
-    "386": {"name": "Kobo Clara 2E", "codename": "goldfinch", "soc": "nxp", "color": False, "page_buttons": False},
-    "387": {"name": "Kobo Elipsa", "codename": "europa", "soc": "sunxi", "color": False, "page_buttons": False},
-    "388": {"name": "Kobo Libra 2", "codename": "io", "soc": "nxp", "color": False, "page_buttons": True},
-    "389": {"name": "Kobo Elipsa 2E", "codename": "condor", "soc": "mtk", "color": False, "page_buttons": False},
-    "390": {"name": "Kobo Libra Colour", "codename": "monza", "soc": "mtk", "color": True, "page_buttons": True},
-    "391": {"name": "Kobo Clara BW", "codename": "spaBW", "soc": "mtk", "color": False, "page_buttons": False},
-    "393": {"name": "Kobo Clara Colour", "codename": "spaColour", "soc": "mtk", "color": True, "page_buttons": False},
-    "395": {"name": "Kobo Clara BW (TPV)", "codename": "spaTPV", "soc": "mtk", "color": False, "page_buttons": False},
+    "310": _m("Kobo Touch A/B", "trilogy", "nxp", 600, 800, 167, dark=False, year=2011),
+    "320": _m("Kobo Touch C", "trilogy", "nxp", 600, 800, 167, dark=False, year=2012),
+    "330": _m("Kobo Glo", "kraken", "nxp", 758, 1024, 212, dark=False, year=2012),
+    "340": _m("Kobo Mini", "pixie", "nxp", 600, 800, 200, dark=False, year=2012),
+    "350": _m("Kobo Aura HD", "dragon", "nxp", 1080, 1440, 265, dark=False, year=2013),
+    "360": _m("Kobo Aura", "phoenix", "nxp", 758, 1024, 212, dark=False, year=2013),
+    "370": _m("Kobo Aura H2O", "dahlia", "nxp", 1080, 1430, 265, dark=False, year=2014),
+    "371": _m("Kobo Glo HD", "alyssum", "nxp", 1072, 1448, 300, dark=False, year=2015),
+    "372": _m("Kobo Touch 2.0", "pika", "nxp", 600, 800, 167, dark=False, year=2015),
+    "373": _m("Kobo Aura ONE", "daylight", "nxp", 1404, 1872, 300, dark=False, year=2016),
+    "381": _m("Kobo Aura ONE Limited Edition", "daylight", "nxp", 1404, 1872, 300, dark=False, year=2017),
+    "374": _m("Kobo Aura H2O Edition 2", "snow", "nxp", 1080, 1440, 265, dark=False, year=2017),
+    "378": _m("Kobo Aura H2O Edition 2 (r2)", "snow", "nxp", 1080, 1440, 265, dark=False, year=2018),
+    "375": _m("Kobo Aura Edition 2", "star", "nxp", 758, 1024, 212, dark=False, year=2016),
+    "379": _m("Kobo Aura Edition 2 (r2)", "star", "nxp", 758, 1024, 212, dark=False, year=2018),
+    "376": _m("Kobo Clara HD", "nova", "nxp", 1072, 1448, 300, dark=False, year=2018),
+    "377": _m("Kobo Forma", "frost", "nxp", 1440, 1920, 300, buttons=True, dark=False, year=2018),
+    "380": _m("Kobo Forma 32GB", "frost32", "nxp", 1440, 1920, 300, buttons=True, dark=False, year=2019),
+    "384": _m("Kobo Libra H2O", "storm", "nxp", 1264, 1680, 300, buttons=True, dark=False, year=2019),
+    "382": _m("Kobo Nia", "luna", "nxp", 758, 1024, 212, dark=False, year=2020),
+    "387": _m("Kobo Elipsa", "europa", "sunxi", 1404, 1872, 227, bt=True, stylus=True, year=2021),
+    "388": _m("Kobo Libra 2", "io", "nxp", 1264, 1680, 300, buttons=True, bt=True, year=2021),
+    "383": _m("Kobo Sage", "cadmus", "sunxi", 1440, 1920, 300, buttons=True, bt=True, stylus=True, year=2021),
+    "386": _m("Kobo Clara 2E", "goldfinch", "nxp", 1072, 1448, 300, bt=True, year=2022),
+    "389": _m("Kobo Elipsa 2E", "condor", "mtk", 1404, 1872, 227, bt=True, stylus=True, year=2023),
+    "390": _m("Kobo Libra Colour", "monza", "mtk", 1264, 1680, 300, color=True, buttons=True, bt=True, stylus=True, year=2024),
+    "391": _m("Kobo Clara BW", "spaBW", "mtk", 1072, 1448, 300, bt=True, year=2024),
+    "393": _m("Kobo Clara Colour", "spaColour", "mtk", 1072, 1448, 300, color=True, bt=True, year=2024),
+    "395": _m("Kobo Clara BW (TPV)", "spaTPV", "mtk", 1072, 1448, 300, bt=True, year=2025),
 }
 
 
@@ -61,6 +82,9 @@ class KoboDevice:
             "soc": self.model.get("soc", ""),
             "color": self.model.get("color", False),
             "page_buttons": self.model.get("page_buttons", False),
+            "width": self.model.get("width"), "height": self.model.get("height"), "ppi": self.model.get("ppi"),
+            "bluetooth": self.model.get("bluetooth", False), "stylus": self.model.get("stylus", False),
+            "dark_mode": self.model.get("dark_mode", True), "year": self.model.get("year"),
             "known": self.is_known,
         }
 

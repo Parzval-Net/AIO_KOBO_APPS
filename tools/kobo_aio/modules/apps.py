@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import tarfile
 
-from ..core import PROJECT_ROOT, Module, Option, register, zip_members
+from ..core import PROJECT_ROOT, Artifact, Module, Option, register, zip_members
 from ._util import ART, ONBOARD, extract_tree
 
 NM_DIR = ".adds/nm"
@@ -76,8 +76,9 @@ def _cadmus_uninstall(mod, ctx):
 
 
 register(Module(
-    id="app.cadmus", category="Apps", title="Cadmus 0.11.0",
-    description="Lector minimalista y rápido (fork de Plato) para EPUB, PDF, CBZ y DjVu.",
+    id="app.cadmus", category="Apps", title="Cadmus 0.12.0",
+    description="Lector minimalista y rápido (fork de Plato) para EPUB, PDF, CBZ y DjVu. La 0.12 agrega suspensión "
+                "automática y WiFi que duerme; si ya lo usabas, revisa sus ajustes de energía (cambiaron de lugar).",
     risk="bajo", requires=["mod.nickelmenu"],
     sources=["https://github.com/OGKevin/cadmus"], license="AGPL-3.0",
     apply_fn=_cadmus_apply, uninstall_fn=_cadmus_uninstall, status_fn=_status_dir(".adds/cadmus/cadmus.sh"),
@@ -155,4 +156,61 @@ register(Module(
     ],
     sources=["https://github.com/hellominecraft913-dev/Ink-boy"], license="MIT",
     apply_fn=_inkboy_apply, uninstall_fn=_inkboy_uninstall, status_fn=_status_dir(".adds/inkboy/inkboy"),
+))
+
+
+# -- KOReader plugins ----------------------------------------------------------
+KOPLUGINS = {
+    "projecttitle": (Artifact("https://github.com/joshuacant/ProjectTitle/releases/download/2026.07-v3.8.3/ProjectTitle-2026-07-01-v3-8-3.zip",
+                              "c407d3432190c982dda52c99d6e51f89f004203ed7d8935cd27bf8f51c0701d3", "ProjectTitle-v3.8.3.zip"),
+                     "projecttitle.koplugin", "Project: Title: biblioteca visual con portadas (AGPL-3.0)"),
+    "appstore": (Artifact("https://github.com/omer-faruq/appstore.koplugin/releases/download/v1.14.0/appstore.koplugin.zip",
+                          "52e802f2d18d1efc576aa489ded1781e2592ea82fa614cd4244632ce3140a548", "appstore-v1.14.0.zip"),
+                 "appstore.koplugin", "App Store: instala y actualiza plugins desde el Kobo (GPL-3.0)"),
+    "kobo": (Artifact("https://github.com/OGKevin/kobo.koplugin/releases/download/v0.4.1/kobo.koplugin.zip",
+                      "5521515971e682def6af4060741090656e24fa7ced48fe1cba67b4f742e189bd", "kobo-koplugin-v0.4.1.zip"),
+             "kobo.koplugin", "Sincroniza progreso con el lector de Kobo y controles Bluetooth (GPL-3.0)"),
+    "hardcover": (Artifact("https://github.com/Billiam/hardcoverapp.koplugin/releases/download/0.4.0/hardcoverapp.koplugin.zip",
+                           "0ca1eba0eccc627b0cab8c3457883ae7a9e771b2cd26aa09794a7041904e1b10", "hardcoverapp-0.4.0.zip"),
+                  "hardcoverapp.koplugin", "Hardcover: sincroniza lecturas con hardcover.app (MIT)"),
+    "localsend": (Artifact("https://github.com/kaikozlov/localsend.koplugin/releases/download/v1.4.5/localsend-koplugin-armv7.zip",
+                           "baf8f20cc54274a418b51b96a58fbbe6e8447d98b8cb909dbe2634826a0eaa9d", "localsend-armv7-1.4.5.zip"),
+                  "localsend.koplugin", "LocalSend: envía libros por WiFi desde el celular, sin cables (MIT)"),
+}
+
+
+def _kop_apply(mod, ctx, opts):
+    for key in opts["plugins"]:
+        art, folder, _ = KOPLUGINS[key]
+        members = zip_members(ctx.fetch(art), f"{folder}/")
+        if not members:
+            raise RuntimeError(f"El paquete de {folder} no tiene la estructura esperada")
+        extract_tree(ctx, members, f".adds/koreader/plugins/{folder}", folder)
+        installed = ctx.state.setdefault("koreader_plugins", [])
+        if key not in installed:
+            installed.append(key)
+
+
+def _kop_uninstall(mod, ctx):
+    for key in ctx.state.get("koreader_plugins", []):
+        art, folder, _ = KOPLUGINS[key]
+        for rel, _, _ in zip_members(ctx.fetch(art), f"{folder}/"):
+            ctx.txn.delete(f".adds/koreader/plugins/{folder}/{rel}")
+    ctx.state["koreader_plugins"] = []
+
+
+register(Module(
+    id="app.koreader_plugins", category="Apps", title="Plugins para KOReader",
+    description="Los más usados por la comunidad en 2026: biblioteca con portadas, tienda de plugins, sincronización "
+                "con el lector de Kobo, Hardcover y envío inalámbrico con LocalSend.",
+    risk="bajo", requires=["app.koreader"],
+    options=[Option("plugins", "Plugins", "multi", ["projecttitle", "localsend"],
+                    [(k, v[2]) for k, v in KOPLUGINS.items()])],
+    sources=["https://github.com/joshuacant/ProjectTitle", "https://github.com/omer-faruq/appstore.koplugin",
+             "https://github.com/OGKevin/kobo.koplugin", "https://github.com/Billiam/hardcoverapp.koplugin",
+             "https://github.com/kaikozlov/localsend.koplugin"],
+    license="AGPL-3.0 / GPL-3.0 / MIT (por plugin)",
+    apply_fn=_kop_apply, uninstall_fn=_kop_uninstall,
+    status_fn=lambda m, d: (f"{len([p for p in KOPLUGINS.values() if (d.root / '.adds/koreader/plugins' / p[1]).is_dir()])} instalados"
+                            if (d.root / ".adds/koreader/plugins").is_dir() else "no instalado"),
 ))

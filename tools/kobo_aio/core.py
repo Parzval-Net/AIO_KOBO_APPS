@@ -211,9 +211,11 @@ class Module:
     soc: tuple = ()                          # restrict to SoC families, empty = all
     color_only: bool = False
     buttons_only: bool = False
+    needs_bluetooth: bool = False            # Bluetooth audio (audiobooks)
     min_fw: tuple = ()
     max_fw: tuple = ()                       # exclusive upper bound, e.g. (5,) for NickelHook (Qt5) mods
     model_ids: tuple = ()                    # restrict to hardware model ids, empty = all
+    exact_firmwares: tuple = ()              # restrict to exact firmware builds (firmware patches)
     reboot: bool = False                     # needs eject + reboot to take effect
     order: int = 50                          # execution priority (backup first, cleanup last)
     persistent: bool = True                  # False = one-shot action (not recorded as installed)
@@ -228,8 +230,12 @@ class Module:
             return False, "Solo para modelos a color"
         if self.buttons_only and not dev.model.get("page_buttons"):
             return False, "Requiere botones físicos de página"
+        if self.needs_bluetooth and not dev.model.get("bluetooth"):
+            return False, "Tu modelo no tiene Bluetooth para audio"
         if self.model_ids and dev.model_id not in self.model_ids:
             return False, "No disponible para este modelo"
+        if self.exact_firmwares and dev.firmware not in self.exact_firmwares:
+            return False, f"Disponible solo para firmware {', '.join(self.exact_firmwares)}"
         if (self.max_fw or self.min_fw) and not dev.firmware_tuple:
             return False, "Firmware no reconocido: por seguridad se desactiva"
         if self.max_fw and dev.firmware_tuple >= self.max_fw:

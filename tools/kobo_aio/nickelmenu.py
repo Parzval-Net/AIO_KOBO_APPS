@@ -206,12 +206,24 @@ def _lint_action(action: str, arg: str) -> str | None:
     return None
 
 
-def lint_dir(nm_dir: Path) -> list[dict]:
-    """Lint every NickelMenu config file and detect experimental keys declared twice (first one wins)."""
+def _issue(file, n, text, error, level="warn", title="", hint=""):
+    return {"file": file, "line": n, "text": text, "error": error, "level": level,
+            "title": title or "Hay un atajo del menú con problemas", "hint": hint}
+
+
+def lint_dir(nm_dir: Path, onboard_root: Path | None = None) -> list[dict]:
+    """Lint every NickelMenu config file.
+
+    Syntax is checked against the official spec; on top of that it looks for problems users actually hit:
+    scripts that do not exist on the device, duplicated labels, experimental keys declared twice (only the
+    first one wins), services without a password, KFMon actions without KFMon and invert without reboot.
+    """
     issues: list[dict] = []
     seen_exp: dict[str, str] = {}
+    labels: dict[tuple[str, str], str] = {}
     if not nm_dir.is_dir():
         return issues
+    onboard_root = onboard_root or nm_dir.parent.parent
     for f in sorted(nm_dir.iterdir()):
         if not f.is_file() or f.name.startswith(".") or f.name in ("doc", "uninstall") or f.suffix in (".png", ".sh"):
             continue
@@ -219,15 +231,57 @@ def lint_dir(nm_dir: Path) -> list[dict]:
             text = f.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
+        last_item = None
         for n, line in enumerate(text.splitlines(), 1):
+            raw = line.strip()
             err = lint_line(line)
             if err:
-                issues.append({"file": f.name, "line": n, "text": line.strip(), "error": err})
-            parts = [p.strip() for p in line.strip().split(":")]
-            if parts and parts[0] == "experimental" and len(parts) >= 3:
+                issues.append(_issue(f.name, n, raw, err, title="Un atajo del menú tiene un error",
+                                     hint="NickelMenu mostrará un mensaje de error en vez del atajo."))
+                continue
+            parts = [p.strip() for p in raw.split(":")]
+            if not parts or raw.startswith("#"):
+                continue
+            kind = parts[0]
+            if kind == "experimental" and len(parts) >= 3:
                 key = parts[1]
                 if key in seen_exp and seen_exp[key] != f.name:
-                    issues.append({"file": f.name, "line": n, "text": line.strip(),
-                                   "error": f"'{key}' ya está definido en {seen_exp[key]}; NickelMenu usa solo el primero"})
+                    issues.append(_issue(f.name, n, raw, f"'{key}' ya está definido en {seen_exp[key]}; NickelMenu usa solo el primero",
+                                         title="Dos configuraciones del menú definen lo mismo",
+                                         hint="El Kobo usa solo la primera; conviene dejar una sola."))
                 seen_exp.setdefault(key, f.name)
+                continue
+            if kind == "menu_item" and len(parts) >= 5:
+                loc, label, action, arg = parts[1], parts[2], parts[3], ":".join(parts[4:]).strip()
+                last_item = (action, arg)
+                key = (loc, label.lower())
+                if key in labels and labels[key] != f"{f.name}:{n}":
+                    issues.append(_issue(f.name, n, raw, f"La etiqueta «{label}» ya existe en {labels[key]}", level="info",
+                                         title=f"Atajo repetido: «{label}»", hint="Aparecerá dos veces en el menú."))
+                labels.setdefault(key, f"{f.name}:{n}")
+            elif kind.startswith("chain_") and len(parts) >= 3:
+                action, arg = parts[1], ":".join(parts[2:]).strip()
+            else:
+                continue
+            if action in ("cmd_spawn", "cmd_output"):
+                for path in re.findall(r"/mnt/onboard/[^\s'\";|&]+", arg):
+                    rel = path[len("/mnt/onboard/"):]
+                    if rel.endswith((".sh", ".lua")) or "/scripts/" in rel or rel.endswith("koreader.sh"):
+                        if not (onboard_root / rel).exists():
+                            issues.append(_issue(f.name, n, raw, f"No existe {path}",
+                                                 title="Un atajo apunta a algo que no está instalado",
+                                                 hint="Al tocarlo no pasará nada o dará error. Reinstala la app o quita el atajo."))
+                if "telnetd" in arg or "ftpd" in arg:
+                    issues.append(_issue(f.name, n, raw, "Servicio de red sin contraseña", level="info",
+                                         title="Un atajo abre acceso sin contraseña",
+                                         hint="Cualquiera en tu misma red WiFi podría entrar al Kobo mientras esté activo."))
+            if action == "kfmon" and not (onboard_root / ".adds" / "kfmon").exists():
+                issues.append(_issue(f.name, n, raw, "KFMon no está instalado",
+                                     title="Un atajo necesita KFMon", hint="Instala KFMon o quita el atajo."))
+            if kind == "menu_item" and action == "nickel_setting" and arg.replace(" ", "").endswith("invert"):
+                following = text.splitlines()[n:n + 3]
+                if not any("power" in x and "reboot" in x for x in following):
+                    issues.append(_issue(f.name, n, raw, "invert requiere reinicio en firmware 4.28+", level="info",
+                                         title="«Invertir pantalla» necesita reiniciar",
+                                         hint="Agrega un reinicio en cadena o reinicia a mano después de usarlo."))
     return issues

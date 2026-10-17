@@ -8,14 +8,16 @@ from ..core import Module, Option, register
 from ..nickelmenu import CATALOG, build_config
 
 NM_DIR = ".adds/nm"
-# Hardware ids without Dark mode (Kobo help center, via KoboPatch Web UI kobo/dark-mode.js).
-NO_DARK_MODE = {"376", "377", "380", "382", "384"}
 
 
 def _menu_apply(mod, ctx, opts):
     items = [i for i in opts["items"]]
-    if ctx.device.model_id in NO_DARK_MODE:
+    model = ctx.device.model
+    if not model.get("dark_mode", True):   # Kobo help center list of models without Dark mode
         items = [i for i in items if i != "dark_mode"]
+        ctx.txn.note("Tu modelo no tiene modo oscuro: se omitió ese atajo")
+    if not model.get("bluetooth", False):
+        items = [i for i in items if i != "bt_toggle"]
     header = []
     if opts["tab_label"]:
         label = re.sub(r"[:\t\n]", "", str(opts["tab_label"]))[:12]

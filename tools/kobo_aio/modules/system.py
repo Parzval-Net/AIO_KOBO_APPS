@@ -59,6 +59,8 @@ LEGACY_HOME_RE = re.compile(r"^\s*experimental\s*:\s*hide_home_\w+", re.M)
 
 def _home_apply(mod, ctx, opts):
     _stage_plugin(ctx, "nickelhome")
+    if ctx.txn.exists(".adds/nickel-home/uninstall"):  # a previous uninstall left the flag: clear it
+        ctx.txn.delete(".adds/nickel-home/uninstall", note="quita la marca de desinstalación de NickelHome")
     lines = ["# Kobo AIO - NickelHome (requiere reinicio para aplicar cambios)", "nhm_enabled:1"]
     lines += [f"hide_home_{k}_enabled:{1 if opts[k] else 0}" for k, _, _ in HOME_KEYS]
     ctx.txn.write_text(".adds/nickel-home/config", "\n".join(lines) + "\n", note="configuración de NickelHome")
@@ -82,9 +84,11 @@ def _home_apply(mod, ctx, opts):
 
 
 def _home_uninstall(mod, ctx):
-    # NickelHook mods remove themselves on boot when their folder/marker is gone.
-    for rel in (".adds/nickel-home/config", ".adds/nickel-home/doc", ".adds/nickel-home/default",
-                f"{NM_DIR}/kobo-aio-home", ".adds/kobo-aio/scripts/toggle_home.sh"):
+    # Verified with REA/Ghidra on libnickelhome.so v0.6 (nh_info @0x2726c): uninstall_flag is
+    # /mnt/onboard/.adds/nickel-home/uninstall (created -> uninstall) and uninstall_xflag is the folder itself.
+    # The transaction cannot remove folders, so create the flag; NickelHook removes the plugin on next boot.
+    ctx.txn.write_text(".adds/nickel-home/uninstall", "", note="NickelHome se desinstala en el próximo reinicio")
+    for rel in (f"{NM_DIR}/kobo-aio-home", ".adds/kobo-aio/scripts/toggle_home.sh"):
         ctx.txn.delete(rel)
 
 
@@ -114,9 +118,9 @@ def _typefix_uninstall(mod, ctx):
 
 
 register(Module(
-    id="mod.nickeltypefix", category="Lectura", title="Tipografía mejorada (NickelTypeFix 0.7)",
-    description="Activa kerning/ligaduras y corrige justificado irregular, letras que bailan y fuentes que "
-                "vuelven a la del sistema en kepubs.",
+    id="mod.nickeltypefix", category="Lectura", title="Tipografía mejorada (NickelTypeFix 1.0)",
+    description="Activa kerning/ligaduras y corrige justificado irregular, letras que bailan, versalitas y fuentes "
+                "que vuelven a la del sistema en kepubs. La 1.0 abre capítulos largos varias veces más rápido.",
     risk="bajo", recommended=True, reboot=True, min_fw=(4, 21), max_fw=(5,),
     options=[Option("optimize_legibility", "Activar optimizeLegibility (kerning y ligaduras)", "bool", True)],
     sources=["https://github.com/nicoverbruggen/NickelTypeFix"], license="MIT",
@@ -151,7 +155,7 @@ def _clock_uninstall(mod, ctx):
 register(Module(
     id="mod.nickelclock", category="Lectura", title="Reloj y batería al leer (NickelClock 0.4.0)",
     description="Muestra la hora (y opcionalmente la batería) en el encabezado o pie del lector.",
-    risk="bajo", reboot=True, requires=["mod.nickelmenu"], max_fw=(5,),
+    risk="bajo", reboot=True, requires=["mod.nickelmenu"], min_fw=(4, 23), max_fw=(5,),
     options=[
         Option("placement", "Ubicación", "choice", "Header", [("Header", "Encabezado"), ("Footer", "Pie")]),
         Option("position", "Lado del reloj", "choice", "Right", [("Left", "Izquierda"), ("Center", "Centro"),
@@ -175,8 +179,28 @@ def _dissolve_uninstall(mod, ctx):
 register(Module(
     id="mod.nickeldissolve", category="Lectura", title="Animación al pasar página (NickelDissolve 0.7)",
     description="Transición de disolución entre páginas. Experimental; solo en Kobo MediaTek recientes.",
-    risk="medio", reboot=True, model_ids=MTK_COLOR_IDS, max_fw=(5,),
+    risk="medio", reboot=True, model_ids=MTK_COLOR_IDS, min_fw=(4, 38), max_fw=(5,),
     sources=["https://github.com/nicoverbruggen/NickelDissolve"], license="MIT",
     apply_fn=_dissolve_apply, uninstall_fn=_dissolve_uninstall,
     status_fn=_status_file(".adds/nickel-dissolve/uninstall"),
+))
+
+
+# -- NickelModManager ----------------------------------------------------------
+def _nmm_apply(mod, ctx, opts):
+    _stage_plugin(ctx, "nickelmodmanager")
+
+
+def _nmm_uninstall(mod, ctx):
+    ctx.txn.delete(".adds/nickel-mod-manager/uninstall", note="NickelModManager se quita en el próximo reinicio")
+
+
+register(Module(
+    id="mod.nickelmodmanager", category="Sistema", title="Gestor de mods en el Kobo (NickelModManager 0.3)",
+    description="Agrega «Más > Administrar mods» en el Kobo para activar o desactivar cada mod sin computador. "
+                "Útil si un mod da problemas tras una actualización. Proyecto nuevo (octubre 2026).",
+    risk="medio", reboot=True, min_fw=(4, 23), max_fw=(5,),
+    sources=["https://github.com/nicoverbruggen/NickelModManager"], license="MIT",
+    apply_fn=_nmm_apply, uninstall_fn=_nmm_uninstall,
+    status_fn=_status_file(".adds/nickel-mod-manager"),
 ))

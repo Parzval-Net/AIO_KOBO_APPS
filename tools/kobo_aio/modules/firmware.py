@@ -50,6 +50,7 @@ KOBOPATCH = {
                       "4e9b702676d12e457fc4d4d55de39108a746c4f51786af9a51cc05a89ef5f407", "kobopatch-darwin-arm64"),
 }
 SUPPORTED_MODELS = tuple(sorted({m for _, m in FIRMWARE}))
+SUPPORTED_FIRMWARES = tuple(sorted({f for f, _ in FIRMWARE}))
 
 # Curated, low-risk and popular patches offered in the UI (exact names from the 4.45 YAML files).
 FEATURED = [
@@ -213,7 +214,8 @@ register(Module(
     description="Modifica Nickel con parches de la comunidad: interlineado y márgenes finos, tamaños de fuente, "
                 "encabezados limpios, tiempos de suspensión y más. Se pierden al actualizar el firmware. Si algo "
                 "falla, «Restaurar originales» o reinstalar el firmware lo revierte.",
-    risk="alto", reboot=True, model_ids=SUPPORTED_MODELS, max_fw=(5,), persistent=True,
+    risk="alto", reboot=True, model_ids=SUPPORTED_MODELS, exact_firmwares=SUPPORTED_FIRMWARES, max_fw=(5,),
+    persistent=True,
     options=[
         Option("mode", "Acción", "choice", "patch", [("patch", "Aplicar parches"), ("restore", "Restaurar originales")]),
         Option("patches", "Parches", "multi", [], _featured_choices),

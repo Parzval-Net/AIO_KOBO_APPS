@@ -475,5 +475,102 @@ class ReviewRegressionTests(TempKobo):
         self.assertTrue(any(r.startswith("Audiobooks/x/Audiolibro/") for r in rels), rels)
 
 
+class UxImprovementTests(TempKobo):
+    def test_more_comic_inputs(self):
+        from PIL import Image
+        from kobo_aio.comics import ComicOptions, convert, expand_inputs, read_pages
+        src = self.tmp / "s.cbt"
+        with tarfile.open(src, "w") as tf:
+            for i in range(2):
+                b = io.BytesIO(); Image.new("RGB", (800, 1200), "red").save(b, "JPEG")
+                ti = tarfile.TarInfo(f"{i}.jpg"); ti.size = len(b.getvalue()); tf.addfile(ti, io.BytesIO(b.getvalue()))
+        self.assertEqual(len(read_pages(src)), 2)
+        name, data = convert(src, "390", ComicOptions())
+        epub = self.tmp / "c.epub"
+        epub.write_bytes(data)
+        self.assertEqual(len(read_pages(epub)), 2)  # EPUB comic input, spine order
+        img = self.tmp / "one.png"
+        Image.new("RGB", (600, 900), "blue").save(img)
+        self.assertEqual(len(read_pages(img)), 1)
+        batch = self.tmp / "lote"; batch.mkdir()
+        (batch / "a.cbt").write_bytes(src.read_bytes()); (batch / "b.epub").write_bytes(data)
+        self.assertEqual([p.name for p in expand_inputs([batch])], ["a.cbt", "b.epub"])
+
+    def test_nickelmenu_lint_finds_real_problems(self):
+        nm = self.root / ".adds/nm"
+        nm.mkdir(parents=True)
+        (nm / "a").write_text("menu_item :main :KOReader :cmd_spawn :quiet:exec /mnt/onboard/.adds/koreader/koreader.sh\n"
+                              "menu_item :main :Invertir :nickel_setting :toggle:invert\n")
+        (nm / "b").write_text("menu_item :main :koreader :power :reboot\n"
+                              "menu_item :main :FTP :cmd_spawn :quiet:/usr/sbin/ftpd -w /mnt/onboard\n")
+        titles = {i["title"] for i in lint_dir(nm)}
+        self.assertTrue(any("no está instalado" in t for t in titles), titles)
+        self.assertTrue(any("repetido" in t for t in titles), titles)
+        self.assertTrue(any("sin contraseña" in t for t in titles), titles)
+        self.assertTrue(any("reiniciar" in t for t in titles), titles)
+
+    def test_own_pending_koboroot_is_merged(self):
+        from kobo_aio.core import REGISTRY, Module, register
+        engine.catalog()
+        firmware_like = tgz({"./usr/local/Kobo/libnickel.so.1.0.0": b"patched"})
+
+        def fw(mod, ctx, opts):
+            ctx.add_firmware("kobopatch", firmware_like)
+        if "test.fw" not in REGISTRY:
+            register(Module(id="test.fw", category="Test", title="FW", description="", apply_fn=fw, reboot=True))
+        dev = parse_version_file(self.root)
+        engine.apply(dev, {"test.fw": {}}, offline=True)
+        # a second run that adds another plugin must merge with our own pending package
+        def plug(mod, ctx, opts):
+            ctx.add_koboroot("plug", tgz({"./usr/local/Kobo/imageformats/libx.so": b"x"}))
+        if "test.plug" not in REGISTRY:
+            register(Module(id="test.plug", category="Test", title="P", description="", apply_fn=plug, reboot=True))
+        engine.apply(dev, {"test.plug": {}}, offline=True)
+        with tarfile.open(self.root / ".kobo/KoboRoot.tgz") as tf:
+            names = sorted(m.name.lstrip("./") for m in tf.getmembers())
+        self.assertEqual(names, ["usr/local/Kobo/imageformats/libx.so", "usr/local/Kobo/libnickel.so.1.0.0"])
+        del REGISTRY["test.fw"], REGISTRY["test.plug"]
+
+
+class ModelAwarenessTests(TempKobo):
+    def test_all_models_have_complete_specs(self):
+        from kobo_aio.device import KOBO_MODELS
+        for mid, m in KOBO_MODELS.items():
+            for k in ("name", "soc", "width", "height", "ppi", "color", "page_buttons", "bluetooth", "dark_mode"):
+                self.assertIn(k, m, f"{mid} sin {k}")
+            self.assertLess(m["width"], m["height"])
+
+    def test_old_glo_hides_dependents_and_skips_them(self):
+        shutil.rmtree(self.root)
+        root = make_kobo(self.tmp / "KOBOeReader", model="330")
+        (root / ".kobo/version").write_text("N000,4.9.77,4.1.15102,4.9.77,4.9.77,00000000-0000-0000-0000-000000000330\n")
+        dev = parse_version_file(root)
+        cat = {m["id"]: m for m in engine.catalog(dev)}
+        self.assertFalse(cat["mod.nickelmenu"]["compatible"])
+        self.assertFalse(cat["nm.menu"]["compatible"])
+        self.assertIn("Necesita", cat["nm.menu"]["incompatible_reason"])
+        res = engine.plan(dev, {"nm.menu": {}}, offline=True)
+        self.assertTrue(all(r["action"] == "skip" for r in res["results"]))
+        self.assertEqual([c for c in res["changes"] if c["rel"] != ".adds/kobo-aio/state.json"], [])
+
+    def test_no_bluetooth_hides_audiobooks(self):
+        shutil.rmtree(self.root)
+        root = make_kobo(self.tmp / "KOBOeReader", model="376")
+        cat = {m["id"]: m for m in engine.catalog(parse_version_file(root))}
+        self.assertFalse(cat["lib.audiobooks"]["compatible"])
+        self.assertTrue(cat["lib.comics"]["compatible"])
+
+    def test_nickelhome_uninstall_creates_flag(self):
+        from kobo_aio.core import REGISTRY
+        engine.catalog()
+        state = {"installed": {"mod.nickelhome": {}}}
+        (self.root / ".adds/kobo-aio").mkdir(parents=True)
+        (self.root / ".adds/kobo-aio/state.json").write_text(json.dumps(state))
+        (self.root / ".adds/nickel-home").mkdir(parents=True)
+        (self.root / ".adds/nickel-home/config").write_text("nhm_enabled:1\n")
+        engine.apply(parse_version_file(self.root), {}, ["mod.nickelhome"], offline=True)
+        self.assertTrue((self.root / ".adds/nickel-home/uninstall").exists())  # nh_info.uninstall_flag (REA)
+
+
 if __name__ == "__main__":
     unittest.main()
