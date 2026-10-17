@@ -35,7 +35,9 @@
 //   - Ticks: every 5 s while playing and visible, only elapsed/remaining and the slider (one band); the footer
 //     at most every 60 s or on a track change; the sleep label only when its minute changes. The timer stops
 //     when paused or when the reader is hidden.
-//   - Every passive area takes touch and mouse events, so a tap never falls through to the reading view.
+//   - Every passive area takes touch and mouse events, so a tap never falls through to the reading view (events
+//     over a stock button we kept go on to it), and Nickel's gestures whose hot spot is on our pane are eaten
+//     at the reader's ancestors, where its recognizers deliver them.
 //   - Nothing is shown or hidden per track: the space is reserved.
 //
 // Every hook below is a PLT entry of libmp3z.so (verified on 4.45.23697 with REA/Ghidra and the .rel.plt
@@ -55,6 +57,7 @@
 #include <QEvent>
 #include <QFont>
 #include <QFontMetrics>
+#include <QGesture>
 #include <QGuiApplication>
 #include <QImage>
 #include <QImageReader>
@@ -150,7 +153,11 @@ static QString headsetName(const QString &dev) {
     void *device[8]; // 8 bytes on 4.45, padded in case a firmware grows it
     memset(device, 0, sizeof device);
     BluetoothDevice_BluetoothDevice(device, dev);
-    const QString name = BluetoothDevice_displayName(device);
+    // 4.45 (RE): the ctor stores {QPointer d, object} or {0, 0} when the device left the manager's map;
+    // displayName -> name()/address() check isValid() first. Skip the call (and its warning) when empty.
+    QString name;
+    if (device[0] && device[1])
+        name = BluetoothDevice_displayName(device);
     BluetoothDevice_destroy(device);
     return name.trimmed();
 }
@@ -161,6 +168,21 @@ static QObject *readerPlayer(const QWidget *reader) {
 }
 
 static QPointer<AioAudio> aio;
+
+// The last setMedia no AioAudio took (setPage inside the MP3Reader constructor, before its AioAudio existed).
+// Kept only while a reader is being constructed: nobody else would replay it.
+static QPointer<QObject> lastMediaPlayer;
+static int lastMediaIndex = -1;
+static QByteArray lastMediaData;
+static bool lastMediaHasData = false;
+static bool inReaderCtor = false;
+
+static void forgetMedia() {
+    lastMediaPlayer = 0;
+    lastMediaIndex = -1;
+    lastMediaData = QByteArray(); // the whole track: let it go
+    lastMediaHasData = false;
+}
 
 #define RATE_COUNT 6
 static const qreal RATES[RATE_COUNT] = {1.0, 1.25, 1.5, 1.75, 2.0, 0.8};
@@ -598,19 +620,48 @@ AioPane::AioPane(QWidget *parent, const QColor &f) : QWidget(parent), fill(f) {
         setAttribute(Qt::WA_OpaquePaintEvent);
 }
 
+// The deepest widget at `p` (pane coordinates), or one of its ancestors below the pane, is a stock Nickel button
+// we kept (a QLabel/TouchLabel marked aioOwned: play/pause, +-30, prev/next, stock volume): its events must keep
+// propagating, or Qt never synthesizes the mouse events it needs. Stock labels that are not buttons (the cover,
+// the stock volume text) stay swallowed like any passive area.
+static bool stockButtonAt(QWidget *pane, const QPoint &p) {
+    for (QWidget *w = pane->childAt(p); w && w != pane; w = w->parentWidget())
+        if (!qobject_cast<AioPane *>(w) && !qobject_cast<AioTap *>(w) && !qobject_cast<AioSlider *>(w) &&
+            w->property("aioOwned").toBool()) // AioText is an AioPane
+            return true;
+    return false;
+}
+
 bool AioPane::event(QEvent *e) {
     switch (e->type()) {
-    case QEvent::TouchBegin:
-    case QEvent::TouchUpdate:
-    case QEvent::TouchEnd:
-    case QEvent::TouchCancel:
+    case QEvent::TouchBegin: {
+        // Qt delivers TouchBegin to the deepest widget with WA_AcceptTouchEvents and maps the points to each
+        // widget it propagates to, so pos() is in our coordinates. Over a stock button: not ours.
+        const QTouchEvent *te = static_cast<QTouchEvent *>(e);
+        if (!te->touchPoints().isEmpty() && stockButtonAt(this, te->touchPoints().first().pos().toPoint())) {
+            e->ignore();
+            return false;
+        }
+        e->accept();
+        return true;
+    }
     case QEvent::MouseButtonPress:
     case QEvent::MouseButtonRelease:
     case QEvent::MouseButtonDblClick:
     case QEvent::MouseMove:
+        // positions are mapped to us as the event propagates from the widget under the point
+        if (stockButtonAt(this, static_cast<QMouseEvent *>(e)->pos())) {
+            e->ignore();
+            return false;
+        }
+        e->accept();
+        return true;
+    case QEvent::TouchUpdate:
+    case QEvent::TouchEnd:
+    case QEvent::TouchCancel:
     case QEvent::Gesture:
     case QEvent::GestureOverride:
-        e->accept(); // ours: nothing below the player reacts to it
+        e->accept(); // ours (we accepted its TouchBegin): nothing below the player reacts to it
         return true;
     default:
         return QWidget::event(e);
@@ -965,8 +1016,13 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     resolveMp3z();
     QScreen *screen = QGuiApplication::primaryScreen();
     QSize s = screen ? screen->size() : QSize(1264, 1680);
-    const int w = qMin(s.width(), s.height()), h = qMax(s.width(), s.height());
-    scale = h / 1680.0;                          // Libra Colour / Libra 2: 1264x1680 at 300 ppi ("Dragon")
+    const int w = qMax(1, s.width()), h = qMax(1, s.height());
+    // Libra Colour / Libra 2: 1264x1680 at 300 ppi ("Dragon"). The rows are a fixed-height column designed for a
+    // 1680 px tall portrait screen: the actual height is the budget (in landscape the layout shrinks to fit it;
+    // the wider screen has room to spare).
+    scale = h / 1680.0;
+    if (w > h)
+        nh_log("AIO Audio: landscape screen (%dx%d), layout scaled by %.2f", w, h, double(scale));
     const int side = qMax(px(200), qMin(w * 70 / 100, h * 42 / 100));
     coverBox = QSize(side, side);
     const int target = px(106);                  // 9 mm at 300 ppi
@@ -976,8 +1032,11 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     connect(timer, SIGNAL(timeout()), this, SLOT(tick()));
     stateTimer = new QTimer(this);
     stateTimer->setSingleShot(true);
-    stateTimer->setInterval(400);                // play/pause flips settle for 0.4 s before anything repaints
+    stateTimer->setInterval(400);                // play/pause flips settle for 0.4 s (debounce, 1.5 s at most)
     connect(stateTimer, SIGNAL(timeout()), this, SLOT(applyPlayState()));
+    saveTimer = new QTimer(this);
+    saveTimer->setSingleShot(true);              // the position save of a pause that came < 15 s after the last
+    connect(saveTimer, SIGNAL(timeout()), this, SLOT(savePaused()));
     sleepTimer = new QTimer(this);
     sleepTimer->setSingleShot(true);
     connect(sleepTimer, SIGNAL(timeout()), this, SLOT(sleepFired()));
@@ -1035,6 +1094,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
 
     AioPane *root = new AioPane(r, Qt::white);
     root->setObjectName("aioRoot");
+    rootPane = root;
     QVBoxLayout *v = new QVBoxLayout(root);
     v->setContentsMargins(px(32), 0, px(32), px(12));
     v->setSpacing(0);
@@ -1168,8 +1228,12 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     playPause->setFixedSize(playBox);
     playPause->setAlignment(Qt::AlignCenter);
     playPause->setProperty("aioOwned", true);
+    if (TouchLabel_setSelectedPixmap && playPause->inherits("TouchLabel")) { // pressed states, once per reader
+        playIconInv = inverted(playIcon, playBox);
+        pauseIconInv = inverted(pauseIcon, playBox);
+    }
     playing = playPause->text() == QString::fromUtf8("Pausa") || playPause->text() == QLatin1String("Pause");
-    setIcon(playPause, playing ? pauseIcon : playIcon, playBox);
+    setIcon(playPause, playing ? pauseIcon : playIcon, playBox, playing ? pauseIconInv : playIconInv);
     addButton(playPause);
     if (seekButtons) {
         fwd->setFixedSize(sb, sb);
@@ -1282,22 +1346,73 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     r->setStyleSheet(plain.join(", ") + " { border: none; background: white; color: black; margin: 0; padding: 0; }" +
                      QString("#volume { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(28)));
 
+    installGestureFilters(); // again on every Show: Nickel may reparent the reader after its constructor
     schedule();
 }
 
 AioAudio::~AioAudio() {
     if (btMine)
         btQueued = false; // our deferred read dies with us
+    for (int i = 0; i < gestureHosts.size(); i++)
+        if (QWidget *w = gestureHosts.at(i).data())
+            w->removeEventFilter(this);
+    gestureHosts.clear();
+    if (!inReaderCtor)
+        forgetMedia(); // a pending track can only be replayed by a reader under construction
     if (volSaveTimer && volSaveTimer->isActive())
         saveVolumeNow();
     saveState(false); // the player may already be stopped or gone: use the last position seen
 }
 
+// Swallowing QEvent::Gesture in our pane does not reach Nickel's recognizers: their gestures are grabbed by the
+// reading view's ancestors and delivered there. Filter every ancestor of the reader (the reader itself is
+// already filtered for Hide/Show).
+void AioAudio::installGestureFilters() {
+    if (!reader || !rootPane)
+        return; // stock layout: Nickel's gestures stay as they are
+    for (QWidget *w = reader->parentWidget(); w; w = w->parentWidget()) {
+        bool known = false;
+        for (int i = 0; i < gestureHosts.size() && !known; i++)
+            known = gestureHosts.at(i).data() == w;
+        if (known)
+            continue;
+        w->installEventFilter(this);
+        gestureHosts << QPointer<QWidget>(w);
+    }
+}
+
+// Every gesture of the event has its hot spot (global coordinates) on our pane, while the reader is shown.
+bool AioAudio::gestureOnPane(QGestureEvent *ge) const {
+    if (!reader || !reader->isVisible() || !rootPane || !rootPane->isVisible())
+        return false;
+    const QList<QGesture *> gs = ge->gestures();
+    if (gs.isEmpty())
+        return false;
+    const QRect area(rootPane->mapToGlobal(QPoint(0, 0)), rootPane->size());
+    for (int i = 0; i < gs.size(); i++) {
+        const QGesture *g = gs.at(i);
+        if (!g || !g->hasHotSpot() || !area.contains(g->hotSpot().toPoint()))
+            return false;
+    }
+    return true;
+}
+
 bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
-    if (watched == reader.data()) {
-        if (e->type() == QEvent::Hide) {
+    const QEvent::Type type = e->type();
+    if (type == QEvent::Gesture || type == QEvent::GestureOverride) {
+        QGestureEvent *ge = static_cast<QGestureEvent *>(e);
+        if (gestureOnPane(ge)) { // ours: accepted, so Qt does not offer it to the next ancestor either
+            const QList<QGesture *> gs = ge->gestures();
+            for (int i = 0; i < gs.size(); i++)
+                ge->accept(gs.at(i));
+            e->accept();
+            return true;
+        }
+    } else if (watched == reader.data()) {
+        if (type == QEvent::Hide) {
             timer->stop(); // nothing repaints behind other screens
-        } else if (e->type() == QEvent::Show) {
+        } else if (type == QEvent::Show) {
+            installGestureFilters();
             tick();
             if (playing && !timer->isActive())
                 timer->start();
@@ -1316,7 +1431,8 @@ void AioAudio::schedule() {
     }
 }
 
-void AioAudio::setIcon(QLabel *l, const QPixmap &pm, const QSize &box) {
+// `inv`: the pressed state already built (play/pause flips often), otherwise built here.
+void AioAudio::setIcon(QLabel *l, const QPixmap &pm, const QSize &box, const QPixmap &inv) {
     if (!l || pm.isNull())
         return;
     l->setPixmap(pm); // straight to QtWidgets: our setPixmap hook only covers libmp3z's PLT
@@ -1324,7 +1440,7 @@ void AioAudio::setIcon(QLabel *l, const QPixmap &pm, const QSize &box) {
         if (TouchLabel_setDeselectedPixmap)
             TouchLabel_setDeselectedPixmap(l, pm);
         if (TouchLabel_setSelectedPixmap)
-            TouchLabel_setSelectedPixmap(l, inverted(pm, box));
+            TouchLabel_setSelectedPixmap(l, inv.isNull() ? inverted(pm, box) : inv);
     }
 }
 
@@ -1548,8 +1664,10 @@ bool AioAudio::playPauseText(QLabel *label, const QString &text) {
         return true; // anything else: keep the icon
     // GStreamer can flip Playing/Paused many times per second when the Bluetooth sink stalls. Each flip used to
     // repaint (colour e-ink), query Bluetooth and write positions.ini, which froze the whole device: settle first.
+    // Debounce: every flip restarts the 400 ms wait, but a burst never holds the icon back more than 1.5 s.
     if (!stateTimer->isActive())
-        stateTimer->start();
+        burstClock.start(); // first flip of a burst
+    stateTimer->start(burstClock.elapsed() >= 1500 ? 0 : 400); // overdue: next event loop pass, not inside this hook
     return true;
 }
 
@@ -1562,7 +1680,7 @@ void AioAudio::applyPlayState() {
         return;
     iconSet = true;
     QLabel *label = playPause.data();
-    setIcon(label, now ? pauseIcon : playIcon, playBox);
+    setIcon(label, now ? pauseIcon : playIcon, playBox, now ? pauseIconInv : playIconInv);
     const bool was = playing;
     playing = now;
     tick();
@@ -1573,8 +1691,22 @@ void AioAudio::applyPlayState() {
             QMetaObject::invokeMethod(this, "sleepFired", Qt::QueuedConnection);
         }
     } else if (was) {
-        saveState(true);
+        // A stalling sink pauses and resumes in a loop: one positions.ini write per 15 s at most, and the
+        // last pause of a burst is still saved once the 15 s are up (close and track change save directly).
+        if (!saveClock.isValid() || saveClock.elapsed() >= 15000) {
+            saveTimer->stop();
+            savePaused();
+        } else if (!saveTimer->isActive()) {
+            saveTimer->start(int(qMax<qint64>(0, 15000 - saveClock.elapsed())));
+        }
     }
+}
+
+void AioAudio::savePaused() {
+    if (playing)
+        return; // playing again: the next pause saves
+    saveClock.start();
+    saveState(true);
 }
 
 void AioAudio::setChapter(const QString &name) {
@@ -1814,7 +1946,8 @@ void AioAudio::volumeUp() { stepVolume(8); }
 
 void AioAudio::applyVolumeNow() {
     applyGain();
-    sendVolume();
+    if (!sendVolume())
+        return; // deleted inside libnickel
     if (btDev.isEmpty() && btChecked && !btRetried) { // maybe the headset connected after the book opened
         btRetried = true;
         requestBluetooth();
@@ -1838,61 +1971,121 @@ void AioAudio::applyGain() {
     QMetaObject::invokeMethod(player, "setVolume", Q_ARG(int, gain));
 }
 
-// The headset level, only when it differs from what this reader last sent.
-void AioAudio::sendVolume() {
+// The headset level, only when it differs from what this reader last sent. False: this AioAudio was deleted
+// during the libnickel call (nothing of it may be touched).
+bool AioAudio::sendVolume() {
     if (btDev.isEmpty() || !BluetoothManager_sharedInstance || !BluetoothManager_setVolume)
-        return;
+        return true;
     const int v = btVolumeLoad();
     if (v == sentVolume)
-        return;
+        return true;
+    QPointer<AioAudio> self(this);
+    const QString dev = btDev; // a copy: the member may change while libnickel runs
     void *bm = BluetoothManager_sharedInstance();
+    if (!self)
+        return false;
     if (!bm)
-        return;
-    BluetoothManager_setVolume(bm, btDev, (unsigned char)v, (unsigned char)v);
+        return true;
+    BluetoothManager_setVolume(bm, dev, (unsigned char)v, (unsigned char)v);
+    if (!self)
+        return false;
     sentVolume = v;
     nh_log("AIO Audio: headset volume %d/127", v);
+    return true;
 }
 
+// One deferred read at a time across readers (btQueued, held until that read ends). While another reader's read
+// is queued or running, retry every second, at most 5 times.
 void AioAudio::requestBluetooth() {
-    if (btQueued || !btVolumeApi())
+    if (!btVolumeApi())
         return;
+    if (btQueued) {
+        if (!btMine && !btRetryPending && btTries < 5) {
+            btRetryPending = true;
+            btTries++;
+            QTimer::singleShot(1000, this, SLOT(retryBluetooth()));
+        }
+        return; // ours is already queued or running
+    }
     btQueued = true;
     btMine = true;
+    btTries = 0;
     QTimer::singleShot(0, this, SLOT(refreshBluetooth())); // after the current event: never inside a tap or setMedia
 }
 
-// The deferred Bluetooth read: sink path, software volume and unmute (once per device per Nickel run), our
-// level (only if it changed) and the headset name.
+void AioAudio::retryBluetooth() {
+    btRetryPending = false;
+    requestBluetooth();
+}
+
+// The deferred Bluetooth read. btQueued stays set until it ends, so nothing (a tap, another reader) starts a second
+// read from an event loop that libnickel might run inside one of its calls.
 void AioAudio::refreshBluetooth() {
+    static bool inFlight = false;
+    if (inFlight)
+        return; // re-entered: the running read releases btQueued
+    inFlight = true;
+    const bool alive = readBluetooth();
+    inFlight = false;
+    if (!alive)
+        return; // ~AioAudio already released btQueued
     btQueued = false;
     btMine = false;
+}
+
+// Sink path, software volume and unmute (once per device per Nickel run), our level (only if it changed) and
+// the headset name. After every libnickel call: stop if this AioAudio was deleted meanwhile. The device path is
+// a local copy. Never logs the headset name or address.
+bool AioAudio::readBluetooth() {
+    QPointer<AioAudio> self(this);
     void *bm = BluetoothManager_sharedInstance ? BluetoothManager_sharedInstance() : 0;
+    if (!self)
+        return false;
     if (!bm || !BluetoothManager_a2dpSink)
-        return;
+        return true;
     const QString dev = BluetoothManager_a2dpSink(bm);
+    if (!self)
+        return false;
     btChecked = true;
     if (dev != btDev) {
         btDev = dev;
         btName.clear();
         sentVolume = -1;
     }
-    if (btDev.isEmpty()) {
+    if (dev.isEmpty()) {
         nh_log("AIO Audio: no A2DP headset connected");
     } else {
-        if (!btPrepared.contains(btDev)) {
-            btPrepared << btDev;
-            const bool absolute = BluetoothManager_supportsAbsoluteVolume ? BluetoothManager_supportsAbsoluteVolume(bm, btDev) : true;
-            if (BluetoothManager_setSoftwareVolume)
-                BluetoothManager_setSoftwareVolume(bm, btDev, !absolute);
-            if (BluetoothManager_setMuted)
-                BluetoothManager_setMuted(bm, btDev, false, false);
+        if (!btPrepared.contains(dev)) {
+            btPrepared << dev;
+            bool absolute = true;
+            if (BluetoothManager_supportsAbsoluteVolume) {
+                absolute = BluetoothManager_supportsAbsoluteVolume(bm, dev);
+                if (!self)
+                    return false;
+            }
+            if (BluetoothManager_setSoftwareVolume) {
+                BluetoothManager_setSoftwareVolume(bm, dev, !absolute);
+                if (!self)
+                    return false;
+            }
+            if (BluetoothManager_setMuted) {
+                BluetoothManager_setMuted(bm, dev, false, false);
+                if (!self)
+                    return false;
+            }
             nh_log("AIO Audio: headset prepared (%s volume)", absolute ? "absolute" : "software");
         }
-        sendVolume();
-        btName = headsetName(btDev);
+        if (!sendVolume())
+            return false;
+        const QString name = headsetName(dev);
+        if (!self)
+            return false;
+        if (btDev == dev)
+            btName = name;
     }
     applyGain();
     updateBtChip();
+    return true;
 }
 
 // The Bluetooth chip only takes the tap; at most one deferred re-read per reader (a headset that connected later).
@@ -1910,21 +2103,11 @@ void AioAudio::updateBtChip() {
 
 // -- hooks ----------------------------------------------------------------------------------------------
 
-// The last setMedia no AioAudio took (its reader was still being built, or `aio` belongs to an older reader).
-static QPointer<QObject> lastMediaPlayer;
-static int lastMediaIndex = -1;
-static QByteArray lastMediaData;
-static bool lastMediaHasData = false;
-
-static void forgetMedia() {
-    lastMediaPlayer = 0;
-    lastMediaIndex = -1;
-    lastMediaData = QByteArray(); // the whole track: let it go
-    lastMediaHasData = false;
-}
-
 extern "C" __attribute__((visibility("default"))) void _aio_reader(void *self, QWidget *parent, void *state) {
+    const bool outer = inReaderCtor;
+    inReaderCtor = true; // setMedia calls from here on are kept for the replay below
     MP3Reader_MP3Reader(self, parent, state);
+    inReaderCtor = outer;
     // MP3Reader passes `this` to Ui_MP3Reader::setupUi as the form QWidget, so the QObject is at offset 0.
     QWidget *reader = reinterpret_cast<QWidget *>(self);
     if (qstrcmp(reader->metaObject()->className(), "MP3Reader") || reader->objectName() != "MP3Reader") {
@@ -1984,6 +2167,13 @@ extern "C" __attribute__((visibility("default"))) void _aio_setMedia(void *self,
     if (aio && aio->owns(player)) {
         forgetMedia();
         aio->media(player, index, data, buffer != 0); // stream gain now, headset level deferred
+        return;
+    }
+    if (!inReaderCtor) {
+        // Not inside an MP3Reader constructor: nobody would replay it, so the track is not kept in memory.
+        if (aio)
+            nh_log("AIO Audio: track for a player without its AioAudio, not kept");
+        forgetMedia();
         return;
     }
     // No AioAudio for this reader yet (setPage inside the MP3Reader constructor): _aio_reader replays it.
