@@ -39,7 +39,7 @@ jobs:
           mkdir -p out
           case "${{ runner.os }}" in
             Windows) cp _app/dist/Kobo-AIO.exe "out/${{ matrix.asset }}" ;;
-            macOS)   mv _app/dist/Kobo-AIO "_app/dist/Kobo AIO" && ditto -c -k --keepParent "_app/dist/Kobo AIO" "out/${{ matrix.asset }}" ;;
+            macOS)   mv _app/dist/Kobo-AIO "_app/dist/Kobo AIO" && (cd _app/dist && ditto -c -k --sequesterRsrc "Kobo AIO" "$GITHUB_WORKSPACE/out/${{ matrix.asset }}") ;;
             Linux)   tar -czf "out/${{ matrix.asset }}" -C _app/dist Kobo-AIO ;;
           esac
       - uses: actions/upload-artifact@v4
