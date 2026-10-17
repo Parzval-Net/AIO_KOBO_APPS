@@ -1,23 +1,42 @@
-// AIO Audio: Kobo's .mp3z audiobook player (libmp3z.so, firmware 4.x) restyled like Nickel's native one.
+// AIO Audio: Kobo's .mp3z audiobook player (libmp3z.so, firmware 4.x) turned into an Audible/Spotify-style
+// player that respects the e-ink hardware.
 //
 // Stock libmp3z shows a debug screen: English labels ("Backword", "File Name: 001 - x.mp3"), empty
 // Forward/Backword slots, linear and log10 volume rows, no elapsed time and, with the GStreamer backend,
 // no cover (AudioPlayer::broadcastMetadata only emits trackImageChanged when Qt reports metadata).
 //
-// Layout built on top of the stock Ui_MP3Reader form (portrait, black on white, sizes scaled from a 1680 px
-// tall 300 ppi screen, every touch target >= 9 mm):
-//   header      [<-] Regresar a Mis libros            [timer] 15 min  1,2x  [vol] - 10 +
-//               (stock slower/faster/normal/logVolume* buttons re-wired; thin black line below)
-//   cover       square box like Nickel's (550 px on 1680 px), cover read from the track's ID3 APIC,
-//               book title (ID3 TALB) under it
-//   transport   [-30]  [play/pause]  [+30]  (Nickel's audiobook icons, painted fallbacks)
-//   times       elapsed ............ total, and a seek slider (tap or drag)
-//   (stretch)
-//   chapter     [toc] chapter name            [<] [>]  [bluetooth]
-//   footer      whole-book bar and "Pista 7 de 15 · 37% del libro · quedan ≈ 3 h 20 min"
-// Extras: sleep timer (15/30/60 min or end of track), resume inside the track (positions.ini: libmp3z only
-// remembers the track), inverted 150 ms tap feedback, and e-ink care (5 s updates only while playing, only
-// labels that changed are touched).
+// Layout, built in our own pane on top of the stock Ui_MP3Reader form (portrait, black on white, sizes scaled
+// from a 1680 px tall screen, every tap target >= 106 px, every row a fixed height):
+//   header      [<] Mis libros ....................................... ( 1,25x )   112 px, thin black line
+//   cover       square, min(70% of the width, 42% of the height), thin black frame, read from the track's
+//               ID3 APIC (placeholder box with the book title when there is none)
+//   title       book title (ID3 TALB), bold, one line, elided
+//   chapter     chapter/track name, italic, one line, elided
+//   scrubber    seek slider (tap or drag); elapsed at the left and "-remaining" at the right under it
+//   transport   [|<]  [-30]  [ play/pause ]  [+30]  [>|]   (stock prev/next chapter buttons keep their wiring)
+//   bottom bar  [-] 55% [+]          ( timer 15 min )          [bt] headset name
+//   footer      "Pista 3 de 15 · 23% del libro · quedan ≈ 5 h 10 min"
+// Extras: sleep timer (15/30/60 min or end of track), playback speed, resume inside the track (positions.ini:
+// libmp3z only remembers the track), whole-book progress from TRCK and the learned track lengths.
+//
+// Performance rules. Kobo Libra Colour (Kaleido colour e-ink): every repainted region goes through kernel colour
+// mapping threads that run SCHED_RR and preempt the A2DP encoder and GStreamer, and Nickel usually keeps a single
+// core online, so any repaint during playback can make the audio stutter, and any synchronous D-Bus call on the
+// GUI thread freezes taps.
+//   - BluetoothManager: read once per reader, deferred after the first setMedia (sink path and name). Software
+//     volume and unmute at most once per device per Nickel run; setVolume only when the level changed, 300 ms
+//     after the last volume tap. Never on taps, ticks or play/pause changes. btVolume is saved 2 s after the
+//     last tap. The Bluetooth chip only consumes the tap (one deferred re-read per reader).
+//   - Fixed geometry: every row has a fixed height, every changing text a fixed width from its worst case; our
+//     texts paint themselves, so a text change repaints its own rect and never relayouts.
+//   - The slider is opaque and repaints only the band between the old and the new knob position.
+//   - Tap feedback: our buttons paint a pressed state for 120 ms; stock TouchLabels use their own selected
+//     pixmap. No stylesheet repolish ever, no feedback on the back link or the cover.
+//   - Ticks: every 5 s while playing and visible, only elapsed/remaining and the slider (one band); the footer
+//     at most every 60 s or on a track change; the sleep label only when its minute changes. The timer stops
+//     when paused or when the reader is hidden.
+//   - Every passive area takes touch and mouse events, so a tap never falls through to the reading view.
+//   - Nothing is shown or hidden per track: the space is reserved.
 //
 // Every hook below is a PLT entry of libmp3z.so (verified on 4.45.23697 with REA/Ghidra and the .rel.plt
 // table), so only calls made by libmp3z are affected:
@@ -25,9 +44,9 @@
 //   QLabel::setText                                setupUi, applyVolume, setPage and the play/pause lambda
 //   AudioPlayer::setMedia(int, QMediaContent, QIODevice*)  setPage: keep the player, read tags and cover
 //   QLabel::setPixmap, QWidget::setGeometry        stock cover lambda: never replaces or moves our cover
-// Optional symbols: TouchLabel::set(De)SelectedPixmap and ReadingController::closeReadingView (libnickel,
-// nh_dlsym) and MP3Reader::saveBookmark (libmp3z is RTLD_LOCAL: dlopen RTLD_NOLOAD + dlsym at runtime).
-// All hooks and symbols are optional: if a firmware changes them, Nickel keeps the stock player.
+// Optional symbols: TouchLabel::set(De)SelectedPixmap, ReadingController::closeReadingView, BluetoothManager and
+// BluetoothDevice (libnickel, nh_dlsym) and MP3Reader::saveBookmark (libmp3z is RTLD_LOCAL: dlopen RTLD_NOLOAD +
+// dlsym at runtime). All hooks and symbols are optional: if a firmware changes them, Nickel keeps the stock player.
 
 #include <QBoxLayout>
 #include <QBuffer>
@@ -35,6 +54,7 @@
 #include <QDir>
 #include <QEvent>
 #include <QFont>
+#include <QFontMetrics>
 #include <QGuiApplication>
 #include <QImage>
 #include <QImageReader>
@@ -42,6 +62,7 @@
 #include <QLayout>
 #include <QMetaMethod>
 #include <QMouseEvent>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QPen>
 #include <QPixmap>
@@ -51,7 +72,6 @@
 #include <QSettings>
 #include <QSpacerItem>
 #include <QStringList>
-#include <QStyle>
 #include <QTimer>
 #include <QTouchEvent>
 #include <QVariant>
@@ -87,8 +107,15 @@ static bool (*BluetoothManager_supportsAbsoluteVolume)(void *self, const QString
 static void (*BluetoothManager_setSoftwareVolume)(void *self, const QString &dev, bool software);
 static void (*BluetoothManager_setMuted)(void *self, const QString &dev, bool left, bool right);
 static void (*BluetoothManager_setVolume)(void *self, const QString &dev, unsigned char left, unsigned char right);
+// Headset name (libnickel 4.45, RE): BluetoothDevice is a QPointer to the manager's cached Device1ProxyFacade
+// (8 bytes), built from the device path by a lookup in BluetoothManager's map; displayName reads its property.
+static void (*BluetoothDevice_BluetoothDevice)(void *self, const QString &path);
+static QString (*BluetoothDevice_displayName)(const void *self);
+static void (*BluetoothDevice_destroy)(void *self);
 
-static int btVolume = -1; // 0..127, ours (positions.ini "btVolume"), -1 = not loaded yet
+static int btVolume = -1;          // 0..127, ours (positions.ini "btVolume"), -1 = not loaded yet
+static QStringList btPrepared;     // sinks that already got setSoftwareVolume/setMuted in this Nickel run
+static bool btQueued = false;      // one deferred Bluetooth read in flight at a time
 
 // The user partition is mounted (not exported over USB): /mnt/onboard is its own filesystem and our folder,
 // which KoboRoot always ships (LEEME.txt), is there. Otherwise a QSettings write would land on the rootfs.
@@ -112,41 +139,20 @@ static int btVolumeLoad() {
     return btVolume;
 }
 
-// Send our volume to the connected A2DP headset. Returns false when there is no headset (or no API).
-static bool btVolumeApply() {
-    if (!BluetoothManager_sharedInstance || !BluetoothManager_a2dpSink || !BluetoothManager_setVolume)
-        return false;
-    void *bm = BluetoothManager_sharedInstance();
-    if (!bm)
-        return false;
-    const QString dev = BluetoothManager_a2dpSink(bm);
-    if (dev.isEmpty()) {
-        nh_log("AIO Audio: no A2DP headset connected");
-        return false;
-    }
-    const bool absolute = BluetoothManager_supportsAbsoluteVolume ? BluetoothManager_supportsAbsoluteVolume(bm, dev) : true;
-    if (BluetoothManager_setSoftwareVolume)
-        BluetoothManager_setSoftwareVolume(bm, dev, !absolute);
-    if (BluetoothManager_setMuted)
-        BluetoothManager_setMuted(bm, dev, false, false);
-    const unsigned char v = (unsigned char)btVolumeLoad();
-    BluetoothManager_setVolume(bm, dev, v, v);
-    nh_log("AIO Audio: headset volume %d/127 (%s)", v, absolute ? "absolute" : "software");
-    return true;
-}
-
 static int volumePercent() {
     return (btVolumeLoad() * 100 + 63) / 127;
 }
 
-// Full stream gain and our level on the headset; with no headset, our level as the stream gain instead.
-// Without the Bluetooth API the stock log10 stream volume is left alone.
-static void applyVolumeTo(QObject *player) {
-    if (!btVolumeApi())
-        return;
-    const bool headset = btVolumeApply();
-    if (player)
-        QMetaObject::invokeMethod(player, "setVolume", Q_ARG(int, headset ? 100 : volumePercent()));
+// The headset's display name, or empty. Only from the deferred Bluetooth read.
+static QString headsetName(const QString &dev) {
+    if (dev.isEmpty() || !BluetoothDevice_BluetoothDevice || !BluetoothDevice_displayName || !BluetoothDevice_destroy)
+        return QString();
+    void *device[8]; // 8 bytes on 4.45, padded in case a firmware grows it
+    memset(device, 0, sizeof device);
+    BluetoothDevice_BluetoothDevice(device, dev);
+    const QString name = BluetoothDevice_displayName(device);
+    BluetoothDevice_destroy(device);
+    return name.trimmed();
 }
 
 // The AudioPlayer of an MP3Reader (MP3Reader+0x40 on 4.45, RE).
@@ -156,8 +162,9 @@ static QObject *readerPlayer(const QWidget *reader) {
 
 static QPointer<AioAudio> aio;
 
-static const qreal RATES[] = {1.0, 1.2, 1.5, 0.8};
-static const char *const RATE_NAMES[] = {"1x", "1,2x", "1,5x", "0,8x"};
+#define RATE_COUNT 6
+static const qreal RATES[RATE_COUNT] = {1.0, 1.25, 1.5, 1.75, 2.0, 0.8};
+static const char *const RATE_NAMES[RATE_COUNT] = {"1x", "1,25x", "1,5x", "1,75x", "2x", "0,8x"};
 static const int SLEEP_MIN[] = {0, 15, 30, 60};
 
 // libmp3z is loaded RTLD_LOCAL by Nickel's plugin loader, so RTLD_DEFAULT may not see its symbols.
@@ -190,10 +197,43 @@ static void detach(QWidget *root, QWidget *w) {
         ls.at(i)->removeWidget(w);
 }
 
-static void repolish(QWidget *w) {
-    w->style()->unpolish(w);
-    w->style()->polish(w);
-    w->update();
+// What is left of the stock form: widgets hidden, spacers and margins to zero (our pane takes the whole reader).
+static void collapse(QLayout *l) {
+    l->setContentsMargins(0, 0, 0, 0);
+    l->setSpacing(0);
+    for (int i = 0; i < l->count(); i++) {
+        QLayoutItem *it = l->itemAt(i);
+        if (!it)
+            continue;
+        if (QWidget *w = it->widget())
+            w->hide();
+        else if (QSpacerItem *sp = it->spacerItem())
+            sp->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+        else if (QLayout *sub = it->layout())
+            collapse(sub);
+    }
+    l->invalidate();
+}
+
+static QFont makeFont(const char *family, int pixels, bool bold, bool italic = false) {
+    QFont f(QString::fromLatin1(family));
+    f.setPixelSize(qMax(6, pixels));
+    f.setBold(bold);
+    f.setItalic(italic);
+    return f;
+}
+
+static int textWidth(const QFont &f, const QString &s) {
+    return QFontMetrics(f).width(s);
+}
+
+// Worst case of "10:00:00" (minus: "-10:00:00") in this font, digits not assumed tabular.
+static int clockWidth(const QFont &f, bool minus) {
+    QFontMetrics fm(f);
+    int digit = 0;
+    for (char c = '0'; c <= '9'; c++)
+        digit = qMax(digit, fm.width(QChar(c)));
+    return 6 * digit + 2 * fm.width(QChar(':')) + (minus ? fm.width(QChar('-')) : 0);
 }
 
 static QString hms(qint64 ms) {
@@ -297,18 +337,6 @@ static bool onTap(QObject *button, QObject *receiver, const char *slot) {
     return QObject::connect(button, mo->method(best), receiver, receiver->metaObject()->method(s));
 }
 
-// Drop the stock connections from a button's tapped(...) to `receiver` (MP3Reader::slower/normal/faster).
-static void unwire(QObject *button, QObject *receiver) {
-    if (!button || !receiver)
-        return;
-    const QMetaObject *mo = button->metaObject();
-    for (int i = 0; i < mo->methodCount(); i++) {
-        QMetaMethod m = mo->method(i);
-        if (m.methodType() == QMetaMethod::Signal && m.name() == "tapped")
-            QObject::disconnect(button, m, receiver, QMetaMethod());
-    }
-}
-
 // -- ID3v2 ------------------------------------------------------------------------------------------------
 
 static quint32 be32(const unsigned char *b) {
@@ -403,11 +431,12 @@ static QString id3Text(const QByteArray &mp3, const char *id) {
     return out.trimmed();
 }
 
+
 // -- icons ------------------------------------------------------------------------------------------------
 
-enum Glyph { G_PLAY, G_PAUSE, G_BACK30, G_FWD30, G_ARROW, G_VOLUME, G_TOC, G_BT, G_TIMER, G_KNOB, G_PREV, G_NEXT, G_MINUS, G_PLUS };
+enum Glyph { G_PLAY, G_PAUSE, G_BACK30, G_FWD30, G_CHEVRON, G_BT, G_TIMER, G_KNOB, G_SKIP_PREV, G_SKIP_NEXT, G_MINUS, G_PLUS };
 
-// Painted stand-ins (black on transparent) for when a Nickel resource is missing.
+// Painted stand-ins, pure black on transparent (crisp on e-ink), for when a Nickel resource is missing.
 static QPixmap glyph(Glyph g, int size) {
     size = qMax(8, size);
     QImage img(size, size, QImage::Format_ARGB32_Premultiplied);
@@ -449,28 +478,12 @@ static QPixmap glyph(Glyph g, int size) {
             p.drawPolygon(head);
             break;
         }
-        case G_ARROW:
-            p.drawLine(P(0.80, 0.50), P(0.22, 0.50));
-            p.drawLine(P(0.22, 0.50), P(0.46, 0.26));
-            p.drawLine(P(0.22, 0.50), P(0.46, 0.74));
-            break;
-        case G_VOLUME: {
-            QPolygonF spk;
-            spk << P(0.14, 0.38) << P(0.30, 0.38) << P(0.50, 0.20) << P(0.50, 0.80) << P(0.30, 0.62) << P(0.14, 0.62);
-            p.setBrush(Qt::black);
-            p.drawPolygon(spk);
-            p.setBrush(Qt::NoBrush);
-            p.drawArc(QRectF(P(0.38, 0.38), P(0.62, 0.62)), -50 * 16, 100 * 16);
-            p.drawArc(QRectF(P(0.18, 0.18), P(0.82, 0.82)), -50 * 16, 100 * 16);
+        case G_CHEVRON: {
+            QPolygonF c;
+            c << P(0.62, 0.20) << P(0.32, 0.50) << P(0.62, 0.80);
+            p.drawPolyline(c);
             break;
         }
-        case G_TOC:
-            for (int i = 0; i < 3; i++) {
-                qreal y = 0.28 + 0.22 * i;
-                p.drawLine(P(0.38, y), P(0.84, y));
-                p.drawPoint(P(0.18, y));
-            }
-            break;
         case G_BT: {
             QPolygonF b;
             b << P(0.32, 0.32) << P(0.68, 0.66) << P(0.50, 0.84) << P(0.50, 0.16) << P(0.68, 0.34) << P(0.32, 0.68);
@@ -489,16 +502,14 @@ static QPixmap glyph(Glyph g, int size) {
             p.setBrush(Qt::black);
             p.drawEllipse(QRectF(P(0.10, 0.10), P(0.90, 0.90)));
             break;
-        case G_PREV: {
-            QPolygonF c;
-            c << P(0.60, 0.22) << P(0.34, 0.50) << P(0.60, 0.78);
-            p.drawPolyline(c);
-            break;
-        }
-        case G_NEXT: {
-            QPolygonF c;
-            c << P(0.40, 0.22) << P(0.66, 0.50) << P(0.40, 0.78);
-            p.drawPolyline(c);
+        case G_SKIP_PREV:
+        case G_SKIP_NEXT: { // bar + triangle (|<), mirrored below for >|
+            p.setPen(Qt::NoPen);
+            p.setBrush(Qt::black);
+            p.drawRect(QRectF(P(0.20, 0.24), P(0.30, 0.76)));
+            QPolygonF tri;
+            tri << P(0.80, 0.24) << P(0.34, 0.50) << P(0.80, 0.76);
+            p.drawPolygon(tri);
             break;
         }
         case G_MINUS:
@@ -510,9 +521,9 @@ static QPixmap glyph(Glyph g, int size) {
             break;
         }
     }
+    if (g == G_FWD30 || g == G_SKIP_NEXT)
+        img = img.mirrored(true, false);
     if (g == G_BACK30 || g == G_FWD30) {
-        if (g == G_FWD30)
-            img = img.mirrored(true, false);
         QPainter p(&img);
         p.setRenderHint(QPainter::TextAntialiasing);
         QFont f;
@@ -535,7 +546,7 @@ static QPixmap nickelIcon(const char *path, int size, Glyph fallback) {
     return pm;
 }
 
-// Tap feedback: the icon in white on a black box.
+// Pressed state: the icon in white on a black box.
 static QPixmap inverted(const QPixmap &pm, const QSize &box) {
     QSize sz = box.expandedTo(pm.size());
     QImage img(sz, QImage::Format_ARGB32_Premultiplied);
@@ -548,10 +559,30 @@ static QPixmap inverted(const QPixmap &pm, const QSize &box) {
     return QPixmap::fromImage(img);
 }
 
-// -- AioTap -----------------------------------------------------------------------------------------------
+// Thin black frame of width lw around `r` (inside it).
+static void drawFrame(QPainter &p, const QRect &r, int lw) {
+    p.fillRect(QRect(r.left(), r.top(), r.width(), lw), Qt::black);
+    p.fillRect(QRect(r.left(), r.bottom() - lw + 1, r.width(), lw), Qt::black);
+    p.fillRect(QRect(r.left(), r.top(), lw, r.height()), Qt::black);
+    p.fillRect(QRect(r.right() - lw + 1, r.top(), lw, r.height()), Qt::black);
+}
 
-AioTap::AioTap(QWidget *parent) : QLabel(parent), down(false) {
-    setAttribute(Qt::WA_AcceptTouchEvents);
+// A picture fitted into the square `box` (white), with a thin black frame hugging the picture.
+static QPixmap framed(const QImage &src, const QSize &box, int lw) {
+    QPixmap out(box);
+    out.fill(Qt::white);
+    if (src.isNull())
+        return out;
+    const QSize inner(qMax(1, box.width() - 2 * lw), qMax(1, box.height() - 2 * lw));
+    QImage img = src;
+    if (img.width() > inner.width() || img.height() > inner.height())
+        img = img.scaled(inner, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    const int w = img.width() + 2 * lw, h = img.height() + 2 * lw;
+    const QRect r((box.width() - w) / 2, (box.height() - h) / 2, w, h);
+    QPainter p(&out);
+    p.drawImage(r.left() + lw, r.top() + lw, img);
+    drawFrame(p, r, lw);
+    return out;
 }
 
 // A mouse event this soon after a touch is the copy the platform plugin may also deliver.
@@ -559,11 +590,175 @@ static bool recentTouch(const QElapsedTimer &t) {
     return t.isValid() && t.elapsed() < 500;
 }
 
+// -- AioPane / AioText ------------------------------------------------------------------------------------
+
+AioPane::AioPane(QWidget *parent, const QColor &f) : QWidget(parent), fill(f) {
+    setAttribute(Qt::WA_AcceptTouchEvents);
+    if (fill.isValid())
+        setAttribute(Qt::WA_OpaquePaintEvent);
+}
+
+bool AioPane::event(QEvent *e) {
+    switch (e->type()) {
+    case QEvent::TouchBegin:
+    case QEvent::TouchUpdate:
+    case QEvent::TouchEnd:
+    case QEvent::TouchCancel:
+    case QEvent::MouseButtonPress:
+    case QEvent::MouseButtonRelease:
+    case QEvent::MouseButtonDblClick:
+    case QEvent::MouseMove:
+    case QEvent::Gesture:
+    case QEvent::GestureOverride:
+        e->accept(); // ours: nothing below the player reacts to it
+        return true;
+    default:
+        return QWidget::event(e);
+    }
+}
+
+void AioPane::paintEvent(QPaintEvent *e) {
+    if (!fill.isValid())
+        return;
+    QPainter p(this);
+    p.fillRect(e->rect(), fill);
+}
+
+AioText::AioText(QWidget *parent, const QFont &f, Qt::Alignment a) : AioPane(parent, Qt::white), face(f), align(a) {
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+}
+
+void AioText::setText(const QString &t) {
+    if (t == str)
+        return;
+    str = t;
+    update(); // this rect only: the geometry is fixed, nothing is relaid out
+}
+
+void AioText::paintEvent(QPaintEvent *e) {
+    QPainter p(this);
+    p.fillRect(e->rect(), Qt::white);
+    if (str.isEmpty())
+        return;
+    p.setFont(face);
+    p.setPen(Qt::black);
+    p.drawText(rect(), align | Qt::AlignVCenter, QFontMetrics(face).elidedText(str, Qt::ElideRight, width()));
+}
+
+// -- AioTap -----------------------------------------------------------------------------------------------
+
+AioTap::AioTap(QWidget *parent, const QPixmap &i, const QFont &f, bool c, bool fb)
+    : QWidget(parent), icon(i), face(f), align(Qt::AlignHCenter), chip(c), feedback(fb), down(false), pressed(false),
+      pressTimer(new QTimer(this)) {
+    setAttribute(Qt::WA_AcceptTouchEvents);
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    if (!icon.isNull() && feedback)
+        iconInv = inverted(icon, icon.size());
+    pressTimer->setSingleShot(true);
+    pressTimer->setInterval(120);
+    connect(pressTimer, SIGNAL(timeout()), this, SLOT(unpress()));
+}
+
+void AioTap::setText(const QString &t) {
+    if (t == str)
+        return;
+    str = t;
+    update();
+}
+
+int AioTap::padding() const {
+    return chip ? height() / 4 : 0;
+}
+
+int AioTap::gap() const {
+    return qMax(4, height() / 10);
+}
+
+// The drawn chip (a pill inside the tap target) or, for plain buttons, the whole target.
+QRect AioTap::box() const {
+    if (!chip)
+        return rect();
+    const int inset = height() / 5;
+    return rect().adjusted(1, inset, -1, -inset);
+}
+
+void AioTap::fitWidth(const QStringList &texts, int minWidth) {
+    QFontMetrics fm(face);
+    int tw = 0;
+    for (int i = 0; i < texts.size(); i++)
+        tw = qMax(tw, fm.width(texts.at(i)));
+    const int w = 2 * padding() + icon.width() + (tw > 0 && !icon.isNull() ? gap() : 0) + tw + 4;
+    setFixedWidth(qMax(minWidth, w));
+}
+
+void AioTap::paintEvent(QPaintEvent *) {
+    QPainter p(this);
+    p.fillRect(rect(), Qt::white);
+    const QRect b = box();
+    if (chip) {
+        const int lw = qMax(2, height() / 48);
+        const qreal radius = b.height() / 2.0;
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(pressed ? QPen(Qt::NoPen) : QPen(Qt::black, lw));
+        p.setBrush(pressed ? QBrush(Qt::black) : QBrush(Qt::NoBrush));
+        p.drawRoundedRect(QRectF(b).adjusted(lw / 2.0, lw / 2.0, -lw / 2.0, -lw / 2.0), radius, radius);
+        p.setRenderHint(QPainter::Antialiasing, false);
+    } else if (pressed) {
+        p.fillRect(b, Qt::black);
+    }
+    QFontMetrics fm(face);
+    const int pad = padding();
+    const int g = !icon.isNull() && !str.isEmpty() ? gap() : 0;
+    const QString t = fm.elidedText(str, Qt::ElideRight, qMax(0, b.width() - 2 * pad - icon.width() - g));
+    const int cw = icon.width() + g + (t.isEmpty() ? 0 : fm.width(t));
+    int x = b.left() + (b.width() - cw) / 2;
+    if (align & Qt::AlignLeft)
+        x = b.left() + pad;
+    else if (align & Qt::AlignRight)
+        x = b.right() + 1 - pad - cw;
+    if (!icon.isNull()) {
+        p.drawPixmap(x, (height() - icon.height()) / 2, pressed && !iconInv.isNull() ? iconInv : icon);
+        x += icon.width() + g;
+    }
+    if (!t.isEmpty()) {
+        p.setFont(face);
+        p.setPen(pressed ? Qt::white : Qt::black);
+        p.drawText(QRect(x, 0, qMax(0, width() - x), height()), Qt::AlignLeft | Qt::AlignVCenter, t);
+    }
+}
+
+void AioTap::press() {
+    down = true;
+    if (!feedback)
+        return;
+    pressTimer->stop();
+    if (!pressed) {
+        pressed = true;
+        update();
+    }
+}
+
+void AioTap::release(bool inside) {
+    const bool was = down;
+    down = false;
+    if (pressed)
+        pressTimer->start(); // the pressed state stays 120 ms, then one repaint back
+    if (was && inside)
+        emit tapped();
+}
+
+void AioTap::unpress() {
+    if (pressed && !down) {
+        pressed = false;
+        update();
+    }
+}
+
 bool AioTap::event(QEvent *e) {
     switch (e->type()) {
     case QEvent::TouchBegin:
         lastTouch.start();
-        down = true;
+        press();
         e->accept();
         return true;
     case QEvent::TouchUpdate:
@@ -573,55 +768,53 @@ bool AioTap::event(QEvent *e) {
     case QEvent::TouchEnd: {
         lastTouch.start();
         const QTouchEvent *te = static_cast<QTouchEvent *>(e);
-        bool inside = te->touchPoints().isEmpty() || rect().contains(te->touchPoints().first().pos().toPoint());
-        bool was = down;
-        down = false;
+        const bool inside = te->touchPoints().isEmpty() || rect().contains(te->touchPoints().first().pos().toPoint());
         e->accept();
-        if (was && inside)
-            emit tapped();
+        release(inside);
         return true;
     }
     case QEvent::TouchCancel:
         lastTouch.start();
-        down = false;
+        e->accept();
+        release(false);
+        return true;
+    case QEvent::MouseButtonDblClick:
+    case QEvent::MouseMove:
+    case QEvent::Gesture:
+    case QEvent::GestureOverride:
         e->accept();
         return true;
     default:
-        return QLabel::event(e);
+        return QWidget::event(e);
     }
 }
 
 void AioTap::mousePressEvent(QMouseEvent *e) {
     e->accept();
-    if (recentTouch(lastTouch))
+    if (recentTouch(lastTouch) || e->button() != Qt::LeftButton)
         return;
-    down = e->button() == Qt::LeftButton;
+    press();
 }
 
 void AioTap::mouseReleaseEvent(QMouseEvent *e) {
-    if (recentTouch(lastTouch)) {
-        e->accept();
-        return;
-    }
-    bool was = down;
-    down = false;
     e->accept();
-    if (was && rect().contains(e->pos()))
-        emit tapped();
+    if (recentTouch(lastTouch))
+        return;
+    release(rect().contains(e->pos()));
 }
 
 // -- AioSlider --------------------------------------------------------------------------------------------
 
-AioSlider::AioSlider(QWidget *parent, bool i, int t, const QPixmap &k)
-    : QWidget(parent), value(0), maximum(0), dragValue(0), interactive(i), dragging(false), thickness(qMax(1, t)),
+AioSlider::AioSlider(QWidget *parent, int tk, int tn, const QPixmap &k)
+    : QWidget(parent), value(0), maximum(0), dragValue(0), dragging(false), thick(qMax(1, tk)), thin(qMax(1, tn)),
       drawnX(-1), knob(k) {
-    if (interactive)
-        setAttribute(Qt::WA_AcceptTouchEvents);
+    setAttribute(Qt::WA_AcceptTouchEvents);
+    setAttribute(Qt::WA_OpaquePaintEvent); // paintEvent fills white itself: nothing below is repainted
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
 
 int AioSlider::margin() const {
-    return interactive ? knob.width() / 2 + 1 : 0;
+    return knob.width() / 2 + 1;
 }
 
 int AioSlider::xFor(qint64 v) const {
@@ -638,39 +831,59 @@ qint64 AioSlider::valueAt(qreal x) const {
     return qint64(qBound<qreal>(0, (x - m) / w, 1) * maximum);
 }
 
-void AioSlider::setValue(qint64 v, qint64 maxValue) {
-    value = v;
-    maximum = maxValue;
-    if (!dragging && xFor(value) != drawnX)
+// Dirty band between the knob as drawn and its new place (plus the knob's width), never the whole line.
+void AioSlider::moveKnob(int x) {
+    if (drawnX < 0) {
         update();
+        return;
+    }
+    if (x == drawnX)
+        return;
+    const int half = knob.width() / 2 + 2;
+    const int kh = qMax(knob.height(), thick) + 4;
+    const int left = qMin(x, drawnX) - half, right = qMax(x, drawnX) + half;
+    update(QRect(left, height() / 2 - kh / 2, right - left, kh));
 }
 
-void AioSlider::paintEvent(QPaintEvent *) {
+void AioSlider::setValue(qint64 v, qint64 maxValue) {
+    const bool rescale = maxValue != maximum;
+    value = v;
+    maximum = maxValue;
+    if (dragging)
+        return;
+    if (rescale)
+        update(); // new track length: the whole line, once
+    else
+        moveKnob(xFor(value));
+}
+
+void AioSlider::paintEvent(QPaintEvent *e) {
     QPainter p(this);
-    p.fillRect(rect(), Qt::white);
+    p.fillRect(e->rect(), Qt::white);
     const int m = margin(), cy = height() / 2, x = xFor(dragging ? dragValue : value);
     drawnX = x;
-    p.fillRect(QRect(m, cy - thickness / 2, qMax(0, width() - 2 * m), thickness), QColor(0xbb, 0xbb, 0xbb));
+    p.fillRect(QRect(m, cy - thin / 2, qMax(0, width() - 2 * m), thin), Qt::black);
     if (x > m)
-        p.fillRect(QRect(m, cy - thickness / 2 - 1, x - m, thickness + 2), Qt::black);
-    if (interactive && maximum > 0 && !knob.isNull())
+        p.fillRect(QRect(m, cy - thick / 2, x - m, thick), Qt::black);
+    if (maximum > 0 && !knob.isNull())
         p.drawPixmap(x - knob.width() / 2, cy - knob.height() / 2, knob);
 }
 
 void AioSlider::press(qreal x) {
-    if (!interactive || maximum <= 0)
+    if (maximum <= 0)
         return;
     dragging = true;
     dragValue = valueAt(x);
-    update();
+    moveKnob(xFor(dragValue));
 }
 
 void AioSlider::drag(qreal x) {
     if (!dragging)
         return;
     dragValue = valueAt(x);
-    if (qAbs(xFor(dragValue) - drawnX) >= qMax(4, width() / 50)) // e-ink: repaint every ~2% of travel
-        update();
+    const int nx = xFor(dragValue);
+    if (qAbs(nx - drawnX) >= qMax(4, width() / 50)) // e-ink: repaint every ~2% of travel
+        moveKnob(nx);
 }
 
 void AioSlider::release(qreal x) {
@@ -679,7 +892,7 @@ void AioSlider::release(qreal x) {
     dragValue = valueAt(x);
     dragging = false;
     value = dragValue;
-    update();
+    moveKnob(xFor(value));
     emit seekRequested(value);
 }
 
@@ -704,8 +917,15 @@ bool AioSlider::event(QEvent *e) {
     }
     case QEvent::TouchCancel:
         lastTouch.start();
-        dragging = false;
-        update();
+        if (dragging) {
+            dragging = false;
+            moveKnob(xFor(value));
+        }
+        e->accept();
+        return true;
+    case QEvent::MouseButtonDblClick:
+    case QEvent::Gesture:
+    case QEvent::GestureOverride:
         e->accept();
         return true;
     default:
@@ -737,348 +957,381 @@ int AioAudio::px(int dragon) const {
     return qMax(1, qRound(dragon * scale));
 }
 
-AioAudio::AioAudio(QWidget *r)
-    : QObject(r), reader(r), timer(new QTimer(this)), flashTimer(new QTimer(this)), sleepTimer(new QTimer(this)),
-      scale(1), coverKey(0), playing(false), started(false), pauseOnPlay(false), track(-1), trackNo(0), trackCount(0),
-      lastPos(0), lastDur(0), pendingSeek(-1), resumeTarget(-1), savedTrack(-1), savedPos(0), speedIndex(0), sleepMode(0) {
+int AioAudio::frameWidth() const {
+    return qMax(2, px(2));
+}
+
+AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     resolveMp3z();
     QScreen *screen = QGuiApplication::primaryScreen();
     QSize s = screen ? screen->size() : QSize(1264, 1680);
     const int w = qMin(s.width(), s.height()), h = qMax(s.width(), s.height());
     scale = h / 1680.0;                          // Libra Colour / Libra 2: 1264x1680 at 300 ppi ("Dragon")
-    const int side = qMin(px(550), w * 4 / 5);
+    const int side = qMax(px(200), qMin(w * 70 / 100, h * 42 / 100));
     coverBox = QSize(side, side);
     const int target = px(106);                  // 9 mm at 300 ppi
 
-    timer->setInterval(5000);                    // e-ink: one short update every 5 s, only while playing
+    timer = new QTimer(this);
+    timer->setInterval(5000);                    // e-ink: one short update every 5 s, only while playing and visible
     connect(timer, SIGNAL(timeout()), this, SLOT(tick()));
     stateTimer = new QTimer(this);
     stateTimer->setSingleShot(true);
     stateTimer->setInterval(400);                // play/pause flips settle for 0.4 s before anything repaints
     connect(stateTimer, SIGNAL(timeout()), this, SLOT(applyPlayState()));
-    flashTimer->setSingleShot(true);
-    flashTimer->setInterval(150);
-    connect(flashTimer, SIGNAL(timeout()), this, SLOT(unflash()));
+    sleepTimer = new QTimer(this);
     sleepTimer->setSingleShot(true);
     connect(sleepTimer, SIGNAL(timeout()), this, SLOT(sleepFired()));
+    volApplyTimer = new QTimer(this);
+    volApplyTimer->setSingleShot(true);
+    volApplyTimer->setInterval(300);             // one setVolume for a burst of taps
+    connect(volApplyTimer, SIGNAL(timeout()), this, SLOT(applyVolumeNow()));
+    volSaveTimer = new QTimer(this);
+    volSaveTimer->setSingleShot(true);
+    volSaveTimer->setInterval(2000);             // one positions.ini write for a burst of taps
+    connect(volSaveTimer, SIGNAL(timeout()), this, SLOT(saveVolumeNow()));
+    r->installEventFilter(this);                 // Hide/Show: stop and restart the tick timer
 
     cover = child<QLabel>(r, "coverImage");
     playPause = child<QLabel>(r, "playPause");
     QLabel *back = child<QLabel>(r, "backward"), *fwd = child<QLabel>(r, "forward");
     QLabel *prev = child<QLabel>(r, "prevChapter"), *next = child<QLabel>(r, "nextChapter");
-    QLabel *arrow = child<QLabel>(r, "slower"), *backText = child<QLabel>(r, "faster");
-    speed = child<QLabel>(r, "normal");
     QLabel *volDown = child<QLabel>(r, "logVolumeDown"), *volUp = child<QLabel>(r, "logVolumeUp");
     QLabel *volume = child<QLabel>(r, "volume"), *title = child<QLabel>(r, "title");
     QBoxLayout *col = child<QBoxLayout>(r, "verticalLayout");
-    QBoxLayout *row1 = child<QBoxLayout>(r, "horizontalLayout");
-    if (!col || !row1 || !playPause || !cover) {
+    if (!col || !playPause || !cover) {
         nh_log("AIO Audio: Ui_MP3Reader changed, keeping the stock layout");
         playPause = 0; // stock "Play"/"Pause" text stays
-        speed = 0;
         cover = 0;     // stock cover lambda keeps the cover (never marked aioCover)
         return;
     }
 
-    // setupUi's vertical spacers (verticalLayout items 0, 4 and 11, before we insert anything): 0 and 4 become
-    // small gaps, 11 stays the stretch that pushes the chapter row and the footer to the bottom.
-    static const int gaps[] = {0, 4};
-    for (int g = 0; g < 2; g++)
-        if (QLayoutItem *it = col->itemAt(gaps[g]))
-            if (QSpacerItem *sp = it->spacerItem())
-                sp->changeSize(0, px(g ? 28 : 20), QSizePolicy::Minimum, QSizePolicy::Fixed);
-    QSpacerItem *bottom = col->count() > 0 && col->itemAt(col->count() - 1) ? col->itemAt(col->count() - 1)->spacerItem() : 0;
-    if (bottom)
-        bottom->changeSize(0, 0, QSizePolicy::Minimum, QSizePolicy::Expanding);
-    col->setContentsMargins(px(24), px(4), px(24), px(16));
-    col->setSpacing(px(10));
+    const QFont fBack = makeFont("DefaultSansSerif", px(30), true);
+    const QFont fChip = makeFont("DefaultSansSerif", px(28), true);
+    const QFont fTitle = makeFont("DefaultSerif", px(40), true);
+    const QFont fChapter = makeFont("DefaultSansSerif", px(30), false, true);
+    const QFont fTime = makeFont("DefaultSansSerif", px(28), false);
+    const QFont fFoot = makeFont("DefaultSansSerif", px(24), false);
+    const bool ownVolume = btVolumeApi();        // headset volume; otherwise the stock log10 buttons stay
+    const bool stockVolume = !ownVolume && volDown && volUp && volume;
+    const bool seekButtons = back && fwd, chapterButtons = prev && next;
 
-    // Header: [<-] Regresar a Mis libros ........ [timer] 15 min  1,2x  [vol] - 10 +
-    QWidget *header = new QWidget(r);
-    header->setObjectName("aioHeader");
-    header->setFixedHeight(target);
+    // The stock widgets we keep leave the form's layouts; everything else in the form is hidden and collapsed.
+    QWidget *const keep[] = {cover.data(), playPause.data(), seekButtons ? back : 0, seekButtons ? fwd : 0,
+                             chapterButtons ? prev : 0, chapterButtons ? next : 0,
+                             stockVolume ? volDown : 0, stockVolume ? volUp : 0, stockVolume ? volume : 0};
+    for (QWidget *k : keep)
+        detach(r, k);
+    collapse(col);
+    static const char *const hidden[] = {"title", "current", "total", "volumeUp", "volumeDown", "slower", "faster", "normal", nullptr};
+    for (int i = 0; hidden[i]; i++)
+        if (QWidget *x = child<QWidget>(r, hidden[i]))
+            x->hide();
+    if (!stockVolume) {
+        QWidget *const unused[] = {volDown, volUp, volume};
+        for (QWidget *u : unused)
+            if (u)
+                u->hide();
+    }
+
+    AioPane *root = new AioPane(r, Qt::white);
+    root->setObjectName("aioRoot");
+    QVBoxLayout *v = new QVBoxLayout(root);
+    v->setContentsMargins(px(32), 0, px(32), px(12));
+    v->setSpacing(0);
+
+    // Header: [<] Mis libros .............. (1x)
+    const int headerH = px(112);
+    AioPane *header = new AioPane(root);
+    header->setFixedHeight(headerH);
     QHBoxLayout *hl = new QHBoxLayout(header);
     hl->setContentsMargins(0, 0, 0, 0);
-    hl->setSpacing(px(12));
-    if (arrow && backText && ReadingController_closeReadingView) {
-        detach(r, arrow);
-        detach(r, backText);
-        unwire(arrow, r);    // stock: MP3Reader::slower()
-        unwire(backText, r); // stock: MP3Reader::faster()
-        arrow->setFixedSize(target, target);
-        arrow->setAlignment(Qt::AlignCenter);
-        setIcon(arrow, nickelIcon(":/images/reading/back_arrow.png", px(56), G_ARROW), QSize(target, target));
-        backText->setText(QString::fromUtf8("Regresar a Mis libros"));
-        backText->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        backText->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-        backText->setFixedHeight(target);
-        QLabel *const backs[] = {arrow, backText};
-        for (QLabel *l : backs) {
-            l->setProperty("aioOwned", true);
-            onTap(l, this, "flashSender()");
-            onTap(l, this, "goHome()");
-        }
-        hl->addWidget(arrow);
-        hl->addWidget(backText, 1);
-    } else {
-        if (arrow) arrow->hide();
-        if (backText) backText->hide();
-        hl->addStretch(1);
+    hl->setSpacing(0);
+    if (ReadingController_closeReadingView) {
+        const QPixmap arrow = nickelIcon(":/images/reading/back_arrow.png", px(56), G_CHEVRON);
+        AioTap *backTap = new AioTap(header, arrow, fBack, false, false); // big target: no pressed repaint
+        backTap->setObjectName("aioBack");
+        backTap->setAlignment(Qt::AlignLeft);
+        backTap->setFixedHeight(headerH);
+        backTap->setText(QString::fromUtf8("Mis libros"));
+        backTap->fitWidth(QStringList() << backTap->text(), target);
+        backTap->setFixedWidth(backTap->width() + px(24));
+        connect(backTap, SIGNAL(tapped()), this, SLOT(goHome()));
+        hl->addWidget(backTap);
     }
-    AioTap *sleepIcon = new AioTap(header);
-    sleepIcon->setObjectName("aioSleep");
-    sleepIcon->setAlignment(Qt::AlignCenter);
-    sleepIcon->setFixedSize(px(84), target);
-    setIcon(sleepIcon, nickelIcon(":/images/reading/timer.png", px(70), G_TIMER), QSize(px(84), target));
-    AioTap *sleepLabel = new AioTap(header);
-    sleepLabel->setObjectName("aioSleepText");
-    sleepLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    sleepLabel->setFixedHeight(target);
-    sleepText = sleepLabel;
-    AioTap *const sleeps[] = {sleepIcon, sleepLabel};
-    for (AioTap *t : sleeps) {
-        connect(t, SIGNAL(tapped()), this, SLOT(flashSender()));
-        connect(t, SIGNAL(tapped()), this, SLOT(cycleSleep()));
-    }
-    hl->addWidget(sleepIcon);
-    hl->addWidget(sleepLabel);
-    if (speed) {
-        detach(r, speed);
-        unwire(speed, r); // stock: MP3Reader::normal()
-        speed->setProperty("aioOwned", true);
-        speed->setText(QString::fromLatin1(RATE_NAMES[0]));
-        speed->setAlignment(Qt::AlignCenter);
-        speed->setFixedHeight(target);
-        speed->setMinimumWidth(px(96));
-        onTap(speed, this, "flashSender()");
-        onTap(speed, this, "cycleSpeed()");
-        hl->addSpacing(px(8));
-        hl->addWidget(speed);
-    }
-    if (volDown && volUp) { // headset volume when the Bluetooth API resolved, else the stock log10 volume
-        hl->addSpacing(px(8));
-        QLabel *volIcon = new QLabel(header);
-        volIcon->setObjectName("aioVolumeIcon");
-        volIcon->setAlignment(Qt::AlignCenter);
-        volIcon->setPixmap(nickelIcon(":/images/reading/volume.png", px(70), G_VOLUME));
-        hl->addWidget(volIcon);
-        const QSize vb(px(84), target);
-        detach(r, volDown);
-        volDown->setFixedSize(vb);
-        volDown->setAlignment(Qt::AlignCenter);
-        setIcon(volDown, glyph(G_MINUS, px(48)), vb);
-        hl->addWidget(volDown);
-        if (volume) {
-            detach(r, volume);
-            if (volume->text().startsWith(QString::fromUtf8("Volumen ")))
-                volume->setText(volume->text().mid(8));
-            volume->setAlignment(Qt::AlignCenter);
-            volume->setMinimumWidth(px(44));
-            hl->addWidget(volume);
-        }
-        detach(r, volUp);
-        volUp->setFixedSize(vb);
-        volUp->setAlignment(Qt::AlignCenter);
-        setIcon(volUp, glyph(G_PLUS, px(48)), vb);
-        hl->addWidget(volUp);
-        const bool ours = btVolumeApi();
-        QLabel *const vols[] = {volDown, volUp};
-        for (QLabel *l : vols) {
-            l->setProperty("aioOwned", true);
-            if (ours)
-                QObject::disconnect(l, nullptr, r, nullptr); // stock log10 stream volume: replaced by the headset volume
-            onTap(l, this, "flashSender()");
-        }
-        if (ours) {
-            onTap(volDown, this, "volumeDown()");
-            onTap(volUp, this, "volumeUp()");
-            volumeLabel = volume;
-            if (volume)
-                volume->setProperty("aioOwned", true); // stock applyVolume would write "Volume: 10" here
-            showVolume();
-        }
-    } else {
-        if (volDown) volDown->hide();
-        if (volUp) volUp->hide();
-        if (volume) volume->hide();
-    }
-    QLabel *line = new QLabel(r);
-    line->setObjectName("aioLine");
+    hl->addStretch(1);
+    AioTap *sp = new AioTap(header, QPixmap(), fChip, true, true);
+    sp->setObjectName("aioSpeed");
+    sp->setFixedHeight(headerH);
+    QStringList rates;
+    for (int i = 0; i < RATE_COUNT; i++)
+        rates << QString::fromLatin1(RATE_NAMES[i]);
+    sp->fitWidth(rates, target);
+    sp->setText(rates.at(speedIndex));
+    connect(sp, SIGNAL(tapped()), this, SLOT(cycleSpeed()));
+    speedTap = sp;
+    hl->addWidget(sp);
+    v->addWidget(header);
+    AioPane *line = new AioPane(root, Qt::black);
     line->setFixedHeight(qMax(2, px(2)));
-    col->insertWidget(0, header);
-    col->insertWidget(1, line);
+    v->addWidget(line);
+    v->addSpacing(px(24));
 
-    // Cover, then the book title (ID3 TALB) under it.
+    // Cover, centred, framed.
+    AioPane *coverRow = new AioPane(root);
+    coverRow->setFixedHeight(side);
+    QHBoxLayout *cr = new QHBoxLayout(coverRow);
+    cr->setContentsMargins(0, 0, 0, 0);
+    cr->setSpacing(0);
+    cover->setFixedSize(coverBox);
     cover->setAlignment(Qt::AlignCenter);
-    cover->setMinimumWidth(1);
-    cover->setFixedHeight(side);
-    cover->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    QLabel *bookLabel = new QLabel(r);
-    bookLabel->setObjectName("aioBook");
-    bookLabel->setAlignment(Qt::AlignCenter);
-    bookLabel->setWordWrap(true);
-    bookLabel->hide();
-    book = bookLabel;
-    col->insertWidget(col->indexOf(cover) + 1, bookLabel);
+    cover->setProperty("aioCoverSlot", true); // the stock cover lambda may not move it, its pictures get framed
+    cr->addStretch(1);
+    cr->addWidget(cover);
+    cr->addStretch(1);
+    v->addWidget(coverRow);
+    if (const QPixmap *pm = cover->pixmap())
+        if (!pm->isNull())
+            cover->setPixmap(framedCover(*pm));
 
-    // Transport: [-30] [play/pause] [+30]
+    // Book title and chapter, one line each.
+    v->addSpacing(px(20));
+    AioText *tt = new AioText(root, fTitle, Qt::AlignHCenter);
+    tt->setFixedHeight(px(56));
+    titleText = tt;
+    v->addWidget(tt);
+    AioText *ct = new AioText(root, fChapter, Qt::AlignHCenter);
+    ct->setFixedHeight(px(44));
+    chapterText = ct;
+    v->addWidget(ct);
+    v->addStretch(1);
+
+    // Scrubber, then elapsed / -remaining right under it (the 5 s tick touches only this band).
+    const QPixmap knob = nickelIcon(":/images/reading/scrubber_handle_off.png", px(56), G_KNOB);
+    AioSlider *sl = new AioSlider(root, qMax(4, px(6)), qMax(2, px(2)), knob);
+    sl->setFixedHeight(qMax(target, knob.height() + px(16))); // the whole band is the tap target
+    connect(sl, SIGNAL(seekRequested(qint64)), this, SLOT(seekTo(qint64)));
+    slider = sl;
+    v->addWidget(sl);
+    const int timeH = px(40);
+    AioPane *times = new AioPane(root);
+    times->setFixedHeight(timeH);
+    QHBoxLayout *tl = new QHBoxLayout(times);
+    tl->setContentsMargins(0, 0, 0, 0);
+    tl->setSpacing(0);
+    AioText *el = new AioText(times, fTime, Qt::AlignLeft);
+    el->setFixedSize(clockWidth(fTime, false) + px(8), timeH);
+    AioText *rem = new AioText(times, fTime, Qt::AlignRight);
+    rem->setFixedSize(clockWidth(fTime, true) + px(8), timeH);
+    tl->addWidget(el);
+    tl->addStretch(1);
+    tl->addWidget(rem);
+    elapsedText = el;
+    remainText = rem;
+    el->setText(QString::fromLatin1("0:00"));
+    v->addWidget(times);
+    v->addSpacing(px(16));
+
+    // Transport: [|<] [-30] [play/pause] [+30] [>|], evenly spaced.
     playIcon = nickelIcon(":/images/audiobook/play_button.png", px(158), G_PLAY);
     pauseIcon = nickelIcon(":/images/audiobook/pause_button.png", px(158), G_PAUSE);
     const int pb = qMax(target, px(158) + px(12));
     playBox = QSize(pb, pb);
+    AioPane *transport = new AioPane(root);
+    transport->setFixedHeight(pb);
+    QHBoxLayout *xl = new QHBoxLayout(transport);
+    xl->setContentsMargins(0, 0, 0, 0);
+    xl->setSpacing(0);
+    xl->addStretch(1);
+    auto addButton = [xl](QWidget *b) {
+        xl->addWidget(b, 0, Qt::AlignVCenter);
+        xl->addStretch(1);
+    };
+    const QSize cb(target, target);
+    const int sb = qMax(target, px(100) + px(12));
+    if (chapterButtons) { // stock goToPrevPage/goToNextPage stay wired
+        prev->setFixedSize(cb);
+        prev->setAlignment(Qt::AlignCenter);
+        prev->setText(QString());
+        setIcon(prev, glyph(G_SKIP_PREV, px(60)), cb);
+        prev->setProperty("aioOwned", true);
+        onTap(prev, this, "userSkip()");
+        addButton(prev);
+    }
+    if (seekButtons) {
+        back->setFixedSize(sb, sb);
+        back->setAlignment(Qt::AlignCenter);
+        setIcon(back, nickelIcon(":/images/audiobook/backward_button.png", px(100), G_BACK30), QSize(sb, sb));
+        back->setProperty("aioOwned", true);
+        onTap(back, this, "rewind()"); // stock: empty slots
+        addButton(back);
+    }
     playPause->setFixedSize(playBox);
     playPause->setAlignment(Qt::AlignCenter);
     playPause->setProperty("aioOwned", true);
     playing = playPause->text() == QString::fromUtf8("Pausa") || playPause->text() == QLatin1String("Pause");
     setIcon(playPause, playing ? pauseIcon : playIcon, playBox);
-    onTap(playPause, this, "flashSender()");
-    const int sb = qMax(target, px(100) + px(12));
-    if (back && fwd) {
-        detach(r, back);
-        detach(r, fwd);
-        back->setFixedSize(sb, sb);
+    addButton(playPause);
+    if (seekButtons) {
         fwd->setFixedSize(sb, sb);
-        back->setAlignment(Qt::AlignCenter);
         fwd->setAlignment(Qt::AlignCenter);
-        setIcon(back, nickelIcon(":/images/audiobook/backward_button.png", px(100), G_BACK30), QSize(sb, sb));
         setIcon(fwd, nickelIcon(":/images/audiobook/forward_button.png", px(100), G_FWD30), QSize(sb, sb));
-        back->setProperty("aioOwned", true);
         fwd->setProperty("aioOwned", true);
-        onTap(back, this, "flashSender()");
-        onTap(fwd, this, "flashSender()");
-        onTap(back, this, "rewind()"); // stock: empty slots
         onTap(fwd, this, "ahead()");
-        row1->insertWidget(0, back);
-        row1->addWidget(fwd);
+        addButton(fwd);
     }
-    row1->insertStretch(0, 1);
-    row1->addStretch(1);
-    row1->setSpacing(px(64));
-
-    // Times and seek slider, above the bottom stretch.
-    QWidget *times = new QWidget(r);
-    QHBoxLayout *tl = new QHBoxLayout(times);
-    tl->setContentsMargins(0, px(8), 0, 0);
-    QLabel *el = new QLabel(times), *tot = new QLabel(times);
-    el->setObjectName("aioElapsed");
-    tot->setObjectName("aioTotal");
-    el->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    tot->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    tl->addWidget(el);
-    tl->addStretch(1);
-    tl->addWidget(tot);
-    elapsed = el;
-    total = tot;
-    QPixmap knob = nickelIcon(":/images/reading/scrubber_handle_off.png", px(56), G_KNOB);
-    AioSlider *sl = new AioSlider(r, true, qMax(2, px(3)), knob);
-    sl->setFixedHeight(qMax(target * 3 / 4, knob.height() + px(8)));
-    connect(sl, SIGNAL(seekRequested(qint64)), this, SLOT(seekTo(qint64)));
-    slider = sl;
-    int at = bottom ? col->count() - 1 : col->count();
-    col->insertWidget(at, times);
-    col->insertWidget(at + 1, sl);
-
-    // Chapter row: [toc] chapter name ...... [<] [>] [bluetooth]
-    QWidget *crow = new QWidget(r);
-    crow->setFixedHeight(target);
-    QHBoxLayout *cl = new QHBoxLayout(crow);
-    cl->setContentsMargins(0, 0, 0, 0);
-    cl->setSpacing(px(10));
-    QLabel *toc = new QLabel(crow);
-    toc->setPixmap(nickelIcon(":/images/reading/reading_toc.png", px(70), G_TOC));
-    cl->addWidget(toc);
-    QLabel *chap = new QLabel(crow);
-    chap->setObjectName("aioChapter");
-    chap->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    chap->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    chapter = chap;
-    cl->addWidget(chap, 1);
-    if (prev && next) { // stock goToPrevPage/goToNextPage stay wired
-        const QSize cb(target, target);
-        detach(r, prev);
-        detach(r, next);
-        prev->setFixedSize(cb);
+    if (chapterButtons) {
         next->setFixedSize(cb);
-        prev->setAlignment(Qt::AlignCenter);
         next->setAlignment(Qt::AlignCenter);
-        setIcon(prev, glyph(G_PREV, px(56)), cb);
-        setIcon(next, glyph(G_NEXT, px(56)), cb);
-        QLabel *const chevrons[] = {prev, next};
-        for (QLabel *l : chevrons) {
-            l->setProperty("aioOwned", true);
-            onTap(l, this, "flashSender()");
-            onTap(l, this, "userSkip()");
-            cl->addWidget(l);
-        }
+        next->setText(QString());
+        setIcon(next, glyph(G_SKIP_NEXT, px(60)), cb);
+        next->setProperty("aioOwned", true);
+        onTap(next, this, "userSkip()");
+        addButton(next);
     }
-    QLabel *bt = new QLabel(crow); // TODO: Bluetooth device name (Nickel's BluetoothManager, not resolved here)
-    bt->setPixmap(nickelIcon(":/images/reading/bluetooth.png", px(54), G_BT));
-    cl->addSpacing(px(6));
-    cl->addWidget(bt);
-    col->addWidget(crow);
+    v->addWidget(transport);
+    v->addStretch(1);
 
-    // Footer: whole-book bar and text.
-    AioSlider *bb = new AioSlider(r, false, qMax(2, px(4)), QPixmap());
-    bb->setFixedHeight(px(12));
-    bb->hide();
-    bookBar = bb;
-    QLabel *foot = new QLabel(r);
-    foot->setObjectName("aioFooter");
-    foot->setAlignment(Qt::AlignCenter);
-    footer = foot;
-    col->addWidget(bb);
-    col->addWidget(foot);
+    // Bottom bar: [-] 55% [+] ....... (timer 15 min) ....... [bt] name. Equal side groups keep the chip centred.
+    AioPane *bar = new AioPane(root);
+    bar->setFixedHeight(target);
+    QHBoxLayout *bl = new QHBoxLayout(bar);
+    bl->setContentsMargins(0, 0, 0, 0);
+    bl->setSpacing(0);
+    const int sideW = qMax(px(320), 2 * target + textWidth(fTime, QString::fromLatin1("100%")) + px(16));
+    AioPane *volGroup = new AioPane(bar);
+    volGroup->setFixedSize(sideW, target);
+    QHBoxLayout *vg = new QHBoxLayout(volGroup);
+    vg->setContentsMargins(0, 0, 0, 0);
+    vg->setSpacing(0);
+    const int volW = textWidth(fTime, QString::fromLatin1("100%")) + px(16);
+    if (ownVolume) {
+        AioTap *dn = new AioTap(volGroup, glyph(G_MINUS, px(48)), fTime, false, true);
+        dn->setObjectName("aioVolumeDown");
+        dn->setFixedSize(cb);
+        AioText *vt = new AioText(volGroup, fTime, Qt::AlignHCenter);
+        vt->setFixedSize(volW, target);
+        AioTap *up = new AioTap(volGroup, glyph(G_PLUS, px(48)), fTime, false, true);
+        up->setObjectName("aioVolumeUp");
+        up->setFixedSize(cb);
+        connect(dn, SIGNAL(tapped()), this, SLOT(volumeDown()));
+        connect(up, SIGNAL(tapped()), this, SLOT(volumeUp()));
+        vg->addWidget(dn);
+        vg->addWidget(vt);
+        vg->addWidget(up);
+        volText = vt;
+        showVolume();
+    } else if (stockVolume) { // stock log10 stream volume, restyled
+        QLabel *const vols[] = {volDown, volUp};
+        for (QLabel *l : vols) {
+            l->setFixedSize(cb);
+            l->setAlignment(Qt::AlignCenter);
+            l->setProperty("aioOwned", true);
+        }
+        setIcon(volDown, glyph(G_MINUS, px(48)), cb);
+        setIcon(volUp, glyph(G_PLUS, px(48)), cb);
+        if (volume->text().startsWith(QString::fromUtf8("Volumen ")))
+            volume->setText(volume->text().mid(8));
+        volume->setAlignment(Qt::AlignCenter);
+        volume->setFixedSize(volW, target);
+        vg->addWidget(volDown);
+        vg->addWidget(volume);
+        vg->addWidget(volUp);
+    }
+    vg->addStretch(1);
+    bl->addWidget(volGroup);
+    bl->addStretch(1);
+    const QPixmap timerIcon = nickelIcon(":/images/reading/timer.png", px(48), G_TIMER);
+    AioTap *st = new AioTap(bar, timerIcon, fChip, true, true);
+    st->setObjectName("aioSleep");
+    st->setFixedHeight(target);
+    st->fitWidth(QStringList() << QString::fromUtf8("Apagado") << QString::fromUtf8("Fin de pista")
+                               << QString::fromUtf8("60 min"), target);
+    connect(st, SIGNAL(tapped()), this, SLOT(cycleSleep()));
+    sleepTap = st;
+    bl->addWidget(st);
+    bl->addStretch(1);
+    AioTap *bt = new AioTap(bar, nickelIcon(":/images/reading/bluetooth.png", px(54), G_BT), fTime, false, false);
+    bt->setObjectName("aioBluetooth");
+    bt->setAlignment(Qt::AlignRight);
+    bt->setFixedSize(sideW, target);
+    connect(bt, SIGNAL(tapped()), this, SLOT(btTapped())); // consumes the tap, nothing heavy
+    btTap = bt;
+    bl->addWidget(bt);
+    v->addWidget(bar);
 
-    // Hidden: the stock track label (it feeds the chapter row), "current"/"total", speed presets, linear volume.
-    static const char *const hidden[] = {"title", "current", "total", "volumeUp", "volumeDown", nullptr};
-    for (int i = 0; hidden[i]; i++)
-        if (QWidget *x = child<QWidget>(r, hidden[i]))
-            x->hide();
+    // Footer: track and whole-book progress, text only.
+    v->addSpacing(px(8));
+    AioText *ft = new AioText(root, fFoot, Qt::AlignHCenter);
+    ft->setFixedHeight(px(36));
+    footerText = ft;
+    v->addWidget(ft);
+
+    col->insertWidget(0, root, 1);
+    col->invalidate();
     if (title)
         setChapter(title->property("aioName").toString());
-    col->invalidate();
+    updateSleepLabel();
+    updateBtChip();
 
-    // E-ink friendly: black on white, no borders, no rounded corners, no grey fills (the slider paints its track).
-    static const char *const ids[] = {"slower", "faster", "normal", "logVolumeDown", "logVolumeUp", "volume", "playPause",
-                                      "backward", "forward", "prevChapter", "nextChapter", "aioSleep", "aioSleepText", nullptr};
-    QStringList plain, down;
-    for (int i = 0; ids[i]; i++) {
+    // Stock widgets only (ours paint themselves), set once: black on white, no borders, no grey fills.
+    static const char *const ids[] = {"coverImage", "playPause", "backward", "forward", "prevChapter", "nextChapter",
+                                      "logVolumeDown", "logVolumeUp", "volume", nullptr};
+    QStringList plain;
+    for (int i = 0; ids[i]; i++)
         plain << QString("#%1").arg(QString::fromLatin1(ids[i]));
-        down << QString("#%1[aioDown=\"true\"]").arg(QString::fromLatin1(ids[i]));
-    }
-    r->setStyleSheet(
-        plain.join(", ") + " { border: none; background: white; color: black; margin: 0; padding: 0; }" +
-        QString("#faster { font-family: DefaultSansSerif; font-weight: bold; font-size: %1px; padding-left: %2px; }").arg(px(30)).arg(px(4)) +
-        QString("#normal, #aioSleepText, #volume { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(28)) +
-        "#normal { font-weight: bold; }"
-        "#aioLine { background: black; border: none; }" +
-        QString("#aioBook { font-family: DefaultSerif; font-weight: bold; font-size: %1px; padding: %2px 0; }").arg(px(34)).arg(px(6)) +
-        QString("#aioElapsed, #aioTotal { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(28)) +
-        QString("#aioChapter { font-family: DefaultSansSerif; font-style: italic; font-size: %1px; padding-left: %2px; }").arg(px(29)).arg(px(6)) +
-        QString("#aioFooter { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(24)) +
-        down.join(", ") + " { background: black; color: white; }");
+    r->setStyleSheet(plain.join(", ") + " { border: none; background: white; color: black; margin: 0; padding: 0; }" +
+                     QString("#volume { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(28)));
 
-    if (playing)
-        timer->start();
+    schedule();
 }
 
 AioAudio::~AioAudio() {
+    if (btMine)
+        btQueued = false; // our deferred read dies with us
+    if (volSaveTimer && volSaveTimer->isActive())
+        saveVolumeNow();
     saveState(false); // the player may already be stopped or gone: use the last position seen
+}
+
+bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
+    if (watched == reader.data()) {
+        if (e->type() == QEvent::Hide) {
+            timer->stop(); // nothing repaints behind other screens
+        } else if (e->type() == QEvent::Show) {
+            tick();
+            if (playing && !timer->isActive())
+                timer->start();
+        }
+    }
+    return QObject::eventFilter(watched, e);
+}
+
+// The tick timer runs only while playing and visible.
+void AioAudio::schedule() {
+    if (playing && reader && reader->isVisible()) {
+        if (!timer->isActive())
+            timer->start();
+    } else {
+        timer->stop();
+    }
 }
 
 void AioAudio::setIcon(QLabel *l, const QPixmap &pm, const QSize &box) {
     if (!l || pm.isNull())
         return;
-    QPixmap inv = inverted(pm, box);
-    l->setProperty("aioIcon", QVariant::fromValue(pm));
-    l->setProperty("aioInv", QVariant::fromValue(inv));
     l->setPixmap(pm); // straight to QtWidgets: our setPixmap hook only covers libmp3z's PLT
-    if (l->inherits("TouchLabel")) {
+    if (l->inherits("TouchLabel")) { // the TouchLabel paints its own pressed state with the selected pixmap
         if (TouchLabel_setDeselectedPixmap)
             TouchLabel_setDeselectedPixmap(l, pm);
         if (TouchLabel_setSelectedPixmap)
-            TouchLabel_setSelectedPixmap(l, inv);
+            TouchLabel_setSelectedPixmap(l, inverted(pm, box));
     }
+}
+
+QPixmap AioAudio::framedCover(const QPixmap &pm) const {
+    if (pm.isNull())
+        return pm;
+    return framed(pm.toImage(), coverBox, frameWidth());
 }
 
 void AioAudio::setPlayer(QObject *p) {
@@ -1088,12 +1341,12 @@ void AioAudio::setPlayer(QObject *p) {
     connect(p, SIGNAL(durationChanged(qint64)), this, SLOT(onDuration()));
     qreal rate = p->property("playbackRate").toReal();
     int best = 0;
-    for (int i = 1; i < 4; i++)
+    for (int i = 1; i < RATE_COUNT; i++)
         if (qAbs(RATES[i] - rate) < qAbs(RATES[best] - rate))
             best = i;
     speedIndex = rate > 0 ? best : 0;
-    if (speed)
-        speed->setText(QString::fromLatin1(RATE_NAMES[speedIndex]));
+    if (speedTap)
+        speedTap->setText(QString::fromLatin1(RATE_NAMES[speedIndex]));
 }
 
 bool AioAudio::owns(QObject *p) const {
@@ -1102,9 +1355,16 @@ bool AioAudio::owns(QObject *p) const {
 
 void AioAudio::media(QObject *p, int index, const QByteArray &mp3, bool hasData) {
     setPlayer(p); // AudioPlayer : QMediaPlayer (single inheritance)
+    // AUDIO-FIX: stock setPage just called applyVolume(10) (10 % stream gain) and never sets the headset's
+    // volume. Full stream gain (local, no D-Bus); the headset level goes once, deferred, per reader.
+    applyGain();
     setTrack(index, mp3);
     if (hasData)
         setCover(mp3);
+    if (!btRequested) {
+        btRequested = true;
+        requestBluetooth();
+    }
     tick();
 }
 
@@ -1181,10 +1441,8 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
         no = count = 0;
     if (!album.isEmpty() && album != bookTitle) {
         bookTitle = album;
-        if (book) {
-            book->setText(album);
-            book->show();
-        }
+        if (titleText)
+            titleText->setText(album);
         loadState();
     }
     const int cur = no > 0 ? no - 1 : index;
@@ -1195,6 +1453,7 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
     trackCount = count;
     lastPos = 0;
     lastDur = 0;
+    footerDirty = true;
     if (first) {
         if (savedTrack == cur && savedPos > 5000) { // libmp3z reopens the track, we bring back the minute
             pendingSeek = savedPos;
@@ -1235,6 +1494,7 @@ void AioAudio::applyPending() {
         resumeTarget = pendingSeek;
     }
     pendingSeek = -1;
+    footerDirty = true; // the book percentage jumps with the resumed minute
     QTimer::singleShot(400, this, SLOT(tick()));
 }
 
@@ -1250,6 +1510,7 @@ void AioAudio::applyPendingLast() {
     }
     lastPos = pendingSeek; // a close before the next tick keeps the saved minute
     pendingSeek = -1;
+    footerDirty = true;
     QTimer::singleShot(400, this, SLOT(tick()));
 }
 
@@ -1271,6 +1532,7 @@ void AioAudio::onDuration() {
         durations.insert(track, d);
     if (d > 0)
         lastDur = d;
+    footerDirty = true; // a new track length: the book total changes
     applyPending();
     tick();
 }
@@ -1304,52 +1566,47 @@ void AioAudio::applyPlayState() {
     const bool was = playing;
     playing = now;
     tick();
+    schedule(); // e-ink: nothing moves while paused
     if (playing) {
-        timer->start();
         if (pauseOnPlay) {
             pauseOnPlay = false;
             QMetaObject::invokeMethod(this, "sleepFired", Qt::QueuedConnection);
         }
-    } else {
-        timer->stop(); // e-ink: nothing moves while paused
-        if (was)
-            saveState(true);
+    } else if (was) {
+        saveState(true);
     }
 }
 
 void AioAudio::setChapter(const QString &name) {
-    if (chapter && chapter->text() != name)
-        chapter->setText(name);
+    if (chapterText)
+        chapterText->setText(name);
 }
 
 void AioAudio::setCover(const QByteArray &mp3) {
     if (!cover)
         return;
+    const int lw = frameWidth();
     QByteArray jpeg = apic(mp3);
     if (jpeg.isEmpty()) {
         const QPixmap *cur = cover->pixmap();
         if (cur && !cur->isNull())
             return;
-        // No picture anywhere yet: a plain frame with the book title (the stock lambda may still replace it).
+        // No picture anywhere yet: a framed box with the book title (the stock lambda may still replace it).
         QPixmap ph(coverBox);
         ph.fill(Qt::white);
         QPainter p(&ph);
-        p.setRenderHint(QPainter::Antialiasing);
-        const int lw = qMax(2, px(3));
-        p.setPen(QPen(Qt::black, lw));
-        p.drawRect(QRectF(lw / 2.0, lw / 2.0, coverBox.width() - lw, coverBox.height() - lw));
-        QFont f;
-        f.setPixelSize(px(40));
-        f.setBold(true);
-        p.setFont(f);
-        p.drawText(QRect(QPoint(0, 0), coverBox).adjusted(px(40), px(40), -px(40), -px(40)),
+        drawFrame(p, QRect(QPoint(0, 0), coverBox), lw);
+        p.setRenderHint(QPainter::TextAntialiasing);
+        p.setFont(makeFont("DefaultSerif", px(44), true));
+        p.setPen(Qt::black);
+        p.drawText(QRect(QPoint(0, 0), coverBox).adjusted(px(48), px(48), -px(48), -px(48)),
                    Qt::AlignCenter | Qt::TextWordWrap, bookTitle.isEmpty() ? QString::fromUtf8("Audiolibro") : bookTitle);
         p.end();
         cover->setPixmap(ph);
         return;
     }
     // setPage runs before the reader is laid out, so the label size is not known yet: always use the box
-    // computed from the screen, which is what the layout gives the cover anyway.
+    // computed from the screen, which is the cover's fixed size anyway.
     int key = int(qHash(jpeg));
     if (key == coverKey && cover->property("aioCover").toBool())
         return;
@@ -1363,23 +1620,21 @@ void AioAudio::setCover(const QByteArray &mp3) {
     if (fmt != "jpeg" && fmt != "jpg" && qint64(native.width()) * native.height() > 4000000)
         return; // only JPEG decodes at the scaled size: others would be decoded whole first
 
-    jr.setScaledSize(native.scaled(coverBox, Qt::KeepAspectRatio)); // the JPEG handler decodes at that scale
+    const QSize inner(qMax(1, coverBox.width() - 2 * lw), qMax(1, coverBox.height() - 2 * lw));
+    jr.setScaledSize(native.scaled(inner, Qt::KeepAspectRatio)); // the JPEG handler decodes at that scale
     QImage img = jr.read();
     if (img.isNull())
         return;
     cover->setProperty("aioCover", true);
-    cover->setPixmap(QPixmap::fromImage(img));
+    cover->setPixmap(framed(img, coverBox, lw));
     coverKey = key;
 }
 
-static void setTextIfChanged(QLabel *l, const QString &t) {
-    if (l && l->text() != t)
-        l->setText(t);
-}
-
+// The 5 s tick and every event that moves the position. Only the elapsed/remaining/slider band changes here;
+// the footer at most every 60 s or when a track changed; the sleep label only when its minute changes.
 void AioAudio::tick() {
     if (!player || !reader)
-        return; // hidden labels do not repaint, so no e-ink cost; the 5 s timer only runs while playing
+        return;
     qint64 pos = player->property("position").toLongLong();
     const qint64 dur = player->property("duration").toLongLong();
     if (pos < 0)
@@ -1390,14 +1645,24 @@ void AioAudio::tick() {
         if (track >= 0 && !durations.contains(track))
             durations.insert(track, dur);
     }
-    setTextIfChanged(elapsed, hms(pos));
-    setTextIfChanged(total, dur > 0 ? hms(dur) : QString());
+    if (elapsedText)
+        elapsedText->setText(hms(pos));
+    if (remainText)
+        remainText->setText(dur > 0 ? QString::fromLatin1("-") + hms(qMax<qint64>(0, dur - pos)) : QString());
     if (slider)
         slider->setValue(pos, dur);
+    if (footerDirty || !footerClock.isValid() || footerClock.elapsed() >= 60000)
+        updateFooter(pos, dur);
+    updateSleepLabel();
+}
 
-    // Whole book: learned track lengths, the average of those for the rest ("≈" until all are known).
+// Whole book: learned track lengths, the average of those for the rest ("≈" until all are known).
+void AioAudio::updateFooter(qint64 pos, qint64 dur) {
+    footerDirty = false;
+    footerClock.start();
+    if (!footerText)
+        return;
     QString f;
-    bool bar = false;
     if (trackNo > 0)
         f = trackCount > 0 ? QString("Pista %1 de %2").arg(trackNo).arg(trackCount) : QString("Pista %1").arg(trackNo);
     if (trackCount > 0 && dur > 0 && track >= 0 && track < trackCount) {
@@ -1420,15 +1685,9 @@ void AioAudio::tick() {
             const int pct = int(qBound<qint64>(0, done * 100 / all, 100));
             f += QString::fromUtf8(" · %1% del libro · quedan %2%3")
                      .arg(pct).arg(nk >= trackCount ? QString() : QString::fromUtf8("≈ ")).arg(span(all - done));
-            if (bookBar)
-                bookBar->setValue(done, all);
-            bar = true;
         }
     }
-    setTextIfChanged(footer, f);
-    if (bookBar && bookBar->isHidden() == bar)
-        bookBar->setVisible(bar);
-    updateSleepLabel();
+    footerText->setText(f);
 }
 
 void AioAudio::seekTo(qint64 ms) {
@@ -1455,7 +1714,7 @@ void AioAudio::rewind() { seek(-30000); }
 void AioAudio::ahead() { seek(30000); }
 void AioAudio::userSkip() { skipClock.start(); }
 
-// "Regresar a Mis libros": save, then close like Nickel's own back button (queued: we are inside the tap).
+// "Mis libros": save, then close like Nickel's own back button (queued: we are inside the tap).
 void AioAudio::goHome() {
     if (property("aioClosing").toBool())
         return; // a second tap before the queued close ran
@@ -1484,9 +1743,9 @@ void AioCloser::close() {
 }
 
 void AioAudio::cycleSpeed() {
-    speedIndex = (speedIndex + 1) % 4; // 1x -> 1,2x -> 1,5x -> 0,8x
-    if (speed)
-        speed->setText(QString::fromLatin1(RATE_NAMES[speedIndex]));
+    speedIndex = (speedIndex + 1) % RATE_COUNT; // 1x -> 1,25x -> 1,5x -> 1,75x -> 2x -> 0,8x -> 1x
+    if (speedTap)
+        speedTap->setText(QString::fromLatin1(RATE_NAMES[speedIndex]));
     applyRate();
 }
 
@@ -1522,74 +1781,131 @@ void AioAudio::endOfTrackCheck() {
 }
 
 void AioAudio::updateSleepLabel() {
-    QString t;
+    QString t = QString::fromUtf8("Apagado");
     if (sleepMode >= 1 && sleepMode <= 3) {
         qint64 left = qint64(SLEEP_MIN[sleepMode]) * 60000 - (sleepClock.isValid() ? sleepClock.elapsed() : 0);
         t = QString("%1 min").arg((qMax<qint64>(0, left) + 59999) / 60000);
     } else if (sleepMode == 4) {
         t = QString::fromUtf8("Fin de pista");
     }
-    setTextIfChanged(sleepText, t);
+    if (sleepTap)
+        sleepTap->setText(t); // repaints only when the minute (or the mode) changed
 }
 
-void AioAudio::flashSender() {
-    if (QLabel *l = qobject_cast<QLabel *>(sender()))
-        flash(l);
-}
+// -- volume and Bluetooth -----------------------------------------------------------------------------------
 
-// Tap feedback: inverted for ~150 ms (icons: white on black; text: black background).
-void AioAudio::flash(QLabel *l) {
-    QVariant inv = l->property("aioInv");
-    if (inv.isValid()) {
-        l->setPixmap(qvariant_cast<QPixmap>(inv));
-    } else {
-        l->setProperty("aioDown", true);
-        repolish(l);
-    }
-    flashed.append(QPointer<QLabel>(l));
-    flashTimer->start();
-}
-
-// Header volume: the headset's own volume (0..127, sent over AVRCP like Kobo's player), shown as a percentage.
+// Bottom bar volume: the headset's own volume (0..127, sent over AVRCP like Kobo's player), shown as a percentage.
 void AioAudio::showVolume() {
-    if (volumeLabel)
-        volumeLabel->setText(QString::number((btVolumeLoad() * 100 + 63) / 127) + "%");
+    if (volText)
+        volText->setText(QString::number(volumePercent()) + "%");
 }
 
+// A tap only changes the number: the headset gets one setVolume 300 ms after the last tap, the file one write
+// 2 s after it.
 void AioAudio::stepVolume(int delta) {
     btVolume = qBound(0, btVolumeLoad() + delta, 127);
-    applyVolumeTo(player.data()); // no headset: the player's own volume, so the buttons still do something
     showVolume();
-    if (!onboardReady())
-        return;
-    QSettings s(AIO_DIR "/positions.ini", QSettings::IniFormat);
-    s.setValue("btVolume", btVolume); // one small write per tap, never on a timer
-}
-
-void AioAudio::syncVolume() {
-    if (volClock.isValid() && volClock.elapsed() < 20000)
-        return; // at most every 20 s: libnickel's Bluetooth calls go over D-Bus on the GUI thread
-    volClock.start();
-    applyVolumeTo(player.data());
+    volApplyTimer->start();
+    volSaveTimer->start();
 }
 
 void AioAudio::volumeDown() { stepVolume(-8); }
 void AioAudio::volumeUp() { stepVolume(8); }
 
-void AioAudio::unflash() {
-    for (int i = 0; i < flashed.size(); i++) {
-        QLabel *l = flashed.at(i).data();
-        if (!l)
-            continue;
-        QVariant icon = l->property("aioIcon");
-        if (icon.isValid()) {
-            l->setPixmap(qvariant_cast<QPixmap>(icon));
-        } else {
-            l->setProperty("aioDown", false);
-            repolish(l);
-        }
+void AioAudio::applyVolumeNow() {
+    applyGain();
+    sendVolume();
+    if (btDev.isEmpty() && btChecked && !btRetried) { // maybe the headset connected after the book opened
+        btRetried = true;
+        requestBluetooth();
     }
-    flashed.clear();
+}
+
+void AioAudio::saveVolumeNow() {
+    volSaveTimer->stop();
+    if (!onboardReady())
+        return;
+    QSettings s(AIO_DIR "/positions.ini", QSettings::IniFormat);
+    s.setValue("btVolume", btVolumeLoad());
+}
+
+// Stream gain (QMediaPlayer, local): full with a headset, our level when there is none. Without the Bluetooth
+// API the stock log10 stream volume is left alone.
+void AioAudio::applyGain() {
+    if (!player || !btVolumeApi())
+        return;
+    const int gain = btChecked && btDev.isEmpty() ? volumePercent() : 100;
+    QMetaObject::invokeMethod(player, "setVolume", Q_ARG(int, gain));
+}
+
+// The headset level, only when it differs from what this reader last sent.
+void AioAudio::sendVolume() {
+    if (btDev.isEmpty() || !BluetoothManager_sharedInstance || !BluetoothManager_setVolume)
+        return;
+    const int v = btVolumeLoad();
+    if (v == sentVolume)
+        return;
+    void *bm = BluetoothManager_sharedInstance();
+    if (!bm)
+        return;
+    BluetoothManager_setVolume(bm, btDev, (unsigned char)v, (unsigned char)v);
+    sentVolume = v;
+    nh_log("AIO Audio: headset volume %d/127", v);
+}
+
+void AioAudio::requestBluetooth() {
+    if (btQueued || !btVolumeApi())
+        return;
+    btQueued = true;
+    btMine = true;
+    QTimer::singleShot(0, this, SLOT(refreshBluetooth())); // after the current event: never inside a tap or setMedia
+}
+
+// The deferred Bluetooth read: sink path, software volume and unmute (once per device per Nickel run), our
+// level (only if it changed) and the headset name.
+void AioAudio::refreshBluetooth() {
+    btQueued = false;
+    btMine = false;
+    void *bm = BluetoothManager_sharedInstance ? BluetoothManager_sharedInstance() : 0;
+    if (!bm || !BluetoothManager_a2dpSink)
+        return;
+    const QString dev = BluetoothManager_a2dpSink(bm);
+    btChecked = true;
+    if (dev != btDev) {
+        btDev = dev;
+        btName.clear();
+        sentVolume = -1;
+    }
+    if (btDev.isEmpty()) {
+        nh_log("AIO Audio: no A2DP headset connected");
+    } else {
+        if (!btPrepared.contains(btDev)) {
+            btPrepared << btDev;
+            const bool absolute = BluetoothManager_supportsAbsoluteVolume ? BluetoothManager_supportsAbsoluteVolume(bm, btDev) : true;
+            if (BluetoothManager_setSoftwareVolume)
+                BluetoothManager_setSoftwareVolume(bm, btDev, !absolute);
+            if (BluetoothManager_setMuted)
+                BluetoothManager_setMuted(bm, btDev, false, false);
+            nh_log("AIO Audio: headset prepared (%s volume)", absolute ? "absolute" : "software");
+        }
+        sendVolume();
+        btName = headsetName(btDev);
+    }
+    applyGain();
+    updateBtChip();
+}
+
+// The Bluetooth chip only takes the tap; at most one deferred re-read per reader (a headset that connected later).
+void AioAudio::btTapped() {
+    if (btRetried)
+        return;
+    btRetried = true;
+    requestBluetooth();
+}
+
+void AioAudio::updateBtChip() {
+    if (btTap)
+        btTap->setText(btName.isEmpty() ? QString::fromLatin1("Bluetooth") : btName);
 }
 
 // -- hooks ----------------------------------------------------------------------------------------------
@@ -1630,14 +1946,8 @@ extern "C" __attribute__((visibility("default"))) void _aio_setText(QLabel *self
         QLabel_setText(self, text);
         return;
     }
-    if (text == QLatin1String("Pause") && self->objectName() == QLatin1String("playPause")) {
-        if (aio)
-            aio->syncVolume(); // now playing: make sure the headset is not at volume 0
-        else
-            applyVolumeTo(0);
-    }
     if (aio && aio->playPauseText(self, text))
-        return; // play/pause icon
+        return; // play/pause icon (no Bluetooth call here: play/pause changes never touch BluetoothManager)
     if (self->property("aioOwned").toBool())
         return; // a stock button we restyled: keep our icon/text
     const QString t = translate(self, text, !aio.isNull());
@@ -1652,12 +1962,16 @@ extern "C" __attribute__((visibility("default"))) void _aio_setText(QLabel *self
 extern "C" __attribute__((visibility("default"))) void _aio_setPixmap(QLabel *self, const QPixmap &pixmap) {
     if (self && self->property("aioCover").toBool())
         return; // our cover, read from the track itself, stays
+    if (self && aio && !pixmap.isNull() && self->property("aioCoverSlot").toBool()) {
+        QLabel_setPixmap(self, aio->framedCover(pixmap)); // the stock cover, fitted into our framed box
+        return;
+    }
     QLabel_setPixmap(self, pixmap);
 }
 
 // The stock cover lambda moves coverImage to (0,0) at the picture's native size before setPixmap.
 extern "C" __attribute__((visibility("default"))) void _aio_setGeometry(QWidget *self, const QRect &rect) {
-    if (self && self->property("aioCover").toBool())
+    if (self && (self->property("aioCoverSlot").toBool() || self->property("aioCover").toBool()))
         return;
     QWidget_setGeometry(self, rect);
 }
@@ -1665,15 +1979,11 @@ extern "C" __attribute__((visibility("default"))) void _aio_setGeometry(QWidget 
 extern "C" __attribute__((visibility("default"))) void _aio_setMedia(void *self, int index, const void *content, QIODevice *device) {
     AudioPlayer_setMedia(self, index, content, device);
     QObject *player = reinterpret_cast<QObject *>(self); // AudioPlayer : QMediaPlayer (single inheritance)
-    // AUDIO-FIX: stock setPage just called applyVolume(10) (10 % stream gain) and never sets the headset's
-    // volume. Full stream gain, and the headset volume is what the volume buttons change (like Kobo's player).
-    // Only with the whole Bluetooth API: otherwise the stock volume stays.
-    applyVolumeTo(player);
     QBuffer *buffer = qobject_cast<QBuffer *>(device);
     const QByteArray data = buffer ? buffer->data() : QByteArray();
     if (aio && aio->owns(player)) {
         forgetMedia();
-        aio->media(player, index, data, buffer != 0);
+        aio->media(player, index, data, buffer != 0); // stream gain now, headset level deferred
         return;
     }
     // No AioAudio for this reader yet (setPage inside the MP3Reader constructor): _aio_reader replays it.
@@ -1715,6 +2025,9 @@ static struct nh_dlsym AioAudioDlsym[] = {
     {.name = "_ZN16BluetoothManager17setSoftwareVolumeERK7QStringb", .out = nh_symoutptr(BluetoothManager_setSoftwareVolume), .desc = "headset volume", .optional = true},
     {.name = "_ZN16BluetoothManager8setMutedERK7QStringbb", .out = nh_symoutptr(BluetoothManager_setMuted), .desc = "headset volume", .optional = true},
     {.name = "_ZN16BluetoothManager9setVolumeERK7QStringhh", .out = nh_symoutptr(BluetoothManager_setVolume), .desc = "headset volume", .optional = true},
+    {.name = "_ZN15BluetoothDeviceC1ERK7QString", .out = nh_symoutptr(BluetoothDevice_BluetoothDevice), .desc = "headset name", .optional = true},
+    {.name = "_ZNK15BluetoothDevice11displayNameEv", .out = nh_symoutptr(BluetoothDevice_displayName), .desc = "headset name", .optional = true},
+    {.name = "_ZN15BluetoothDeviceD1Ev", .out = nh_symoutptr(BluetoothDevice_destroy), .desc = "headset name", .optional = true},
     {0},
 };
 
