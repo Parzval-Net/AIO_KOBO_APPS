@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Ink-boy · Instalador para Kobo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* E-reader inspired tokens: warm paper, ink, and a single restrained accent.
+       Night mode mirrors the inverted "dark mode" of e-ink readers. */
+    :root {
+      --paper: #f4f1ea;
+      --surface: #fbfaf6;
+      --surface-sunk: #ece8de;
+      --ink: #1b1a17;
+      --ink-2: #45433d;
+      --ink-3: #6f6c64;
+      --rule: #d8d3c6;
+      --rule-strong: #b9b3a4;
+      --accent: #1f4e79;
+      --accent-ink: #ffffff;
+      --ok: #2f6b45;
+      --warn: #8a5a12;
+      --err: #a3322a;
+      --ok-bg: #e3efe6;
+      --warn-bg: #f6ead2;
+      --err-bg: #f6e0dd;
+      --k-red: #c4473a;
+      --k-amber: #d49a2a;
+      --k-green: #3a7d55;
+      --k-blue: #2f6aa3;
+      --radius: 14px;
+      --radius-sm: 9px;
+      --shadow: 0 1px 0 rgba(27, 26, 23, 0.04), 0 8px 24px -12px rgba(27, 26, 23, 0.18);
+      --focus: 0 0 0 3px var(--paper), 0 0 0 5px var(--accent);
+      --serif: "Literata", "Iowan Old Style", Georgia, serif;
+      --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #141413;
+        --surface: #1c1c1a;
+        --surface-sunk: #232320;
+        --ink: #ece9e1;
+        --ink-2: #c9c5ba;
+        --ink-3: #9a968b;
+        --rule: #2f2e2a;
+        --rule-strong: #46443e;
+        --accent: #8db8e3;
+        --accent-ink: #0f1a24;
+        --ok: #8cc9a1;
+        --warn: #e2b768;
+        --err: #ef9a90;
+        --ok-bg: #1d2a21;
+        --warn-bg: #2c2416;
+        --err-bg: #2e1d1b;
+        --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 10px 28px -14px rgba(0, 0, 0, 0.6);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 400 16px/1.6 var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    code, .mono { font-family: var(--mono); font-size: 0.88em; }
+    code {
+      background: var(--surface-sunk);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      padding: 0.05em 0.35em;
+    }
+    a { color: var(--accent); }
+
+    .page {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 40px 16px 56px;
+    }
+
+    /* Masthead */
+    .masthead { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; margin-bottom: 32px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--ink-3); font-size: 0.82rem; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+    .cfa { display: grid; grid-template-columns: repeat(2, 7px); gap: 2px; }
+    .cfa i { width: 7px; height: 7px; border-radius: 1.5px; display: block; }
+    .cfa i:nth-child(1) { background: var(--k-red); }
+    .cfa i:nth-child(2) { background: var(--k-green); }
+    .cfa i:nth-child(3) { background: var(--k-blue); }
+    .cfa i:nth-child(4) { background: var(--k-amber); }
+    h1 {
+      font-family: var(--serif);
+      font-weight: 700;
+      font-size: clamp(2rem, 1.4rem + 2.6vw, 2.9rem);
+      line-height: 1.1;
+      letter-spacing: -0.015em;
+      margin: 10px 0 12px;
+    }
+    .lede { color: var(--ink-2); max-width: 58ch; margin: 0; font-size: 1.02rem; }
+
+    /* Decorative e-reader illustration */
+    .reader {
+      width: 132px; aspect-ratio: 3 / 4;
+      background: var(--ink); border-radius: 16px; padding: 10px 10px 18px;
+      box-shadow: var(--shadow);
+    }
+    .reader .screen {
+      height: 100%; border-radius: 6px; background: #ece8dc;
+      display: grid; place-items: center; position: relative; overflow: hidden;
+    }
+    .reader .gb { width: 64%; aspect-ratio: 10 / 9; border-radius: 3px;
+      background:
+        linear-gradient(#9bbc0f, #9bbc0f) 18% 30% / 18% 14% no-repeat,
+        linear-gradient(#306230, #306230) 62% 62% / 22% 22% no-repeat,
+        #c4cfa1;
+      filter: grayscale(0.35); outline: 2px solid #2a2a26; }
+    @media (prefers-color-scheme: dark) { .reader { background: #2a2a27; } }
+
+    /* Stepper */
+    .stepper { list-style: none; display: flex; gap: 8px; padding: 0; margin: 0 0 20px; counter-reset: s; }
+    .stepper li {
+      flex: 1; display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      background: var(--surface); border: 1px solid var(--rule);
+      font-size: 0.86rem; color: var(--ink-3); font-weight: 500; min-width: 0;
+    }
+    .stepper li span.n {
+      flex: none; width: 24px; height: 24px; border-radius: 50%;
+      display: grid; place-items: center; font-size: 0.78rem; font-weight: 600;
+      border: 1.5px solid var(--rule-strong); color: var(--ink-3);
+    }
+    .stepper li .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stepper li[data-state="current"] { color: var(--ink); border-color: var(--ink); }
+    .stepper li[data-state="current"] span.n { border-color: var(--ink); color: var(--ink); }
+    .stepper li[data-state="done"] { color: var(--ink-2); }
+    .stepper li[data-state="done"] span.n { background: var(--ok); border-color: var(--ok); color: var(--surface); }
+
+    /* Cards */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 16px;
+    }
+    .card[aria-disabled="true"] { opacity: 0.62; }
+    .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 14px; }
+    .kicker { font-size: 0.76rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+    h2 { font-family: var(--serif); font-weight: 600; font-size: 1.35rem; line-height: 1.25; margin: 2px 0 0; }
+    .muted { color: var(--ink-3); }
+    .small { font-size: 0.86rem; }
+
+    .steps { margin: 0 0 18px; padding-left: 1.2rem; color: var(--ink-2); }
+    .steps li { margin: 4px 0; }
+
+    /* Chips */
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+      font-size: 0.78rem; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+      background: var(--surface-sunk); color: var(--ink-2); border: 1px solid var(--rule);
+    }
+    .chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+    .chip.ok { background: var(--ok-bg); color: var(--ok); border-color: transparent; }
+    .chip.warn { background: var(--warn-bg); color: var(--warn); border-color: transparent; }
+    .chip.err { background: var(--err-bg); color: var(--err); border-color: transparent; }
+
+    /* Buttons */
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn {
+      appearance: none; border: 1px solid var(--ink); background: var(--surface); color: var(--ink);
+      font: 600 0.95rem/1 var(--sans); padding: 13px 18px; border-radius: 10px; cursor: pointer;
+      min-height: 46px; transition: background-color .15s ease, transform .15s ease;
+    }
+    .btn:hover { background: var(--surface-sunk); }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--ink); color: var(--paper); }
+    .btn.primary:hover { background: var(--ink-2); }
+    .btn.accent { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+    .btn.accent:hover { filter: brightness(1.08); }
+    .btn.link { border-color: transparent; background: none; color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; padding: 13px 6px; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; filter: none; }
+    .btn:focus-visible, select:focus-visible, .dropzone:focus-visible, summary:focus-visible { outline: none; box-shadow: var(--focus); }
+
+    /* Device panel */
+    .device {
+      display: none; margin-top: 18px; border-top: 1px solid var(--rule); padding-top: 18px;
+    }
+    .device.visible { display: block; }
+    .device-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .device-title strong { font-family: var(--serif); font-size: 1.15rem; }
+    .kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 20px; margin: 0; }
+    .kv dt { font-size: 0.74rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+    .kv dd { margin: 2px 0 0; font-size: 0.92rem; }
+
+    /* Notices */
+    .notice { border-radius: var(--radius-sm); padding: 12px 14px; font-size: 0.9rem; margin-top: 14px; display: none; }
+    .notice.visible { display: block; }
+    .notice.warn { background: var(--warn-bg); color: var(--warn); }
+    .notice.err { background: var(--err-bg); color: var(--err); }
+    .notice.ok { background: var(--ok-bg); color: var(--ok); }
+
+    /* Form */
+    .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .field label { display: block; font-size: 0.86rem; font-weight: 600; margin-bottom: 6px; }
+    .field .hint { font-size: 0.8rem; color: var(--ink-3); margin-top: 5px; }
+    select {
+      width: 100%; appearance: none; font: 500 0.94rem var(--sans); color: var(--ink);
+      background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%236f6c64' stroke-width='1.6'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 14px center;
+      border: 1px solid var(--rule-strong); border-radius: 10px; padding: 12px 38px 12px 12px; min-height: 46px;
+    }
+
+    .dropzone {
+      border: 1.5px dashed var(--rule-strong); border-radius: var(--radius);
+      padding: 22px; text-align: center; cursor: pointer; background: var(--surface-sunk);
+      transition: border-color .15s ease, background-color .15s ease;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--ink); background: var(--surface); }
+    .dropzone .big { font-weight: 600; }
+    .files { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+    .file {
+      display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem;
+      padding: 5px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--rule);
+    }
+    .file .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-3); }
+
+    /* Progress */
+    .progress { height: 6px; border-radius: 99px; background: var(--surface-sunk); overflow: hidden; margin: 16px 0 6px; display: none; }
+    .progress.visible { display: block; }
+    .progress > i { display: block; height: 100%; width: 0; background: var(--ink); transition: width .25s ease; }
+    .checklist { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 6px; }
+    .checklist li { display: flex; gap: 10px; align-items: baseline; font-size: 0.92rem; }
+    .checklist li::before { content: "✓"; font-weight: 700; color: var(--ok); }
+    .checklist li.skip::before { content: "•"; color: var(--warn); }
+
+    details.log { margin-top: 16px; border-top: 1px solid var(--rule); padding-top: 12px; }
+    details.log summary { cursor: pointer; font-size: 0.86rem; font-weight: 600; color: var(--ink-2); border-radius: 6px; }
+    .console {
+      margin-top: 10px; background: var(--surface-sunk); border: 1px solid var(--rule); border-radius: var(--radius-sm);
+      font: 400 0.8rem/1.55 var(--mono); color: var(--ink-2); padding: 12px 14px;
+      max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+    }
+
+    details.advanced { margin-top: 18px; }
+    details.advanced summary { cursor: pointer; font-size: 0.86rem; color: var(--ink-3); border-radius: 6px; }
+    details.advanced .inner { margin-top: 12px; }
+
+    footer { text-align: center; color: var(--ink-3); font-size: 0.8rem; margin-top: 28px; }
+
+    @media (max-width: 640px) {
+      .page { padding-top: 24px; }
+      .masthead { grid-template-columns: 1fr; }
+      .reader { display: none; }
+      .card { padding: 18px; }
+      .card-head { flex-direction: column-reverse; gap: 10px; }
+      .stepper li .t { display: none; }
+      .stepper li { justify-content: center; }
+      .actions .btn { flex: 1 1 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="masthead">
+      <div>
+        <div class="brand"><span class="cfa" aria-hidden="true"><i></i><i></i><i></i><i></i></span> Ink-boy · Game Boy para e-ink</div>
+        <h1>Instala Ink-boy en tu Kobo</h1>
+        <p class="lede">Conecta el lector por USB, elige la unidad y el asistente instala el emulador, el acceso en NickelMenu y tus ROMs. Tus partidas y ajustes del Kobo se conservan.</p>
+      </div>
+      <div class="reader" aria-hidden="true"><div class="screen"><div class="gb"></div></div></div>
+    </header>
+
+    <ol class="stepper" aria-label="Progreso de la instalación">
+      <li id="st1" data-state="current"><span class="n">1</span><span class="t">Conectar</span></li>
+      <li id="st2"><span class="n">2</span><span class="t">Configurar</span></li>
+      <li id="st3"><span class="n">3</span><span class="t">Instalar</span></li>
+    </ol>
+
+    <main>
+      <!-- STEP 1 -->
+      <section class="card" aria-labelledby="h-connect">
+        <div class="card-head">
+          <div>
+            <div class="kicker">Paso 1</div>
+            <h2 id="h-connect">Conecta tu Kobo</h2>
+          </div>
+          <span id="connStatus" class="chip">Sin conectar</span>
+        </div>
+
+        <ol class="steps">
+          <li>Conecta el Kobo al computador con un cable USB de datos.</li>
+          <li>En la pantalla del Kobo toca <strong>Conectar</strong>.</li>
+          <li>Elige la unidad <code>KOBOeReader</code> y concede permiso de edición.</li>
+        </ol>
+
+        <div class="actions">
+          <button id="btnPickDirectory" class="btn primary">Seleccionar unidad KOBOeReader</button>
+        </div>
+        <p id="browserNotice" class="notice warn" role="status"></p>
+
+        <div id="deviceBanner" class="device" aria-live="polite">
+          <div class="device-title">
+            <strong id="detModel">Kobo</strong>
+            <span id="detColorChip" class="chip">Pantalla</span>
+            <span id="nmChip" class="chip">NickelMenu</span>
+          </div>
+          <dl class="kv">
+            <div><dt>Procesador</dt><dd id="detSoc">—</dd></div>
+            <div><dt>Pantalla</dt><dd id="detPanel">—</dd></div>
+            <div><dt>Firmware</dt><dd id="detFw">—</dd></div>
+          </dl>
+          <p id="nmNotice" class="notice warn"></p>
+        </div>
+
+        <details class="advanced">
+          <summary>Opciones avanzadas</summary>
+          <div class="inner">
+            <p class="small muted">Si iniciaste el servidor con <code>make installer-web</code>, puedes instalar sin elegir la carpeta: el servidor escribe directamente en <code>/Volumes/KOBOeReader</code> con el instalador de línea de comandos.</p>
+            <button id="btnAutoBackend" class="btn">Instalar desde el servidor local</button>
+          </div>
+        </details>
+      </section>
+
+      <!-- STEP 2 -->
+      <section class="card" aria-labelledby="h-config">
+        <div class="card-head">
+          <div>
+            <div class="kicker">Paso 2</div>
+            <h2 id="h-config">Ajustes y ROMs</h2>
+          </div>
+          <span class="chip">Recomendado según modelo</span>
+        </div>
+
+        <div class="fields">
+          <div class="field">
+            <label for="selMode">Modo de pantalla</label>
+            <select id="selMode">
+              <option value="quality">Calidad: color o 4 grises</option>
+              <option value="turbo">Turbo: blanco y negro, más fluido</option>
+            </select>
+            <div class="hint">Puedes cambiarlo en el juego con MODE.</div>
+          </div>
+          <div class="field">
+            <label for="selScale">Tamaño del juego</label>
+            <select id="selScale">
+              <option value="6">x6 · 960 × 864 (recomendado)</option>
+              <option value="7">x7 · 1120 × 1008 (solo Libra Colour)</option>
+            </select>
+            <div class="hint">x6 se alinea con el filtro de color Kaleido 3.</div>
+          </div>
+          <div class="field">
+            <label for="selButtons">Botones físicos</label>
+            <select id="selButtons">
+              <option value="A_B">Superior A · Inferior B</option>
+              <option value="B_A">Superior B · Inferior A</option>
+              <option value="START_SELECT">Superior START · Inferior SELECT</option>
+            </select>
+            <div class="hint">Solo en modelos con botones de página.</div>
+          </div>
+        </div>
+
+        <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-describedby="dzHint">
+          <input type="file" id="romFileInput" multiple accept=".gb,.gbc,.cgb,.sav" hidden />
+          <div class="big">Arrastra tus ROMs aquí o haz clic para elegirlas</div>
+          <div id="dzHint" class="small muted">Archivos <code>.gb</code>, <code>.gbc</code> y partidas <code>.sav</code>. Antes de reemplazar una partida existente se te pedirá confirmación.</div>
+          <div id="romChipList" class="files">
+            <span class="file"><span class="tag">DEMO</span> Kobo_Kaleido_Color_Demo.gbc</span>
+            <span class="file"><span class="tag">DEMO</span> Kobo_Carta_Classic_Demo.gb</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- STEP 3 -->
+      <section class="card" id="installCard" aria-labelledby="h-install" aria-disabled="true">
+        <div class="card-head">
+          <div>
+            <div class="kicker">Paso 3</div>
+            <h2 id="h-install">Instalar</h2>
+          </div>
+          <span id="writeStatus" class="chip">Pendiente</span>
+        </div>
+
+        <p class="muted small" style="margin-top:0">Se instalan el emulador y su lanzador en <code>.adds/inkboy</code>, el acceso en <code>.adds/nm/inkboy</code> y se configura <code>ExcludeSyncFolders</code> para que Nickel no indexe esas carpetas.</p>
+
+        <div class="actions">
+          <button id="btnWriteKobo" class="btn accent" disabled>Instalar en mi Kobo</button>
+        </div>
+
+        <div id="progress" class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+        <p id="resultNotice" class="notice" role="status"></p>
+        <ul id="checklist" class="checklist" aria-live="polite"></ul>
+
+        <details class="log">
+          <summary>Registro técnico</summary>
+          <div id="consoleLog" class="console" role="log" aria-live="polite">Esperando conexión del Kobo...</div>
+        </details>
+      </section>
+    </main>
+
+    <footer>Ink-boy para Kobo · Peanut-GB, Walnut-CGB y FBInk · Requiere NickelMenu</footer>
+  </div>
+
+  <script>
+    const KOBO_UUID_MAP = {
+      "390": { name: "Kobo Libra Colour", soc: "MediaTek MT8113T", panel: "Kaleido 3 color · 1264 × 1680", isColor: true, hasButtons: true, scale: "6", mode: "quality" },
+      "393": { name: "Kobo Clara Colour", soc: "MediaTek MT8113T", panel: "Kaleido 3 color · 1072 × 1448", isColor: true, hasButtons: false, scale: "6", mode: "quality" },
+      "376": { name: "Kobo Clara HD", soc: "NXP i.MX6ULL", panel: "Carta 16 grises · 1072 × 1448", isColor: false, hasButtons: false, scale: "6", mode: "quality" }
+    };
+
+    // Value written to Kobo eReader.conf: Qt QSettings needs doubled backslashes on disk
+    const EXCLUDE_SYNC_LINE = "ExcludeSyncFolders=(\\\\.(?!kobo|adobe).+|([^.][^/]*/)+\\\\..+)";
+
+    let koboDirHandle = null;
+    let detectedProfile = KOBO_UUID_MAP["390"];
+    const extraRomFiles = [];
+
+    const $ = (id) => document.getElementById(id);
+    const logEl = $("consoleLog");
+
+    function appendLog(msg) {
+      const ts = new Date().toLocaleTimeString();
+      logEl.textContent += `\n[${ts}] ${msg}`;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    function setChip(el, text, kind) {
+      el.textContent = text;
+      el.className = "chip" + (kind ? " " + kind : "");
+    }
+    function showNotice(el, text, kind) {
+      el.textContent = text;
+      el.className = `notice ${kind} visible`;
+    }
+    function hideNotice(el) { el.className = "notice"; }
+    function setStep(n) {
+      ["st1", "st2", "st3"].forEach((id, i) => {
+        $(id).dataset.state = i + 1 < n ? "done" : (i + 1 === n ? "current" : "");
+      });
+    }
+    function setProgress(pct) {
+      $("progress").classList.toggle("visible", pct > 0 && pct < 100);
+      $("progressBar").style.width = `${pct}%`;
+    }
+    function addCheck(text, skipped) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      if (skipped) li.className = "skip";
+      $("checklist").appendChild(li);
+    }
+
+    if (!("showDirectoryPicker" in window)) {
+      showNotice($("browserNotice"),
+        "Este navegador no permite escribir en carpetas. Abre la página en Chrome, Edge o Brave de escritorio, o usa las opciones avanzadas.", "warn");
+      $("btnPickDirectory").disabled = true;
+    }
+
+    // ROM drop zone
+    const dropzone = $("dropzone");
+    const romInput = $("romFileInput");
+    dropzone.addEventListener("click", () => romInput.click());
+    dropzone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); romInput.click(); }
+    });
+    dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragover");
+      handleSelectedFiles(e.dataTransfer.files);
+    });
+    romInput.addEventListener("change", (e) => handleSelectedFiles(e.target.files));
+
+    function handleSelectedFiles(fileList) {
+      for (const f of fileList) {
+        if (!/\.(gb|gbc|cgb|sav)$/i.test(f.name)) continue;
+        if (extraRomFiles.some((x) => x.name === f.name)) continue;
+        extraRomFiles.push(f);
+        const chip = document.createElement("span");
+        chip.className = "file";
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = /\.sav$/i.test(f.name) ? "SAV" : `${Math.max(1, Math.round(f.size / 1024))} KB`;
+        chip.append(tag, " " + f.name);
+        $("romChipList").appendChild(chip);
+        appendLog(`Agregado para transferir: ${f.name}`);
+      }
+    }
+
+    async function pathExists(dir, names) {
+      try {
+        let d = dir;
+        for (const n of names.slice(0, -1)) d = await d.getDirectoryHandle(n, { create: false });
+        await d.getFileHandle(names[names.length - 1], { create: false });
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    // Step 1: pick KOBOeReader and identify the model from .kobo/version
+    $("btnPickDirectory").addEventListener("click", async () => {
+      try {
+        koboDirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+      } catch (err) {
+        if (err.name !== "AbortError") appendLog(`No se pudo abrir la carpeta: ${err.message}`);
+        return;
+      }
+      appendLog(`Volumen seleccionado: ${koboDirHandle.name}`);
+      try {
+        const koboSubdir = await koboDirHandle.getDirectoryHandle(".kobo", { create: false });
+        const verText = (await (await (await koboSubdir.getFileHandle("version", { create: false })).getFile()).text()).trim();
+        appendLog(`Leído .kobo/version: ${verText}`);
+
+        const parts = verText.split(",");
+        const fw = parts[2] || "4.x";
+        const uuid = parts[parts.length - 1] || "";
+        const match = uuid.match(/0*([1-9][0-9]*)$/);
+        const devId = match ? match[1] : "";
+
+        detectedProfile = KOBO_UUID_MAP[devId] || {
+          name: `Kobo (modelo ${devId || "desconocido"})`, soc: "ARM Linux", panel: "E-ink",
+          isColor: false, hasButtons: false, scale: "6", mode: "quality", unknown: true
+        };
+
+        $("detModel").textContent = detectedProfile.name;
+        $("detSoc").textContent = detectedProfile.soc;
+        $("detPanel").textContent = detectedProfile.panel;
+        $("detFw").textContent = fw;
+        setChip($("detColorChip"), detectedProfile.isColor ? "Color" : "Escala de grises", "");
+        $("selMode").value = detectedProfile.mode;
+        $("selScale").value = detectedProfile.scale;
+
+        const hasNickelMenu = await pathExists(koboDirHandle, [".adds", "nm", "doc"]);
+        if (hasNickelMenu) {
+          setChip($("nmChip"), "NickelMenu instalado", "ok");
+          hideNotice($("nmNotice"));
+        } else {
+          setChip($("nmChip"), "NickelMenu no detectado", "warn");
+          showNotice($("nmNotice"),
+            "No encontré NickelMenu. Ink-boy se instala igual, pero sin NickelMenu no aparecerá en el menú del Kobo. Instálalo desde su sitio oficial (pgaskin.net/NickelMenu).", "warn");
+        }
+        if (detectedProfile.unknown) {
+          showNotice($("browserNotice"), "Modelo no reconocido: se usarán ajustes genéricos. Ink-boy está probado en Libra Colour y Clara HD.", "warn");
+        } else {
+          hideNotice($("browserNotice"));
+        }
+
+        $("deviceBanner").classList.add("visible");
+        setChip($("connStatus"), "Conectado", "ok");
+        $("btnWriteKobo").disabled = false;
+        $("installCard").setAttribute("aria-disabled", "false");
+        setStep(2);
+      } catch (err) {
+        koboDirHandle = null;
+        setChip($("connStatus"), "Carpeta incorrecta", "err");
+        showNotice($("browserNotice"), "Esa carpeta no parece ser un Kobo: no tiene .kobo/version. Elige la raíz de la unidad KOBOeReader.", "err");
+        appendLog(`Error al identificar el Kobo: ${err.message}`);
+      }
+    });
+
+    async function writeFile(dirHandle, filename, content) {
+      const fh = await dirHandle.getFileHandle(filename, { create: true });
+      const writable = await fh.createWritable();
+      await writable.write(content);
+      await writable.close();
+    }
+
+    async function fetchAsset(url) {
+      try {
+        const resp = await fetch(url, { cache: "no-store" });
+        return resp.ok ? await resp.arrayBuffer() : null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    // Fallback launcher, used only if the served dist/inkboy.sh is unavailable.
+    // Settings come from config.ini, so no --mode/--scale flags are hardcoded here.
+    function buildFallbackLauncher() {
+      return [
+        `#!/bin/sh`,
+        `INKBOY_DIR="/mnt/onboard/.adds/inkboy"`,
+        `INKBOY_TMP="/tmp/inkboy"`,
+        `LOG_FILE="/tmp/inkboy.log"`,
+        `mkdir -p "$INKBOY_DIR/roms" "$INKBOY_DIR/saves"`,
+        `cleanup() { sync; rm -f "$INKBOY_TMP" 2>/dev/null || true; killall -CONT nickel >/dev/null 2>&1 || true; }`,
+        `trap cleanup EXIT INT TERM HUP QUIT`,
+        `echo "=== Ink-boy Kobo Session Started: $(date) ===" > "$LOG_FILE"`,
+        `[ -f "$INKBOY_DIR/inkboy" ] || { echo "[ERROR] Binary not found" >> "$LOG_FILE"; exit 1; }`,
+        `cp -f "$INKBOY_DIR/inkboy" "$INKBOY_TMP"`,
+        `chmod 755 "$INKBOY_TMP"`,
+        `[ -x "$INKBOY_TMP" ] || exit 1`,
+        `killall -STOP nickel >/dev/null 2>&1 || true`,
+        `"$INKBOY_TMP" --no-suspend-nickel --roms-dir "$INKBOY_DIR/roms" "$@" >> "$LOG_FILE" 2>&1`,
+        `exit 0`,
+        ``
+      ].join("\n");
+    }
+
+    // Step 3: install
+    $("btnWriteKobo").addEventListener("click", async () => {
+      if (!koboDirHandle) return;
+      const btn = $("btnWriteKobo");
+      btn.disabled = true;
+      $("checklist").innerHTML = "";
+      hideNotice($("resultNotice"));
+      setChip($("writeStatus"), "Instalando", "");
+      setStep(3);
+      setProgress(5);
+      try {
+        appendLog("Iniciando instalación...");
+
+        // 0. Download everything first so a missing binary never leaves a half-installed Kobo
+        const binary = await fetchAsset("/dist/inkboy");
+        if (!binary) {
+          throw new Error("No pude descargar el emulador. Abre esta página con `make installer-web` en vez de abrir el archivo directamente.");
+        }
+        const launcherBuf = await fetchAsset("/dist/inkboy.sh");
+        const launcher = launcherBuf ? new TextDecoder().decode(launcherBuf) : buildFallbackLauncher();
+        const demoRoms = [];
+        for (const name of ["Kobo_Kaleido_Color_Demo.gbc", "Kobo_Carta_Classic_Demo.gb"]) {
+          const buf = await fetchAsset(`/dist/roms/${name}`);
+          if (buf) demoRoms.push({ name, buf });
+        }
+        setProgress(20);
+
+        // 1. Kobo eReader.conf: keep all Nickel settings, only (re)write ExcludeSyncFolders
+        const koboDir = await koboDirHandle.getDirectoryHandle(".kobo", { create: true });
+        const koboSub = await koboDir.getDirectoryHandle("Kobo", { create: true });
+        let confText = "";
+        let bakText = "";
+        try {
+          bakText = await (await (await koboSub.getFileHandle("Kobo eReader.conf.inkboy.bak", { create: false })).getFile()).text();
+        } catch (_) {}
+        try {
+          confText = await (await (await koboSub.getFileHandle("Kobo eReader.conf", { create: false })).getFile()).text();
+          if (!bakText && confText.trim().length > 80) {
+            await writeFile(koboSub, "Kobo eReader.conf.inkboy.bak", confText);
+            appendLog("Respaldo guardado en .kobo/Kobo/Kobo eReader.conf.inkboy.bak");
+          }
+        } catch (_) {}
+
+        // Restore the backup only if the current config is missing or truncated
+        if (bakText.trim().length > 80 && confText.trim().length <= 80) {
+          confText = bakText;
+          appendLog("Kobo eReader.conf estaba truncado: restaurado desde el respaldo.");
+        }
+
+        if (/^ExcludeSyncFolders=.*$/m.test(confText)) {
+          confText = confText.replace(/^ExcludeSyncFolders=.*$/m, () => EXCLUDE_SYNC_LINE);
+        } else if (confText.includes("[FeatureSettings]")) {
+          confText = confText.replace("[FeatureSettings]", () => `[FeatureSettings]\n${EXCLUDE_SYNC_LINE}`);
+        } else {
+          if (confText && !confText.endsWith("\n")) confText += "\n";
+          confText += `\n[FeatureSettings]\n${EXCLUDE_SYNC_LINE}\n`;
+        }
+        await writeFile(koboSub, "Kobo eReader.conf", confText);
+        addCheck("Kobo eReader.conf actualizado, tus ajustes se mantienen");
+        setProgress(35);
+
+        // 2. Folders
+        const addsDir = await koboDirHandle.getDirectoryHandle(".adds", { create: true });
+        const inkboyDir = await addsDir.getDirectoryHandle("inkboy", { create: true });
+        const romsDir = await inkboyDir.getDirectoryHandle("roms", { create: true });
+        await inkboyDir.getDirectoryHandle("saves", { create: true });
+        const nmDir = await addsDir.getDirectoryHandle("nm", { create: true });
+
+        // 3. Binary, launcher, config.ini and NickelMenu entry
+        await writeFile(inkboyDir, "inkboy", binary);
+        await writeFile(inkboyDir, "inkboy.sh", launcher);
+        appendLog(`Emulador copiado (${(binary.byteLength / 1048576).toFixed(1)} MB)`);
+        addCheck("Emulador y lanzador instalados en .adds/inkboy");
+        setProgress(65);
+
+        const configIni = [
+          `# Ink-boy settings for ${detectedProfile.name} (written by the web installer)`,
+          `[display]`,
+          `# 6 = 960x864, 7 = 1120x1008 (Libra Colour only)`,
+          `scale = ${$("selScale").value}`,
+          `# quality = color / 4 grays, turbo = fast 1-bit`,
+          `mode = ${$("selMode").value}`,
+          `# 0 = Grayscale, 1 = PokeRedBlue, 2 = OriginalGreen, 3 = GbcGoldCyan`,
+          `dmg_palette = ${detectedProfile.isColor ? 1 : 0}`,
+          ``,
+          `[input]`,
+          `# A_B, B_A or START_SELECT`,
+          `libra_buttons = ${$("selButtons").value}`,
+          ``,
+          `[system]`,
+          `# resume = return to Nickel, reboot = clean reboot on exit`,
+          `exit_mode = resume`,
+          `# Experimental: pause Nickel's watchdog (sickel) while playing`,
+          `pause_watchdog = no`,
+          ``
+        ].join("\n");
+        await writeFile(inkboyDir, "config.ini", configIni);
+
+        const nmEntry = [
+          `menu_item :main :Ink-boy (Game Boy / GBC) :cmd_spawn :quiet:/bin/sh /mnt/onboard/.adds/inkboy/inkboy.sh`,
+          `menu_item :main :Ink-boy (Modo Turbo A2)  :cmd_spawn :quiet:/bin/sh /mnt/onboard/.adds/inkboy/inkboy.sh --mode turbo`,
+          ``
+        ].join("\n");
+        await writeFile(nmDir, "inkboy", nmEntry);
+        addCheck("Ajustes guardados en config.ini y acceso creado en NickelMenu");
+        setProgress(80);
+
+        // 4. ROMs: demos + user files; existing .sav files need explicit confirmation
+        for (const rom of demoRoms) await writeFile(romsDir, rom.name, rom.buf);
+        let romCount = demoRoms.length;
+        let keptSaves = 0;
+        for (const f of extraRomFiles) {
+          if (/\.sav$/i.test(f.name) && await pathExists(romsDir, [f.name]) &&
+              !confirm(`Ya existe la partida ${f.name} en el Kobo. ¿Reemplazarla por la de este computador?`)) {
+            appendLog(`Partida conservada en el Kobo: ${f.name}`);
+            keptSaves++;
+            continue;
+          }
+          await writeFile(romsDir, f.name, await f.arrayBuffer());
+          appendLog(`Copiado a .adds/inkboy/roms/${f.name}`);
+          romCount++;
+        }
+        addCheck(`${romCount} archivo(s) de juego copiados`);
+        if (keptSaves > 0) addCheck(`${keptSaves} partida(s) existentes conservadas`, true);
+        setProgress(100);
+
+        setChip($("writeStatus"), "Instalado", "ok");
+        showNotice($("resultNotice"), "Listo. Expulsa el Kobo de forma segura y abre NickelMenu › Ink-boy.", "ok");
+        appendLog("Instalación completada.");
+        $("st3").dataset.state = "done";
+      } catch (err) {
+        setProgress(0);
+        setChip($("writeStatus"), "Error", "err");
+        showNotice($("resultNotice"), err.message, "err");
+        appendLog(`Error durante la instalación: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Server-side install (tools/kobo_auto_installer.py) writes straight to /Volumes/KOBOeReader
+    $("btnAutoBackend").addEventListener("click", async () => {
+      if (!confirm("El servidor local instalará Ink-boy directamente en /Volumes/KOBOeReader. ¿Continuar?")) return;
+      appendLog("Solicitando instalación al servidor local...");
+      setChip($("writeStatus"), "Instalando", "");
+      try {
+        const resp = await fetch("/api/auto-install", { method: "POST" });
+        const data = await resp.json();
+        appendLog(data.log || JSON.stringify(data, null, 2));
+        if (data.ok) {
+          setChip($("writeStatus"), "Instalado", "ok");
+          showNotice($("resultNotice"), "Instalado desde el servidor local. Revisa el registro técnico para el detalle.", "ok");
+        } else {
+          setChip($("writeStatus"), "Error", "err");
+          showNotice($("resultNotice"), "El servidor no pudo instalar. Revisa el registro técnico.", "err");
+        }
+      } catch (_) {
+        setChip($("writeStatus"), "Sin servidor", "warn");
+        showNotice($("resultNotice"), "No hay servidor local. Inicia `make installer-web` o usa `make auto-install` en la terminal.", "warn");
+      }
+      $("installCard").querySelector("details.log").open = true;
+    });
+  </script>
+</body>
+</html>

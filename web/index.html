@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Kobo AIO</title>
+<meta name="description" content="Todo en uno para lectores Kobo: NickelMenu, mods, fuentes, KOReader, cómics, diccionarios, Ink-boy y mantenimiento, con respaldo y rollback.">
+<style>
+:root{
+  --paper:#f4f1ea;--surface:#fbfaf6;--sunk:#ece8de;--ink:#1b1a17;--ink2:#45433d;--ink3:#6f6c64;
+  --rule:#d8d3c6;--rule2:#b9b3a4;--accent:#1f4e79;--accent-ink:#fff;--ok:#2f6b45;--warn:#8a5a12;--err:#a3322a;
+  --ok-bg:#e3efe6;--warn-bg:#f6ead2;--err-bg:#f6e0dd;--info-bg:#e4ebf3;--r:14px;--r2:9px;
+  --shadow:0 1px 0 rgba(27,26,23,.04),0 8px 24px -12px rgba(27,26,23,.18);
+  --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;--sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#141413;--surface:#1c1c1a;--sunk:#232320;--ink:#ece9e1;--ink2:#c9c5ba;--ink3:#9a968b;--rule:#2f2e2a;
+  --rule2:#46443e;--accent:#8db8e3;--accent-ink:#0f1a24;--ok:#8cc9a1;--warn:#e2b768;--err:#ef9a90;
+  --ok-bg:#1d2a21;--warn-bg:#2c2416;--err-bg:#2e1d1b;--info-bg:#1b2430}}
+:root[data-theme="dark"]{--paper:#141413;--surface:#1c1c1a;--sunk:#232320;--ink:#ece9e1;--ink2:#c9c5ba;--ink3:#9a968b;
+  --rule:#2f2e2a;--rule2:#46443e;--accent:#8db8e3;--accent-ink:#0f1a24;--ok:#8cc9a1;--warn:#e2b768;--err:#ef9a90;
+  --ok-bg:#1d2a21;--warn-bg:#2c2416;--err-bg:#2e1d1b;--info-bg:#1b2430}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.5 var(--sans)}
+a{color:var(--accent)}
+button,select,input{font:inherit;color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px 120px}
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:22px 0 14px;border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.logo{width:34px;height:34px;border-radius:9px;background:var(--ink);color:var(--paper);display:grid;place-items:center;
+  font:700 15px var(--serif)}
+h1{font:600 22px var(--serif);margin:0;letter-spacing:.2px}
+h2{font:600 19px var(--serif);margin:0 0 4px}
+h3{font:600 15px var(--sans);margin:0}
+.muted{color:var(--ink3)}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid var(--rule);
+  background:var(--surface);font-size:13px;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ink3)}
+.dot.ok{background:var(--ok)}.dot.err{background:var(--err)}.dot.warn{background:var(--warn)}
+nav.tabs{display:flex;gap:4px;margin:16px 0;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{border:1px solid transparent;background:none;padding:8px 14px;border-radius:999px;cursor:pointer;color:var(--ink2);white-space:nowrap}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.card{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px}
+.btn{border:1px solid var(--rule2);background:var(--surface);padding:8px 14px;border-radius:var(--r2);cursor:pointer}
+.btn:hover{border-color:var(--ink3)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{color:var(--err);border-color:var(--err)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.small{padding:4px 10px;font-size:13px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.finding{display:flex;gap:12px;padding:10px 12px;border-radius:var(--r2);margin:6px 0;align-items:flex-start}
+.finding.critical{background:var(--err-bg)}.finding.warn{background:var(--warn-bg)}.finding.info{background:var(--info-bg)}
+.finding.ok{background:var(--ok-bg)}
+.sev{font:600 11px var(--sans);text-transform:uppercase;letter-spacing:.6px;padding:2px 7px;border-radius:6px;min-width:66px;text-align:center}
+.critical .sev{background:var(--err);color:#fff}.warn .sev{background:var(--warn);color:#fff}
+.info .sev{background:var(--accent);color:var(--accent-ink)}.ok .sev{background:var(--ok);color:#fff}
+.finding .body{flex:1;min-width:0}
+.finding details{font-size:13px;margin-top:4px}
+.mod{border:1px solid var(--rule);border-radius:var(--r);padding:14px;background:var(--surface);display:flex;flex-direction:column;gap:8px}
+.mod.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.mod.off{opacity:.55}
+.mod .top{display:flex;gap:10px;align-items:flex-start}
+.mod input[type=checkbox].pick{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--sunk);color:var(--ink2)}
+.chip.inst{background:var(--ok-bg);color:var(--ok)}.chip.alto{background:var(--err-bg);color:var(--err)}
+.chip.medio{background:var(--warn-bg);color:var(--warn)}.chip.rec{background:var(--info-bg);color:var(--accent)}
+.opts{border-top:1px dashed var(--rule);padding-top:8px;display:none;flex-direction:column;gap:8px}
+.mod.sel .opts{display:flex}
+.opt label{font-size:13px;color:var(--ink2);display:block;margin-bottom:2px}
+.opt select,.opt input[type=text]{width:100%;padding:6px 8px;border-radius:8px;border:1px solid var(--rule2);background:var(--paper)}
+.multi{max-height:170px;overflow:auto;border:1px solid var(--rule);border-radius:8px;padding:6px 8px;background:var(--paper)}
+.multi label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink);margin:2px 0}
+.drop{border:1.5px dashed var(--rule2);border-radius:10px;padding:12px;text-align:center;font-size:13px;color:var(--ink3);cursor:pointer}
+.drop.over{border-color:var(--accent);color:var(--accent)}
+.files{font-size:12px;font-family:var(--mono);margin:6px 0 0;padding:0;list-style:none}
+.files li{display:flex;justify-content:space-between;gap:8px}
+.cat{margin:22px 0 8px;display:flex;align-items:baseline;gap:10px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--rule);padding:12px 16px;
+  box-shadow:0 -8px 24px -16px rgba(0,0,0,.3);z-index:5}
+.bar .in{max-width:1080px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+dialog{border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);color:var(--ink);max-width:760px;width:calc(100% - 32px);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog .hd{padding:16px 18px;border-bottom:1px solid var(--rule)}
+dialog .bd{padding:14px 18px;max-height:60vh;overflow:auto}
+dialog .ft{padding:12px 18px;border-top:1px solid var(--rule);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+.log{font:12px/1.5 var(--mono);background:var(--sunk);border-radius:8px;padding:10px;max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.chg{font:12px/1.6 var(--mono);display:flex;gap:8px}
+.chg b{min-width:72px;font-weight:600}
+.chg .write{color:var(--ok)}.chg .delete{color:var(--err)}
+.empty{padding:28px;text-align:center;color:var(--ink3)}
+.steps{counter-reset:s;list-style:none;padding:0;margin:10px 0}
+.steps li{counter-increment:s;padding:8px 0 8px 40px;position:relative}
+.steps li::before{content:counter(s);position:absolute;left:0;top:6px;width:28px;height:28px;border-radius:50%;
+  background:var(--ink);color:var(--paper);display:grid;place-items:center;font-weight:600}
+code,kbd{font-family:var(--mono);font-size:13px;background:var(--sunk);padding:1px 6px;border-radius:5px}
+pre.cmd{font:13px var(--mono);background:var(--sunk);padding:10px 12px;border-radius:8px;overflow:auto}
+.hidden{display:none!important}
+.spinner{width:14px;height:14px;border:2px solid var(--rule2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:560px){.grid{grid-template-columns:1fr}h1{font-size:19px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><div class="logo">K</div><div><h1>Kobo AIO</h1><div class="muted" style="font-size:13px">Todo en uno para tu lector, con respaldo y vuelta atrás</div></div></div>
+  <span class="pill" id="helperPill"><span class="dot" id="helperDot"></span><span id="helperTxt">Buscando motor local…</span></span>
+  <span class="pill" id="devPill"><span class="dot" id="devDot"></span><span id="devTxt">Sin Kobo</span></span>
+  <button class="btn small" id="themeBtn" aria-label="Cambiar tema">◐</button>
+</header>
+
+<section id="setup" class="card hidden" aria-labelledby="hSetup">
+  <h2 id="hSetup">Empieza en 1 minuto</h2>
+  <p class="muted">Esta página no sube nada a internet. Las instalaciones las hace un motor local en tu computador, que lee y escribe el Kobo por USB, guarda respaldos y puede deshacer cada cambio.</p>
+  <ol class="steps">
+    <li>Descarga Kobo AIO: <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS/archive/refs/heads/main.zip">ZIP</a> o <code>git clone https://github.com/Parzval-Net/AIO_KOBO_APPS</code></li>
+    <li>macOS: doble clic en <code>Kobo AIO.command</code> (la primera vez: clic derecho &gt; Abrir). Linux/Windows: <code>cd tools &amp;&amp; python3 -m kobo_aio serve</code></li>
+    <li>Conecta el Kobo por USB y toca <b>Conectar</b> en su pantalla. Esta página se conecta sola.</li>
+  </ol>
+  <div class="row"><button class="btn primary" id="retryBtn">Reintentar conexión</button><a class="btn" href="http://127.0.0.1:8765/">Abrir la versión local</a><span class="muted" style="font-size:13px">Requiere Python 3.9+ y Pillow. Si tu navegador bloquea la conexión desde esta página (Safari), usa la versión local.</span></div>
+</section>
+
+<nav class="tabs" role="tablist" id="tabs">
+  <button role="tab" data-tab="home" aria-selected="true">Diagnóstico</button>
+  <button role="tab" data-tab="install">Instalar y ajustar</button>
+  <button role="tab" data-tab="library">Biblioteca</button>
+  <button role="tab" data-tab="backups">Respaldos</button>
+  <button role="tab" data-tab="about">Acerca de</button>
+</nav>
+
+<main>
+  <section data-panel="home">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div><h2 id="devName">Conecta tu Kobo</h2><div class="muted" id="devMeta">Detección automática de modelo y firmware</div></div>
+        <div class="row"><button class="btn" id="doctorBtn">Volver a revisar</button><button class="btn primary" id="fixAllBtn" disabled>Corregir lo recomendado</button></div>
+      </div>
+      <div id="findings" style="margin-top:12px"><div class="empty">Sin datos todavía.</div></div>
+    </div>
+  </section>
+
+  <section data-panel="install" class="hidden">
+    <div class="card row" style="justify-content:space-between">
+      <div><h2>Mods, apps y ajustes</h2><div class="muted">Marca lo que quieras. Antes de escribir verás la lista exacta de cambios.</div></div>
+      <div class="row"><button class="btn" id="recBtn">Seleccionar recomendados</button><button class="btn" id="clearBtn">Limpiar</button></div>
+    </div>
+    <div id="catalog"></div>
+  </section>
+
+  <section data-panel="library" class="hidden">
+    <div class="card"><h2>Biblioteca</h2><div class="muted">Convierte y envía cómics, libros, diccionarios y fondos de reposo. Solo agrega archivos nuevos: nunca pisa tus libros.</div></div>
+    <div id="libraryMods" class="grid"></div>
+  </section>
+
+  <section data-panel="backups" class="hidden">
+    <div class="card">
+      <h2>Respaldos y vuelta atrás</h2>
+      <p class="muted">Cada instalación guarda los archivos originales en <code>~/Kobo-AIO/backups</code>. Puedes revertirla aunque se haya interrumpido.</p>
+      <div id="backups"><div class="empty">Conecta tu Kobo para ver sus respaldos.</div></div>
+    </div>
+  </section>
+
+  <section data-panel="about" class="hidden">
+    <div class="card">
+      <h2>Acerca de Kobo AIO</h2>
+      <p>Reúne en un solo lugar lo mejor del ecosistema Kobo, con versiones fijadas por SHA-256 y reglas de seguridad: solo escribe en rutas de mods, respalda antes de cambiar, valida cada <code>KoboRoot.tgz</code> y bloquea mods incompatibles con firmware 5.x.</p>
+      <h3 style="margin-top:12px">Créditos y licencias</h3>
+      <ul id="credits" class="muted" style="font-size:14px"></ul>
+      <p class="muted" style="font-size:13px">Inspirado en <a href="https://kp.nicoverbruggen.be">KoboPatch Web UI</a> (MIT) y <a href="https://github.com/Parzval-Net/NickelMenu-Builder">NickelMenu Builder</a> (MIT). Kobo es marca de Rakuten Kobo; este proyecto no está afiliado.</p>
+    </div>
+  </section>
+</main>
+</div>
+
+<div class="bar hidden" id="bar"><div class="in">
+  <span id="selCount" class="muted">0 seleccionados</span>
+  <span id="selList" class="muted" style="font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+  <button class="btn primary" id="planBtn" disabled>Revisar cambios</button>
+</div></div>
+
+<dialog id="dlg">
+  <div class="hd"><h2 id="dlgTitle">Cambios</h2><div class="muted" id="dlgSub"></div></div>
+  <div class="bd" id="dlgBody"></div>
+  <div class="ft" id="dlgFoot"></div>
+</dialog>
+
+<script>
+"use strict";
+// The helper is ALWAYS local: a ?helper= override may only point to 127.0.0.1/localhost (dev/testing ports).
+const HELPER = (() => {
+  const q = new URLSearchParams(location.search).get("helper");
+  if (q && /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(q)) return q;
+  return (location.hostname === "127.0.0.1" || location.hostname === "localhost") && location.port ? "" : "http://127.0.0.1:8765";
+})();
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"'`]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c]));
+const safeUrl = u => { try { const x = new URL(String(u)); return x.protocol === "https:" ? x.href : "#"; } catch (_) { return "#"; } };
+const SEV = new Set(["critical", "warn", "info", "ok"]);
+const sev = s => SEV.has(s) ? s : "info";
+const state = { helper:false, device:null, modules:[], installed:{}, selection:{}, uninstall:new Set(), doctor:null };
+const LIB_CATS = new Set(["Biblioteca", "Personalización"]);
+
+async function api(path, opts = {}) {
+  const init = { ...opts, headers: { ...(opts.headers || {}) } };
+  if (init.method === "POST") init.headers["X-Kobo-AIO"] = "1";
+  if (init.json !== undefined) { init.body = JSON.stringify(init.json); init.headers["Content-Type"] = "application/json"; delete init.json; }
+  const r = await fetch(HELPER + path, init);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
+}
+async function waitJob(id, onLog) {
+  for (;;) {
+    const j = await api(`/api/jobs/${id}`);
+    onLog && onLog(j.log);
+    if (j.state === "done") return j.result;
+    if (j.state === "error") throw new Error(j.error);
+    await new Promise(r => setTimeout(r, 600));
+  }
+}
+
+// ---------- theme ----------
+$("#themeBtn").onclick = () => {
+  const cur = document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("aio-theme", next); } catch (_) {}
+};
+try { const t = localStorage.getItem("aio-theme"); if (t) document.documentElement.dataset.theme = t; } catch (_) {}
+
+// ---------- tabs ----------
+$$("#tabs button").forEach(b => b.onclick = () => {
+  $$("#tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  $$("[data-panel]").forEach(p => p.classList.toggle("hidden", p.dataset.panel !== b.dataset.tab));
+  if (b.dataset.tab === "backups") loadBackups();
+});
+
+// ---------- connection ----------
+function setPill(dot, txt, kind, text) { $(dot).className = "dot " + kind; $(txt).textContent = text; }
+async function connect() {
+  try {
+    const s = await api("/api/status");
+    state.helper = true;
+    setPill("#helperDot", "#helperTxt", "ok", `Motor local ${s.version}`);
+    $("#setup").classList.add("hidden");
+  } catch (_) {
+    state.helper = false;
+    setPill("#helperDot", "#helperTxt", "err", "Motor local no detectado");
+    $("#setup").classList.remove("hidden");
+    return;
+  }
+  await refresh();
+}
+$("#retryBtn").onclick = connect;
+
+async function refresh() {
+  const cat = await api("/api/catalog");
+  state.device = cat.device; state.modules = cat.modules; state.installed = cat.installed || {};
+  if (state.device) {
+    setPill("#devDot", "#devTxt", state.device.known ? "ok" : "warn", `${state.device.name} · ${state.device.firmware}`);
+    $("#devName").textContent = state.device.name;
+    $("#devMeta").textContent = `Firmware ${state.device.firmware} · ${state.device.color ? "Pantalla a color" : "Pantalla B/N"} · ${state.device.soc.toUpperCase()}`;
+  } else {
+    setPill("#devDot", "#devTxt", "", "Sin Kobo");
+    $("#devName").textContent = "Conecta tu Kobo";
+    $("#devMeta").textContent = "Conéctalo por USB y toca «Conectar» en su pantalla";
+  }
+  renderCatalog(); renderCredits();
+  if (state.device) runDoctor(); else $("#findings").innerHTML = '<div class="empty">Esperando un Kobo…</div>';
+}
+
+// ---------- doctor ----------
+async function runDoctor() {
+  $("#findings").innerHTML = '<div class="row muted"><span class="spinner"></span> Revisando el Kobo (solo lectura)…</div>';
+  try {
+    const rep = await api("/api/doctor");
+    state.doctor = rep;
+    const lint = (rep.nickelmenu_lint || []).map(i => ({ severity: "warn", title: `NickelMenu: ${i.file} línea ${i.line}`, detail: `${i.error} · ${i.text}`, fix: i.file === "webui-preset" || i.file.startsWith("kobo-aio") ? "nm.menu" : "" }));
+    const all = [...rep.findings.filter(f => f.severity !== "ok"), ...lint, ...rep.findings.filter(f => f.severity === "ok")];
+    $("#findings").innerHTML = all.map(f => `
+      <div class="finding ${sev(f.severity)}"><span class="sev">${({critical:"crítico",warn:"aviso",info:"info",ok:"ok"})[sev(f.severity)]}</span>
+      <div class="body"><b>${esc(f.title)}</b>${f.detail ? `<div class="muted" style="font-size:13px">${esc(f.detail)}</div>` : ""}
+      ${f.data && f.data.missing ? `<details><summary>Ver ${f.data.missing.length} archivos</summary><div class="log">${esc(f.data.missing.join("\n"))}</div></details>` : ""}</div>
+      ${f.fix && byId(f.fix) ? `<button class="btn small" data-fix="${esc(f.fix)}">Corregir</button>` : ""}</div>`).join("");
+    $$("[data-fix]").forEach(b => b.onclick = () => { select(b.dataset.fix, true); openPlan(); });
+    const fixes = [...new Set(all.filter(f => f.fix && (f.severity === "critical" || f.severity === "warn")).map(f => f.fix))].filter(byId);
+    $("#fixAllBtn").disabled = !fixes.length;
+    $("#fixAllBtn").onclick = () => { fixes.forEach(f => select(f, true)); openPlan(); };
+  } catch (e) {
+    $("#findings").innerHTML = `<div class="finding critical"><span class="sev">error</span><div class="body">${esc(e.message)}</div></div>`;
+  }
+}
+$("#doctorBtn").onclick = () => refresh();
+
+// ---------- catalog ----------
+const byId = id => state.modules.find(m => m.id === id);
+function defaults(m) { const o = {}; m.options.forEach(op => o[op.id] = Array.isArray(op.default) ? [...op.default] : op.default); return o; }
+function select(id, on) {
+  const m = byId(id); if (!m || m.compatible === false) return;
+  if (on) { state.selection[id] = state.selection[id] || defaults(m); (m.requires || []).forEach(r => { if (!state.installed[r]) select(r, true); }); }
+  else delete state.selection[id];
+  renderCatalog();
+}
+function optionHtml(m, op) {
+  const v = (state.selection[m.id] || {})[op.id] ?? op.default;
+  const nm = esc(`${m.id}::${op.id}`);
+  if (op.type === "bool") return `<div class="opt"><label style="display:flex;gap:8px;align-items:center;color:var(--ink)"><input type="checkbox" data-opt="${nm}" ${v ? "checked" : ""}> ${esc(op.label)}</label></div>`;
+  if (op.type === "choice") return `<div class="opt"><label>${esc(op.label)}</label><select data-opt="${nm}">${op.choices.map(c => `<option value="${esc(c.value)}" ${String(c.value) === String(v) ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></div>`;
+  if (op.type === "multi") return `<div class="opt"><label>${esc(op.label)}</label><div class="multi">${op.choices.map(c => `<label><input type="checkbox" data-multi="${nm}" value="${esc(c.value)}" ${(v || []).includes(c.value) ? "checked" : ""}> ${esc(c.label)}</label>`).join("")}</div></div>`;
+  if (op.type === "text") return `<div class="opt"><label>${esc(op.label)}</label><input type="text" data-opt="${nm}" value="${esc(v)}"></div>`;
+  if (op.type === "files") return `<div class="opt"><label>${esc(op.label)}</label><div class="drop" data-drop="${nm}">Arrastra archivos aquí o haz clic para elegir<input type="file" multiple hidden></div><ul class="files">${(v || []).map(p => `<li><span>${esc(p.split("/").pop())}</span></li>`).join("")}</ul></div>`;
+  return "";
+}
+function modCard(m) {
+  const sel = !!state.selection[m.id], inst = !!state.installed[m.id] || /instalado|activo|correcto|familias/.test(m.status || "") && !/no instalado|inactivo/.test(m.status || "");
+  const un = state.uninstall.has(m.id);
+  return `<article class="mod ${sel ? "sel" : ""} ${m.compatible === false ? "off" : ""}" data-mod="${esc(m.id)}">
+    <div class="top"><input class="pick" type="checkbox" ${sel ? "checked" : ""} ${m.compatible === false ? "disabled" : ""} aria-label="Seleccionar ${esc(m.title)}">
+      <div style="flex:1;min-width:0"><h3>${esc(m.title)}</h3>
+      <div class="chips" style="margin-top:4px">
+        ${m.recommended ? '<span class="chip rec">recomendado</span>' : ""}
+        ${m.risk !== "bajo" ? `<span class="chip ${m.risk === "alto" ? "alto" : "medio"}">riesgo ${esc(m.risk)}</span>` : ""}
+        ${m.status && m.status !== "desconocido" && m.status !== "n/a" ? `<span class="chip ${inst ? "inst" : ""}">${esc(m.status)}</span>` : ""}
+        ${m.reboot ? '<span class="chip">se instala al reiniciar</span>' : ""}
+        ${m.license ? `<span class="chip">${esc(m.license)}</span>` : ""}
+      </div></div></div>
+    <div class="muted" style="font-size:14px">${esc(m.description)}</div>
+    ${m.compatible === false ? `<div style="font-size:13px;color:var(--warn)">${esc(m.incompatible_reason)}</div>` : ""}
+    ${m.options.length ? `<div class="opts">${m.options.map(op => optionHtml(m, op)).join("")}</div>` : ""}
+    <div class="row" style="font-size:13px">
+      ${(m.sources || []).slice(0, 2).map(s => `<a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(s.replace(/^https:\/\/(www\.)?/, "").split("/").slice(0, 3).join("/"))}</a>`).join(" · ")}
+      ${m.can_uninstall && inst ? `<label style="margin-left:auto;display:flex;gap:6px;align-items:center;color:var(--err)"><input type="checkbox" data-un="${esc(m.id)}" ${un ? "checked" : ""}> Desinstalar</label>` : ""}
+    </div></article>`;
+}
+function renderCatalog() {
+  const groups = {};
+  state.modules.forEach(m => { (groups[m.category] = groups[m.category] || []).push(m); });
+  const order = ["Sistema", "Lectura", "Menú", "Apps", "Juegos", "Ajustes", "Mantenimiento"];
+  $("#catalog").innerHTML = order.filter(c => groups[c]).map(c => `<div class="cat"><h2>${esc(c)}</h2></div><div class="grid">${groups[c].map(modCard).join("")}</div>`).join("")
+    || '<div class="empty">Conecta el motor local para ver el catálogo.</div>';
+  const lib = state.modules.filter(m => LIB_CATS.has(m.category));
+  $("#libraryMods").innerHTML = lib.map(modCard).join("") || '<div class="empty">Conecta el motor local.</div>';
+  bindCards();
+  const ids = Object.keys(state.selection);
+  $("#bar").classList.toggle("hidden", !ids.length && !state.uninstall.size);
+  $("#selCount").textContent = `${ids.length} seleccionado${ids.length === 1 ? "" : "s"}${state.uninstall.size ? ` · ${state.uninstall.size} a desinstalar` : ""}`;
+  $("#selList").textContent = ids.map(i => byId(i)?.title).join(" · ");
+  $("#planBtn").disabled = !state.device || (!ids.length && !state.uninstall.size);
+}
+function bindCards() {
+  $$("[data-mod]").forEach(card => {
+    const id = card.dataset.mod;
+    $(".pick", card).onchange = e => select(id, e.target.checked);
+    $$("[data-opt]", card).forEach(el => el.onchange = () => {
+      const [, op] = el.dataset.opt.split("::");
+      state.selection[id][op] = el.type === "checkbox" ? el.checked : el.value;
+    });
+    $$("[data-multi]", card).forEach(el => el.onchange = () => {
+      const [, op] = el.dataset.multi.split("::");
+      state.selection[id][op] = $$("[data-multi]", card).filter(x => x.dataset.multi === el.dataset.multi && x.checked).map(x => x.value);
+    });
+    $$("[data-un]", card).forEach(el => el.onchange = () => { el.checked ? state.uninstall.add(id) : state.uninstall.delete(id); renderCatalog(); });
+    $$("[data-drop]", card).forEach(zone => {
+      const input = $("input", zone), [, op] = zone.dataset.drop.split("::");
+      zone.onclick = () => input.click();
+      input.onchange = () => upload(id, op, input.files, zone);
+      zone.ondragover = e => { e.preventDefault(); zone.classList.add("over"); };
+      zone.ondragleave = () => zone.classList.remove("over");
+      zone.ondrop = e => { e.preventDefault(); zone.classList.remove("over"); upload(id, op, e.dataTransfer.files, zone); };
+    });
+  });
+}
+async function upload(id, op, files, zone) {
+  if (!files || !files.length) return;
+  const list = state.selection[id][op] = state.selection[id][op] || [];
+  for (const f of files) {
+    zone.innerHTML = `<span class="row" style="justify-content:center"><span class="spinner"></span> Subiendo ${esc(f.name)} (${(f.size / 1048576).toFixed(1)} MB)…</span>`;
+    try { const r = await api("/api/upload", { method: "POST", body: f, headers: { "X-Filename": encodeURIComponent(f.name) } }); list.push(r.path); }
+    catch (e) { alert(`No se pudo subir ${f.name}: ${e.message}`); }
+  }
+  renderCatalog();
+}
+$("#recBtn").onclick = () => { state.modules.filter(m => m.recommended && m.compatible !== false && !LIB_CATS.has(m.category)).forEach(m => select(m.id, true)); };
+$("#clearBtn").onclick = () => { state.selection = {}; state.uninstall.clear(); renderCatalog(); };
+
+// ---------- plan / apply ----------
+const dlg = $("#dlg");
+function dialog(title, sub, body, buttons) {
+  $("#dlgTitle").textContent = title; $("#dlgSub").textContent = sub || ""; $("#dlgBody").innerHTML = body;
+  $("#dlgFoot").innerHTML = ""; buttons.forEach(([label, cls, fn]) => { const b = document.createElement("button"); b.className = "btn " + cls; b.textContent = label; b.onclick = fn; $("#dlgFoot").append(b); });
+  if (!dlg.open) dlg.showModal();
+}
+function logView(lines) { return `<div class="log" id="jobLog">${esc((lines || []).join("\n")) || "…"}</div>`; }
+async function openPlan() {
+  if (!state.device) return alert("Conecta tu Kobo primero.");
+  dialog("Calculando cambios", "Simulación: todavía no se escribe nada", logView(["Preparando…"]), [["Cancelar", "", () => dlg.close()]]);
+  try {
+    const { job } = await api("/api/plan", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
+    const res = await waitJob(job, l => { const el = $("#jobLog"); if (el) el.textContent = l.join("\n"); });
+    const skips = res.results.filter(r => !r.ok);
+    const changes = res.changes;
+    const body = `${skips.length ? `<div class="finding warn"><span class="sev">omitidos</span><div class="body">${skips.map(s => `${esc(byId(s.id)?.title || s.id)}: ${esc(s.reason)}`).join("<br>")}</div></div>` : ""}
+      <p><b>${changes.length}</b> cambios en el Kobo${res.needs_reboot ? " · se completa al expulsar y reiniciar" : ""}. Se respaldan los originales.</p>
+      <div>${groupChanges(changes)}</div>
+      <details style="margin-top:10px"><summary>Detalle</summary>${logView(res.log)}</details>`;
+    dialog("Revisa antes de aplicar", state.device.name, body, [["Cancelar", "", () => dlg.close()], ["Aplicar en el Kobo", "primary", applyNow]]);
+  } catch (e) { dialog("No se pudo planificar", "", `<div class="finding critical"><span class="sev">error</span><div class="body">${esc(e.message)}</div></div>`, [["Cerrar", "", () => dlg.close()]]); }
+}
+$("#planBtn").onclick = openPlan;
+const AREAS = [[/^\.kobo\/Kobo\//, "Configuración de Nickel"], [/^\.kobo\/KoboRoot\.tgz$/, "Mods de sistema (se instalan al reiniciar)"],
+  [/^fonts\//, "Fuentes"], [/^\.adds\/nm\//, "Menú NickelMenu"], [/^\.adds\/koreader\//, "KOReader"], [/^\.adds\/cadmus\//, "Cadmus"],
+  [/^\.adds\/inkboy\//, "Ink-boy"], [/^\.kobo\/custom-dict\//, "Diccionarios"], [/^\.kobo\/screensaver\//, "Pantallas de reposo"],
+  [/^\.adds\//, "Archivos de mods"], [/\/\._|\.DS_Store$/, "Basura de macOS"], [/./, "Biblioteca"]];
+function groupChanges(changes) {
+  const groups = new Map();
+  changes.forEach(c => { const a = AREAS.find(([re]) => re.test(c.rel))[1]; if (!groups.has(a)) groups.set(a, []); groups.get(a).push(c); });
+  const verb = c => c.op === "delete" ? "borrar" : c.existed ? "actualizar" : "crear";
+  return [...groups].map(([area, list]) => {
+    const counts = {}; list.forEach(c => counts[verb(c)] = (counts[verb(c)] || 0) + 1);
+    const sum = Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(", ");
+    const rows = list.slice(0, 300).map(c => `<div class="chg"><b class="${c.op === "delete" ? "delete" : "write"}">${verb(c)}</b><span>${esc(c.rel)}</span></div>`).join("");
+    return `<details ${list.length <= 4 ? "open" : ""} style="margin:4px 0"><summary><b>${esc(area)}</b> <span class="muted">· ${sum}</span></summary>${rows}${list.length > 300 ? `<div class="muted">…y ${list.length - 300} más</div>` : ""}</details>`;
+  }).join("");
+}
+async function applyNow() {
+  dialog("Aplicando…", "No desconectes el Kobo", logView(["Iniciando…"]), []);
+  try {
+    const { job } = await api("/api/apply", { method: "POST", json: { selection: state.selection, uninstall: [...state.uninstall] } });
+    const res = await waitJob(job, l => { const el = $("#jobLog"); if (el) { el.textContent = l.join("\n"); el.scrollTop = el.scrollHeight; } });
+    state.selection = {}; state.uninstall.clear(); renderCatalog();
+    dialog("Listo", `${res.changes.length} cambios aplicados`, `
+      <div class="finding ok"><span class="sev">ok</span><div class="body">Instalación completa.${res.manifest ? `<div class="muted" style="font-size:13px">Respaldo: ${esc(res.manifest)}</div>` : ""}</div></div>
+      ${res.needs_reboot ? '<div class="finding info"><span class="sev">siguiente</span><div class="body">Expulsa el Kobo: instalará los mods de sistema y se reiniciará solo (1-2 min).</div></div>' : ""}
+      <details><summary>Registro</summary>${logView(res.log)}</details>`,
+      [["Cerrar", "", () => { dlg.close(); refresh(); }], ["Expulsar Kobo", "primary", eject]]);
+  } catch (e) {
+    dialog("Error al aplicar", "Puedes revertir desde Respaldos", `<div class="finding critical"><span class="sev">error</span><div class="body">${esc(e.message)}</div></div>`, [["Ver respaldos", "", () => { dlg.close(); $('[data-tab="backups"]').click(); }], ["Cerrar", "", () => dlg.close()]]);
+  }
+}
+async function eject() {
+  try { const r = await api("/api/eject", { method: "POST", json: {} }); dialog("Kobo expulsado", "", `<p>${r.ok ? "Ya puedes desconectar el cable." : esc(r.output)}</p>`, [["Cerrar", "", () => { dlg.close(); refresh(); }]]); }
+  catch (e) { alert(e.message); }
+}
+
+// ---------- backups ----------
+async function loadBackups() {
+  if (!state.device) return;
+  try {
+    const list = await api("/api/backups");
+    $("#backups").innerHTML = list.length ? list.map(b => `<div class="finding ${b.complete ? "info" : "warn"}"><span class="sev">${b.complete ? esc(b.label) : "incompleto"}</span>
+      <div class="body"><b>${esc(b.time)}</b> · ${Number(b.changes) || 0} cambios<div class="muted" style="font-size:12px;font-family:var(--mono)">${esc(b.path)}</div></div>
+      <button class="btn small danger" data-rb="${esc(b.path)}">Revertir</button></div>`).join("") : '<div class="empty">Aún no hay respaldos de este Kobo.</div>';
+    $$("[data-rb]").forEach(btn => btn.onclick = () => doRollback(btn.dataset.rb));
+  } catch (e) { $("#backups").innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+async function doRollback(path) {
+  const { job } = await api("/api/rollback", { method: "POST", json: { manifest: path, dry_run: true } });
+  const prev = await waitJob(job);
+  dialog("Revertir instalación", path, `<p>Se harán ${prev.actions.length} acciones:</p>${logView(prev.actions)}`, [["Cancelar", "", () => dlg.close()], ["Revertir", "danger", async () => {
+    const r = await api("/api/rollback", { method: "POST", json: { manifest: path } });
+    const done = await waitJob(r.job);
+    dialog("Revertido", "", logView(done.actions), [["Cerrar", "", () => { dlg.close(); refresh(); }]]);
+  }]]);
+}
+
+function renderCredits() {
+  const seen = new Set();
+  $("#credits").innerHTML = state.modules.filter(m => m.sources && m.sources.length).map(m => {
+    const s = m.sources[0]; if (seen.has(s)) return ""; seen.add(s);
+    return `<li><a href="${esc(safeUrl(s))}" target="_blank" rel="noopener noreferrer">${esc(m.title)}</a>${m.license ? ` · ${esc(m.license)}` : ""}</li>`;
+  }).join("");
+}
+
+connect();
+setInterval(() => { if (!state.helper) connect(); else api("/api/devices").then(d => { const has = d.length > 0; if (has !== !!state.device) refresh(); }).catch(() => connect()); }, 5000);
+</script>
+</body>
+</html>

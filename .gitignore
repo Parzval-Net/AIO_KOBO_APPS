@@ -1,0 +1,14 @@
+build/
+tools/toolchain/
+__pycache__/
+*.pyc
+.DS_Store
+._*
+.claude/
+dist/Ink-boy-Kobo-Bundle.zip
+/roms/
+*.sav
+*.sav.tmp
+
+# Herramienta local de escritura cruda sobre el bloque del Kobo: no se publica
+src/tools/kobo_fat32_recover.cpp
