@@ -1315,7 +1315,6 @@ void AioAudio::applyPlayState() {
         if (was)
             saveState(true);
     }
-    return true;
 }
 
 void AioAudio::setChapter(const QString &name) {
