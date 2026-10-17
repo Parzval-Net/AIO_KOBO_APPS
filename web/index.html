@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<meta name="aio-version" content="1.3.1">
 <title>Kobo AIO</title>
 <meta name="description" content="Mejora tu Kobo en minutos: menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros, diccionarios y más. Con respaldo y vuelta atrás.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='1.5' width='22' height='29' rx='5' fill='%231E1C18'/%3E%3Crect x='8' y='4.5' width='16' height='20' rx='1.8' fill='%23F3EFE6'/%3E%3Cpath d='M18.5 4.5h4v9l-2-1.6-2 1.6z' fill='%23C2553E'/%3E%3C/svg%3E">
@@ -143,6 +144,7 @@ code,kbd{font-family:var(--mono);font-size:.88em;background:var(--sunk);padding:
 .steps li.now b{color:var(--accent)}
 .explore{display:flex;gap:10px;align-items:flex-start;margin:16px 0 0;padding:12px 16px;border-radius:12px;background:var(--info-bg);font-size:15px}
 .explore .ic{margin-top:2px;color:var(--accent)}
+.explore.warnb{background:var(--warn-bg)}.explore.warnb .ic{color:var(--warn)}
 .ways{display:grid;gap:12px;grid-template-columns:1fr 1fr;margin-top:12px}
 @media (max-width:700px){.ways{grid-template-columns:1fr}}
 .way{display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding:16px;border-radius:14px;border:1px solid var(--rule);background:var(--surface)}
@@ -349,6 +351,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
 
 <div class="wrap" id="main" tabindex="-1">
   <div class="explore hidden" id="explore" role="note"></div>
+  <div class="explore warnb hidden" id="update" role="status"></div>
 
   <section class="view" data-view="home" aria-labelledby="hHome">
     <div class="card hero">
@@ -599,14 +602,14 @@ function stockGuide() {
     ${d ? "" : `<div class="finding info">${icon("info")}<div class="body small">Conecta tu Kobo para hacer los pasos 1 y 2.</div></div>`}
     ${state.web === "zip" ? `<div class="finding warn">${icon("alert")}<div class="body small">Este navegador no puede borrar archivos del Kobo. Para quitar los mods usa Chrome o Edge, o la app de escritorio.</div></div>` : ""}`,
     [["Cerrar", "", () => dlg.close()],
-     ...(canBackup ? [[`${icon("archive")}Respaldar`, "", () => openPlan(selectionFor(["maint.backup"]))]] : []),
-     [`${icon("factory")}Quitar todos los mods`, "primary", () => openPlan(selectionFor(["maint.stock"]))]]);
+     ...(canBackup ? [[`${icon("archive")}Respaldar`, "", () => planFor(["maint.backup"])]] : []),
+     [`${icon("factory")}Quitar todos los mods`, "primary", () => planFor(["maint.stock"])]]);
 }
 document.addEventListener("click", e => { if (e.target.closest("[data-stock]")) { e.preventDefault(); stockGuide(); } });
 
-function desktopDialog(reason) {
+function desktopDialog(reason, title) {
   const os = HOST_OS === "mobile" ? null : HOST_OS, d = os && DESKTOP[os];
-  dialog(reason ? "Esta función usa la app de escritorio" : "Kobo AIO de escritorio", reason ? `Motivo: ${reason}` : "Todas las funciones, sin instalar Python ni nada más",
+  dialog(title || (reason ? "Esta función usa la app de escritorio" : "Kobo AIO de escritorio"), reason ? `Motivo: ${reason}` : "Todas las funciones, sin instalar Python ni nada más",
     `${d ? `<p class="small" style="margin-top:0">Es una app gratuita que trae todo incluido. Descárgala, ábrela y vuelve a esta página: <b>se conecta sola</b>.</p>
       <div class="row">${desktopButtons(os)}</div>
       <ol class="steps"><li><b>Descarga</b> la app para ${esc(d.name)}.</li><li><b>Ábrela.</b> ${esc(d.open)}</li><li><b>Listo.</b> Se abre Kobo AIO con todas las funciones. Deja su ventana abierta mientras lo usas.</li></ol>`
@@ -762,7 +765,7 @@ document.addEventListener("click", e => {
   const l = e.target.closest("[data-lib]");
   if (l) { go("library"); requestAnimationFrame(() => { const c = $(`[data-task="${CSS.escape(l.dataset.lib)}"]`); c && c.scrollIntoView({ behavior: "smooth", block: "center" }); }); return; }
   const q = e.target.closest("[data-quick]");
-  if (q) openPlan(selectionFor([q.dataset.quick]));
+  if (q) planFor([q.dataset.quick]);
 });
 
 function deviceArt(d, el) {
@@ -791,6 +794,8 @@ async function connect() {
     const s = await api("/api/status");
     state.helper = true;
     setChip("#helperDot", "#helperTxt", "ok", `Motor local ${s.version}`);
+    state.engineVersion = s.version;
+    renderUpdate();
   } catch (_) {
     const changed = state.helper !== false;
     state.helper = false;
@@ -925,7 +930,7 @@ async function runDoctor() {
       <div style="flex:1;min-width:200px"><b>${worst === "ok" ? "Tu Kobo está en orden" : `${bad.length} ${bad.length === 1 ? "cosa por revisar" : "cosas por revisar"}`}</b>
       <div class="small">${worst === "ok" ? `${good.length} revisiones pasaron. Ya puedes mejorarlo.` : "Te explicamos cada una abajo."}</div></div>
       ${fixes.length ? `<button class="btn primary sm" id="fixAll">${icon("wand")}Arreglar ${fixes.length === 1 ? "esto" : `las ${fixes.length}`}</button>` : ""}`;
-    if (fixes.length) $("#fixAll").onclick = () => openPlan(selectionFor(fixes));
+    if (fixes.length) $("#fixAll").onclick = () => planFor(fixes);
     const fRow = f => { const s = sevOf(f.severity); return `<div class="finding ${s}">${icon(SEVICON[s])}<div class="body"><b>${esc(f.title)}</b>
       ${f.detail ? `<div class="small muted">${esc(f.detail)}</div>` : ""}
       ${f.data && Array.isArray(f.data.missing) ? `<details class="tech"><summary>Ver los ${f.data.missing.length} libros</summary><div class="log">${esc(f.data.missing.join("\n"))}</div></details>` : ""}
@@ -934,7 +939,7 @@ async function runDoctor() {
     $("#findings").innerHTML = [...bad, ...info].map(fRow).join("") +
       (good.length ? `<details ${bad.length ? "" : "open"} style="margin-top:12px"><summary class="small" style="cursor:pointer">${good.length} cosas están bien</summary>
         <div class="oklist">${good.map(f => `<div>${icon("check")}<span>${esc(f.title)}</span></div>`).join("")}</div></details>` : "");
-    $$("[data-fix]").forEach(b => b.onclick = () => openPlan(selectionFor([b.dataset.fix])));
+    $$("[data-fix]").forEach(b => b.onclick = () => planFor([b.dataset.fix]));
   } catch (e) {
     $("#findings").innerHTML = `<div class="finding critical">${icon("x-circle")}<div class="body"><b>No se pudo revisar el Kobo</b><div class="small">${esc(e.message)}</div></div></div>`;
   }
@@ -945,6 +950,31 @@ const byId = id => state.modules.find(m => m.id === id);
 const isInstalled = m => !!state.installed[m.id] || (/instalado|activo|correcto|familias/.test(m.status || "") && !/^no |inactivo/.test(m.status || ""));
 // Biblioteca keeps its own drafts (files to send): they must never leak into the wizard/expert selection or plan.
 const store = () => state.view === "library" ? state.lib : state.selection;
+// The page (GitHub Pages) can be newer than the desktop app it talks to: say so instead of failing silently.
+const PAGE_VERSION = (document.querySelector('meta[name="aio-version"]') || {}).content || "";
+const verParts = v => String(v || "0").split(".").map(n => parseInt(n, 10) || 0);
+const olderThan = (a, b) => { const x = verParts(a), y = verParts(b); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) < (y[i] || 0); return false; };
+const engineOutdated = () => !!(HELPER && state.helper && !state.web && state.engineVersion && olderThan(state.engineVersion, PAGE_VERSION));
+function renderUpdate() {
+  const el = $("#update"), show = engineOutdated();
+  el.classList.toggle("hidden", !show);
+  if (show) el.innerHTML = `${icon("alert")}<div><b>Tu app de escritorio es la versión ${esc(state.engineVersion)} y esta página es la ${esc(PAGE_VERSION)}.</b> Las funciones nuevas no van a funcionar hasta que la actualices. <a href="#" data-update>Descargar la versión nueva</a></div>`;
+}
+function updateDialog(feature) {
+  desktopDialog(`${feature ? `«${feature}» es nueva y ` : ""}tu app de escritorio es la versión ${state.engineVersion || "anterior"}; descarga la ${PAGE_VERSION}, cierra la anterior y abre la nueva`, "Actualiza la app de escritorio");
+}
+document.addEventListener("click", e => { if (e.target.closest("[data-update]")) { e.preventDefault(); updateDialog(); } });
+// Plan a fixed set of modules; if the connected engine does not know one of them, explain why instead.
+function planFor(ids) {
+  const missing = ids.filter(i => !byId(i));
+  if (missing.length) {
+    const name = (META[missing[0]] || [missing[0]])[0];
+    if (engineOutdated() || (state.helper && !state.web)) updateDialog(name);
+    else toast(`«${name}» no está disponible en esta versión de Kobo AIO.`);
+    return;
+  }
+  openPlan(selectionFor(ids));
+}
 function selectionFor(ids) {   // one-off selection (quick actions, «Arreglar») resolving requirements, without touching the user's
   const keep = state.selection; state.selection = {};
   ids.forEach(i => select(i, true));
@@ -1188,6 +1218,7 @@ function dialog(title, sub, body, buttons) {
 }
 async function openPlan(sel = state.selection) {
   if (!state.device) { toast("Conecta tu Kobo primero."); return; }
+  if (!Object.keys(sel).length && !(sel === state.selection && state.uninstall.size)) { toast("No hay nada que aplicar."); return; }
   dialog("Preparando…", "Todavía no se escribe nada", '<div class="row"><span class="spinner"></span>Calculando cambios</div>', [["Cancelar", "", () => dlg.close()]]);
   try {
     const res = await planNow(sel);

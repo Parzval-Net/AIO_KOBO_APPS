@@ -1,5 +1,5 @@
 {
- "version": "1.3.0",
+ "version": "1.3.1",
  "device": null,
  "modules": [
   {
@@ -1334,7 +1334,6 @@
       "rescan_full",
       "dark_mode",
       "auto_usb",
-      "home",
       "wifi_toggle"
      ],
      "choices": [
@@ -1416,7 +1415,7 @@
       },
       {
        "value": "home",
-       "label": "[Sistema] Inicio"
+       "label": "[Extras] Salir del navegador"
       },
       {
        "value": "wifi_toggle",

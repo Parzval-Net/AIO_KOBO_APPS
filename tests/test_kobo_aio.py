@@ -881,6 +881,13 @@ class StockTests(TempKobo):
 
 
 class WebCatalogTests(unittest.TestCase):
+    def test_page_version_matches_engine(self):
+        """The page compares its version with the desktop app to warn about outdated apps."""
+        import re
+        from kobo_aio import __version__
+        html = (Path(__file__).resolve().parent.parent / "web" / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(re.search(r'<meta name="aio-version" content="([^"]+)">', html).group(1), __version__)
+
     def test_demo_catalog_in_sync(self):
         """web/catalog.json feeds the explore mode on GitHub Pages; regenerate it with `make catalog`."""
         from kobo_aio import engine

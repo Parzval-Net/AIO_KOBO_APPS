@@ -95,8 +95,11 @@ CATALOG: list[NmItem] = [
        "Alterna el código de desbloqueo."),
     _i("usb", "Sistema", "Conectar USB", "main", "nickel_misc", "force_usb_connection",
        "Muestra el diálogo de conexión USB."),
-    _i("home", "Sistema", "Inicio", "browser", "nickel_misc", "home",
-       "Salir del navegador (necesario en firmware 4.23+).", default=True),
+    # Only shows inside the web browser's own menu. Every browser shortcut here opens it "modal" (with its own close
+    # button), so this is only needed if you open the browser some other way (NickelMenu doc: 4.23.15505+).
+    _i("home", "Extras", "Salir del navegador", "browser", "nickel_misc", "home",
+       "Aparece solo en el menú del navegador web y vuelve al inicio. No hace falta con los atajos de navegador de "
+       "este menú, que ya se abren en una ventana con botón para cerrar."),
     # Red
     _i("wifi_toggle", "Red", "WiFi on/off", "main", "nickel_wifi", "toggle", "Alterna el WiFi.", default=True),
     _i("wifi_connect", "Red", "Conectar WiFi", "main", "nickel_wifi", "autoconnect", "Enciende y conecta a red conocida."),
