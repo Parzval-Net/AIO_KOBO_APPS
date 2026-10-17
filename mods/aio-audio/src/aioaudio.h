@@ -30,7 +30,7 @@ private:
     QPointer<QLabel> current;
     QPointer<QLabel> cover;
     QTimer *timer;
-    QSize coverBox;
+    QSize coverBox; // cover area from the screen size
     int coverKey;
 };
 

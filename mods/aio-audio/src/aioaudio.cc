@@ -9,17 +9,19 @@
 //   MP3Reader::MP3Reader(QWidget*, PluginState*)   called by MP3ReaderPlugin::reader: restyle the Ui_MP3Reader form
 //   QLabel::setText                                setupUi, applyVolume, setPage and the play/pause lambda: Spanish text
 //   AudioPlayer::setMedia(int, QMediaContent, QIODevice*)  setPage: keep the player, read the cover from the QBuffer
-//   QLabel::setPixmap                              stock cover lambda: never replaces our cover
+//   QLabel::setPixmap, QWidget::setGeometry        stock cover lambda: never replaces or moves our cover
 // All hooks are optional: if a firmware changes them, Nickel keeps the stock player.
 
 #include <QBoxLayout>
 #include <QBuffer>
 #include <QGuiApplication>
 #include <QImage>
+#include <QImageReader>
 #include <QLabel>
 #include <QMetaMethod>
 #include <QPixmap>
 #include <QScreen>
+#include <QSpacerItem>
 #include <QStringList>
 #include <QTimer>
 #include <QVariant>
@@ -36,6 +38,7 @@
 static void (*MP3Reader_MP3Reader)(void *self, QWidget *parent, void *state);
 static void (*QLabel_setText)(QLabel *self, const QString &text);
 static void (*QLabel_setPixmap)(QLabel *self, const QPixmap &pixmap);
+static void (*QWidget_setGeometry)(QWidget *self, const QRect &rect);
 static void (*AudioPlayer_setMedia)(void *self, int index, const void *content, QIODevice *device);
 
 static QPointer<AioAudio> aio;
@@ -79,7 +82,8 @@ static QString trackTitle(QString t) {
         if (open > 0 && kn.size() == 2) {
             int k = kn[0].toInt(&ok1), n = kn[1].toInt(&ok2);
             if (ok1 && ok2 && k > 0 && n >= k)
-                t = QString::fromUtf8("%1 · parte %2 de %3").arg(t.left(open).trimmed()).arg(k).arg(n);
+                t = QString::fromUtf8("%1 · parte %2 de %3")
+                        .arg(t.left(open).trimmed(), QString::number(k), QString::number(n)); // one pass: no %N from the name
         }
     }
     return t.replace('_', ' ');
@@ -131,27 +135,40 @@ static bool onTap(QObject *button, QObject *receiver, const char *slot) {
     return QObject::connect(button, mo->method(best), receiver, receiver->metaObject()->method(s));
 }
 
+static quint32 be32(const unsigned char *b) {
+    return quint32(b[0]) << 24 | quint32(b[1]) << 16 | quint32(b[2]) << 8 | quint32(b[3]);
+}
+static quint32 syncsafe(const unsigned char *b) {
+    return quint32(b[0] & 0x7f) << 21 | quint32(b[1] & 0x7f) << 14 | quint32(b[2] & 0x7f) << 7 | quint32(b[3] & 0x7f);
+}
+
+// The APIC picture of an ID3v2.3/2.4 tag. Every size is checked against what is left, so a damaged tag only
+// means "no cover".
 static QByteArray apic(const QByteArray &mp3) {
     const unsigned char *d = reinterpret_cast<const unsigned char *>(mp3.constData());
-    int len = mp3.size();
+    const quint32 len = quint32(mp3.size());
     if (len < 10 || memcmp(d, "ID3", 3) || d[3] < 3 || d[3] > 4 || (d[5] & 0x80)) // unsynchronised tags: skip
         return QByteArray();
-    bool v4 = d[3] == 4;
-    int end = 10 + ((d[6] & 0x7f) << 21 | (d[7] & 0x7f) << 14 | (d[8] & 0x7f) << 7 | (d[9] & 0x7f));
-    int p = 10;
-    if (d[5] & 0x40 && p + 4 <= len) // extended header
-        p += v4 ? ((d[p] & 0x7f) << 21 | (d[p + 1] & 0x7f) << 14 | (d[p + 2] & 0x7f) << 7 | (d[p + 3] & 0x7f))
-                : (d[p] << 24 | d[p + 1] << 16 | d[p + 2] << 8 | d[p + 3]) + 4;
-    if (end > len)
-        end = len;
-    while (p + 10 <= end && d[p]) {
-        int size = v4 ? ((d[p + 4] & 0x7f) << 21 | (d[p + 5] & 0x7f) << 14 | (d[p + 6] & 0x7f) << 7 | (d[p + 7] & 0x7f))
-                      : (d[p + 4] << 24 | d[p + 5] << 16 | d[p + 6] << 8 | d[p + 7]);
-        if (size <= 0 || p + 10 + size > end)
+    const bool v4 = d[3] == 4;
+    quint32 end = qMin(len, 10 + syncsafe(d + 6));
+    quint32 p = 10;
+    if (d[5] & 0x40) { // extended header
+        if (end - p < 4)
+            return QByteArray();
+        quint32 ext = v4 ? syncsafe(d + p) : be32(d + p);
+        if (!v4 && ext <= 0xfffffff0u)
+            ext += 4; // v2.3 does not count its own size field
+        if (ext > end - p)
+            return QByteArray();
+        p += ext;
+    }
+    while (end - p >= 10 && d[p]) {
+        quint32 size = v4 ? syncsafe(d + p + 4) : be32(d + p + 4);
+        if (size == 0 || size > end - p - 10)
             break;
         if (!memcmp(d + p, "APIC", 4)) {
             const unsigned char *f = d + p + 10;
-            int i = 1, n = size, enc = f[0];
+            quint32 i = 1, n = size, enc = f[0];
             while (i < n && f[i]) i++;          // MIME type
             i += 2;                              // NUL + picture type
             if (enc == 1 || enc == 2) {          // UTF-16 description, 2-byte NUL
@@ -162,7 +179,7 @@ static QByteArray apic(const QByteArray &mp3) {
                 i += 1;
             }
             if (i < n)
-                return QByteArray(reinterpret_cast<const char *>(f + i), n - i);
+                return QByteArray(reinterpret_cast<const char *>(f + i), int(n - i));
             break;
         }
         p += 10 + size;
@@ -197,6 +214,17 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r), timer(new QTimer(this)),
         row3->insertWidget(0, prev, 1);
     }
 
+    // setupUi puts expanding vertical spacers above the cover and below the volume line (verticalLayout items
+    // 0 and 4); they would share the free space with the cover. Make them a small fixed gap.
+    if (QBoxLayout *col = child<QBoxLayout>(r, "verticalLayout")) {
+        static const int gaps[] = {0, 4};
+        for (int g = 0; g < 2; g++)
+            if (QLayoutItem *it = col->itemAt(gaps[g]))
+                if (QSpacerItem *sp = it->spacerItem())
+                    sp->changeSize(0, base / 2, QSizePolicy::Minimum, QSizePolicy::Fixed);
+        col->invalidate();
+    }
+
     // Linear volume duplicates the log10 row; "Total:" is replaced by the elapsed/total line.
     static const char *const hidden[] = {"volumeUp", "volumeDown", "total", nullptr};
     for (int i = 0; hidden[i]; i++)
@@ -221,7 +249,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r), timer(new QTimer(this)),
         cover->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     }
 
-    // E-ink friendly: black on white, solid outlines, no gradients.
+    // E-ink friendly: black on white, square solid outlines (no antialiased corners), no gradients.
     r->setStyleSheet(QString(
         "#title { font-size: %1px; font-weight: bold; padding: %3px; }"
         "#current { font-size: %2px; padding: %3px; }"
@@ -229,7 +257,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r), timer(new QTimer(this)),
         "#playPause, #backward, #forward, #slower, #normal, #faster, #prevChapter, #nextChapter,"
         "#logVolumeDown, #logVolumeUp, #volumeDown, #volumeUp {"
         " font-size: %2px; color: black; background: white; border: 2px solid black;"
-        " border-radius: %3px; margin: %5px; padding: 0 %3px; }"
+        " margin: %5px; padding: 0 %3px; }"
         "#playPause { font-weight: bold; border-width: 3px; }")
         .arg(base * 4 / 3).arg(base).arg(base / 3).arg(base * 5 / 6).arg(base / 5));
 
@@ -252,15 +280,23 @@ void AioAudio::setCover(const QByteArray &mp3) {
     QByteArray jpeg = apic(mp3);
     if (jpeg.isEmpty())
         return;
-    int key = qHash(jpeg);
+    // setPage runs before the reader is laid out, so the label size is not known yet: always use the box
+    // computed from the screen, which is what the layout gives the cover anyway.
+    int key = int(qHash(jpeg));
     if (key == coverKey && cover->property("aioCover").toBool())
         return;
-    QImage img;
-    if (!img.loadFromData(jpeg))
+    QBuffer buf(&jpeg);
+    buf.open(QIODevice::ReadOnly);
+    QImageReader jr(&buf);
+    QSize native = jr.size();
+    if (!native.isValid() || native.width() > 8000 || native.height() > 8000)
         return;
-    QSize box = cover->width() > 1 && cover->height() > 1 ? cover->size().boundedTo(coverBox) : coverBox;
-    cover->setPixmap(QPixmap::fromImage(img.scaled(box, Qt::KeepAspectRatio, Qt::SmoothTransformation)));
+    jr.setScaledSize(native.scaled(coverBox, Qt::KeepAspectRatio)); // the JPEG handler decodes at that scale
+    QImage img = jr.read();
+    if (img.isNull())
+        return;
     cover->setProperty("aioCover", true);
+    cover->setPixmap(QPixmap::fromImage(img));
     coverKey = key;
 }
 
@@ -313,6 +349,13 @@ extern "C" __attribute__((visibility("default"))) void _aio_setPixmap(QLabel *se
     QLabel_setPixmap(self, pixmap);
 }
 
+// The stock cover lambda moves coverImage to (0,0) at the picture's native size before setPixmap.
+extern "C" __attribute__((visibility("default"))) void _aio_setGeometry(QWidget *self, const QRect &rect) {
+    if (self && self->property("aioCover").toBool())
+        return;
+    QWidget_setGeometry(self, rect);
+}
+
 extern "C" __attribute__((visibility("default"))) void _aio_setMedia(void *self, int index, const void *content, QIODevice *device) {
     AudioPlayer_setMedia(self, index, content, device);
     if (!aio)
@@ -341,6 +384,7 @@ static struct nh_hook AioAudioHook[] = {
     {.sym = "_ZN9MP3ReaderC1EP7QWidgetP11PluginState", .sym_new = "_aio_reader", .lib = MP3Z, .out = nh_symoutptr(MP3Reader_MP3Reader), .desc = "player layout", .optional = true},
     {.sym = "_ZN6QLabel7setTextERK7QString", .sym_new = "_aio_setText", .lib = MP3Z, .out = nh_symoutptr(QLabel_setText), .desc = "Spanish labels", .optional = true},
     {.sym = "_ZN6QLabel9setPixmapERK7QPixmap", .sym_new = "_aio_setPixmap", .lib = MP3Z, .out = nh_symoutptr(QLabel_setPixmap), .desc = "keep cover", .optional = true},
+    {.sym = "_ZN7QWidget11setGeometryERK5QRect", .sym_new = "_aio_setGeometry", .lib = MP3Z, .out = nh_symoutptr(QWidget_setGeometry), .desc = "keep cover place", .optional = true},
     {.sym = "_ZN11AudioPlayer8setMediaEiRK13QMediaContentP9QIODevice", .sym_new = "_aio_setMedia", .lib = MP3Z, .out = nh_symoutptr(AudioPlayer_setMedia), .desc = "cover and seeking", .optional = true},
     {0},
 };

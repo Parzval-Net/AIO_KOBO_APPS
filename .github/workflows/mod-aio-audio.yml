@@ -34,7 +34,7 @@ jobs:
         working-directory: mods/aio-audio
         run: |
           grep -E "NEEDED|RPATH|RUNPATH" readelf.txt
-          for s in NickelHook _aio_reader _aio_setText _aio_setPixmap _aio_setMedia; do
+          for s in NickelHook _aio_reader _aio_setText _aio_setPixmap _aio_setGeometry _aio_setMedia; do
             grep -qw "$s" exports.txt || { echo "missing export $s"; exit 1; }
           done
           tar tzvf KoboRoot.tgz
