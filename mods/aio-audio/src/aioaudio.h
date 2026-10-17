@@ -16,6 +16,7 @@
 #include <QString>
 #include <QStringList>
 #include <QWidget>
+#include <QWindow>
 
 class QEvent;
 class QGestureEvent;
@@ -165,7 +166,7 @@ public:
     bool readerShown() const;
     bool trackEnded() const;                               // the player is at the end of its track (auto-advance)
     bool pageKey(QObject *receiver, QKeyEvent *e);         // page-turn button: true when taken
-    bool fastRegion(const QRegion &region, const QPoint &origin) const; // only our black/white controls changed
+    bool fastRegion(const QRegion &region, QWindow *win); // only our black/white controls changed (reader's window)
 
 public Q_SLOTS:
     void rewind();
@@ -197,6 +198,8 @@ public Q_SLOTS:
     void tocNext();
     void tocRowTapped();
     void jumpNow();
+    void onPosition(qint64 pos);
+    void onState();
 
 private:
     int px(int dragon) const;
@@ -228,8 +231,12 @@ private:
     void buildToc();
     void layoutToc();
     void fillToc();
+    int stockTrackCount() const;        // QVector<Shortcover> size at MP3Reader+0x2c (validated layout), else 0
+    void notePos(qint64 pos);
+    void refreshWindow();
 
     QPointer<QWidget> reader;
+    bool layoutOk = false;              // MP3Reader is the 4.45 layout (Volume vtable at +0x24): offsets usable
     QPointer<QObject> player;
     QPointer<QLabel> cover, playPause;
     QPointer<AioPane> rootPane;
@@ -269,15 +276,18 @@ private:
     QString bookPath, fallbackTitle;    // the .mp3z (Content::getId), its folder or file name
     // Fast refresh: these widgets only ever paint black and white.
     QList<QPointer<QWidget> > fastWidgets;
+    QPointer<QWindow> readerWin;        // the reader's top-level window (refreshed on Show)
+    bool normalFlush = false;           // next flush of that window keeps the default waveform (track change)
+    int playerState = -1, prevPlayerState = -1; // QMediaPlayer::State (0 stopped, 1 playing, 2 paused)
     bool keysOn = false;
     QElapsedTimer keyClock;             // auto-repeat of a held page button: one seek per 400 ms
     // "Capitulos": the .mp3z entries as libmp3z orders them, read once on the first open.
     QPointer<AioTap> tocTap, tocPrevTap, tocNextTap, tocClose;
     QPointer<AioPane> tocPane, tocLine;
-    QPointer<AioText> tocTitle, tocPageText;
+    QPointer<AioText> tocTitle, tocPageText, tocNote;
     QList<QPointer<AioTap> > tocRows;
     QStringList tocNames;
-    bool tocLoaded = false;
+    bool tocLoaded = false, tocVerified = true; // tocVerified: entry count matches the player's (jumps allowed)
     int tocPage = 0, tocPerPage = 9, tocCurrent = -1, jumpTarget = -1;
 };
 

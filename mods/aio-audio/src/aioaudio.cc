@@ -68,7 +68,8 @@
 // libnickel.so: ReadingView::processTap/processSwipe   swallowed while our player is shown in that view
 // libQt5Widgets.so.5: QBackingStore::flush(QRegion, QWindow*, QPoint, QList<QPair<QRect, quint64> >)  fast refresh
 // Optional symbols: TouchLabel::set(De)SelectedPixmap, ReadingController::closeReadingView, Content::getId,
-// BluetoothManager and BluetoothDevice (libnickel, nh_dlsym) and MP3Reader::saveBookmark/goToPage/event/
+// BluetoothManager and BluetoothDevice (libnickel, nh_dlsym), _ZTV6Volume (libnickel, dlsym: validates the 4.45
+// MP3Reader offsets before any of them is read) and MP3Reader::saveBookmark/goToPage/event/
 // staticMetaObject (libmp3z is RTLD_LOCAL: dlopen RTLD_NOLOAD + dlsym at runtime). All hooks and symbols are
 // optional: if a firmware changes them, Nickel keeps the stock behaviour for that part.
 
@@ -216,13 +217,38 @@ static QString headsetName(const QString &dev) {
     return name.trimmed();
 }
 
-// The AudioPlayer of an MP3Reader (MP3Reader+0x40 on 4.45, RE).
+// MP3Reader layout on 4.45 (RE): Volume embedded at +0x24 (the constructor runs Volume::Volume on this+0x24,
+// which stores &_ZTV6Volume + 8 as its first word), QVector<Shortcover> at +0x2c, current index at +0x30,
+// AudioPlayer at +0x40. Those offsets are only used when that first word is libnickel's Volume vtable: any other
+// build fails the check and keeps the stock-safe paths (no track list, no path, no offset reads).
+static bool readerLayout(const QWidget *reader) {
+    static const void *volumeVptr = 0;
+    static bool resolved = false;
+    if (!resolved) {
+        resolved = true;
+        void *vt = dlsym(RTLD_DEFAULT, "_ZTV6Volume");
+        if (!vt) {
+            if (void *h = dlopen("libnickel.so.1.0.0", RTLD_LAZY | RTLD_NOLOAD)) {
+                vt = dlsym(h, "_ZTV6Volume");
+                dlclose(h); // only drops the reference NOLOAD added
+            }
+        }
+        if (vt)
+            volumeVptr = static_cast<const char *>(vt) + 8; // vtable group: offset-to-top, typeinfo, then the vptr
+    }
+    if (!reader || !volumeVptr)
+        return false;
+    return *reinterpret_cast<const void *const *>(reinterpret_cast<const char *>(reader) + 0x24) == volumeVptr;
+}
+
+// The AudioPlayer of an MP3Reader (MP3Reader+0x40 on 4.45, RE). Only with a validated layout.
 static QObject *readerPlayer(const QWidget *reader) {
     return *reinterpret_cast<QObject *const *>(reinterpret_cast<const char *>(reader) + 0x40);
 }
 
 // The .mp3z of an MP3Reader: Content::getId of its Volume (embedded at MP3Reader+0x24 on 4.45, RE: setPage and
-// saveBookmark pass this+0x24), "file://" stripped. Empty unless it looks like an absolute .mp3z path.
+// saveBookmark pass this+0x24), "file://" stripped. Empty unless it looks like an absolute .mp3z path. Only with a
+// validated layout.
 static QString readerPath(const QWidget *reader) {
     if (!Content_getId || !reader)
         return QString();
@@ -243,7 +269,8 @@ static quint32 le32(const unsigned char *b) {
 
 // The entry names of a ZIP (.mp3z) as libmp3z orders its tracks (4.45, RE): every entry, UTF-8,
 // QStringList::sort(). Only the End Of Central Directory (last 66 KB) and the central directory are read; every
-// field is checked against what was read. Empty on any doubt (ZIP64, damaged file).
+// field is checked against what was read. Every entry is read (5000 at most), sorted, and more than MAX_TRACKS
+// means no list: a truncated list would not match libmp3z's order. Empty on any doubt (ZIP64, damaged file).
 static QStringList zipNames(const QString &path) {
     QStringList names;
     QFile f(path);
@@ -278,7 +305,7 @@ static QStringList zipNames(const QString &path) {
         return names;
     const unsigned char *c = reinterpret_cast<const unsigned char *>(cd.constData());
     quint32 pos = 0;
-    while (cdSize - pos >= 46 && names.size() < MAX_TRACKS && quint32(names.size()) < entries) {
+    while (cdSize - pos >= 46 && names.size() < 5000 && quint32(names.size()) < entries) {
         if (le32(c + pos) != 0x02014b50u)
             break;
         const quint32 nl = le16(c + pos + 28), xl = le16(c + pos + 30), cl = le16(c + pos + 32);
@@ -291,6 +318,8 @@ static QStringList zipNames(const QString &path) {
         pos += step;
     }
     names.sort();
+    if (names.size() > MAX_TRACKS)
+        return QStringList();
     return names;
 }
 
@@ -393,6 +422,12 @@ static QFont makeFont(const char *family, int pixels, bool bold, bool italic = f
     f.setPixelSize(qMax(6, pixels));
     f.setBold(bold);
     f.setItalic(italic);
+    return f;
+}
+
+// No antialiasing: pure black glyphs, so a DU update leaves no grey residue (the fast-refresh widgets).
+static QFont crisp(QFont f) {
+    f.setStyleStrategy(QFont::NoAntialias);
     return f;
 }
 
@@ -1300,10 +1335,10 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     }
 
     const QFont fBack = makeFont("DefaultSansSerif", px(30), true);
-    const QFont fChip = makeFont("DefaultSansSerif", px(28), true);
+    const QFont fChip = crisp(makeFont("DefaultSansSerif", px(28), true));  // speed and sleep chips (fast refresh)
     const QFont fTitle = makeFont("DefaultSerif", px(40), true);
     const QFont fChapter = makeFont("DefaultSansSerif", px(30), false, true);
-    const QFont fTime = makeFont("DefaultSansSerif", px(28), false);
+    const QFont fTime = crisp(makeFont("DefaultSansSerif", px(28), false)); // times and volume % (fast refresh)
     const QFont fFoot = makeFont("DefaultSansSerif", px(24), false);
     const bool ownVolume = btVolumeApi();        // headset volume; otherwise the stock log10 buttons stay
     const bool stockVolume = !ownVolume && volDown && volUp && volume;
@@ -1327,8 +1362,19 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
                 u->hide();
     }
 
+    // The 4.45 MP3Reader layout, checked once per reader: without it, no path, no track list, no offset reads.
+    layoutOk = readerLayout(r);
+    if (!layoutOk) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            nh_log("AIO Audio: MP3Reader layout not recognised (no Volume at +0x24), no track list or book path");
+        }
+    }
+
     // The book: its .mp3z path names the title when the tags do not.
-    bookPath = readerPath(r);
+    if (layoutOk)
+        bookPath = readerPath(r);
     if (!bookPath.isEmpty()) {
         const QFileInfo fi(bookPath);
         const QString dir = fi.dir().dirName();
@@ -1373,7 +1419,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         hl->addWidget(backTap);
     }
     hl->addStretch(1);
-    if (MP3Reader_goToPageFn && !bookPath.isEmpty()) {
+    if (layoutOk && MP3Reader_goToPageFn && !bookPath.isEmpty()) {
         AioTap *tt = new AioTap(header, nickelIcon(":/images/reading/reading_toc.png", px(48), G_TOC), fChip, false, true);
         tt->setObjectName("aioToc");
         tt->setFixedSize(target, headerH);
@@ -1580,6 +1626,9 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
             volume->setText(volume->text().mid(8));
         volume->setAlignment(Qt::AlignCenter);
         volume->setFixedSize(volW, target);
+        QFont vf = volume->font(); // the stylesheet sets family and size only: the strategy stays
+        vf.setStyleStrategy(QFont::NoAntialias);
+        volume->setFont(vf);
         vg->addWidget(volDown);
         vg->addWidget(volume);
         vg->addWidget(volUp);
@@ -1637,8 +1686,15 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
                      QString("#volume { font-family: DefaultSansSerif; font-size: %1px; }").arg(px(28)));
 
     installGestureFilters(); // again on every Show: Nickel may reparent the reader after its constructor
+    refreshWindow();
     relayout();
     schedule();
+}
+
+// The reader's top-level QWindow (none until it is shown): only flushes of that window may use the fast refresh.
+void AioAudio::refreshWindow() {
+    QWidget *top = reader ? reader->window() : 0;
+    readerWin = top ? top->windowHandle() : 0;
 }
 
 AioAudio::~AioAudio() {
@@ -1713,6 +1769,7 @@ bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
             timer->stop(); // nothing repaints behind other screens
             setKeyFilter(false);
         } else if (type == QEvent::Show) {
+            refreshWindow();
             installGestureFilters();
             setKeyFilter(true);
             relayout();
@@ -1800,7 +1857,27 @@ bool AioAudio::pageKey(QObject *receiver, QKeyEvent *ke) {
     return true;
 }
 
+// An enum property of the player (QMediaPlayer::State, MediaStatus) as an int, or -1.
+static int enumProperty(QObject *p, const char *name) {
+    if (!p)
+        return -1;
+    const QMetaObject *mo = p->metaObject();
+    const int i = mo->indexOfProperty(name);
+    if (i < 0)
+        return -1;
+    const QMetaProperty prop = mo->property(i);
+    if (!prop.isEnumType())
+        return -1;
+    const QVariant v = prop.read(p);
+    if (!v.isValid() || !v.constData())
+        return -1;
+    return *static_cast<const int *>(v.constData());
+}
+
 // Track changes are let through when the track is over: whatever libmp3z/Nickel uses to advance keeps working.
+// Besides the player's own position and EndOfMedia: the last position seen (ticks, positionChanged) was within 3 s
+// of the track's end, or the player went from Playing to Stopped near it (a backend that already rewound to 0).
+// The stock prev/next buttons and media keys never get here (blockNav only looks at qt_static_metacall).
 bool AioAudio::trackEnded() const {
     QObject *p = player.data();
     if (!p)
@@ -1808,16 +1885,13 @@ bool AioAudio::trackEnded() const {
     const qint64 pos = p->property("position").toLongLong(), dur = p->property("duration").toLongLong();
     if (dur > 0 && pos >= dur - 1500)
         return true;
-    const QMetaObject *mo = p->metaObject();
-    const int i = mo->indexOfProperty("mediaStatus");
-    if (i >= 0) {
-        const QMetaProperty prop = mo->property(i);
-        if (prop.isEnumType()) {
-            const QVariant v = prop.read(p);
-            if (v.isValid() && v.constData() && *static_cast<const int *>(v.constData()) == 7) // EndOfMedia
-                return true;
-        }
-    }
+    if (enumProperty(p, "mediaStatus") == 7) // EndOfMedia
+        return true;
+    if (lastDur > 0 && lastPos >= lastDur - 3000)
+        return true;
+    const int state = enumProperty(p, "state");
+    if (state == 0 && prevPlayerState == 1 && lastDur > 0 && lastPos >= lastDur - 10000) // Stopped after Playing
+        return true;
     return false;
 }
 
@@ -1830,11 +1904,19 @@ bool AioAudio::inFast(const QRect &g) const {
     return false;
 }
 
-// Every rect of the flushed region (window coordinates, the window at `origin`) is inside one of our black and
-// white controls, the player is shown and the track list is closed.
-bool AioAudio::fastRegion(const QRegion &region, const QPoint &origin) const {
+// The flush is for the reader's own window, every rect of the flushed region (window coordinates) is inside one of
+// our black and white controls, the player is shown and the track list is closed. The first flush of that window
+// after a track change keeps the default waveform (one clean refresh of the fast widgets).
+bool AioAudio::fastRegion(const QRegion &region, QWindow *win) {
+    if (!win || win != readerWin.data())
+        return false;
+    if (normalFlush) {
+        normalFlush = false;
+        return false;
+    }
     if (!rootPane || !readerShown() || (tocPane && tocPane->isVisible()))
         return false;
+    const QPoint origin = win->mapToGlobal(QPoint(0, 0));
     const QRect b = region.boundingRect();
     if (b.isEmpty())
         return false;
@@ -1868,6 +1950,7 @@ void AioAudio::relayout() {
     if (tocPane && tocPane->isVisible()) {
         tocPane->setGeometry(rootPane->rect());
         layoutToc();
+        fillToc(); // rows per page may have changed
     }
 }
 
@@ -1901,14 +1984,27 @@ void AioAudio::drawPlaceholder() {
 
 // -- track list ("Capitulos") -------------------------------------------------------------------------------
 
-// libmp3z's current track (MP3Reader+0x30, 0-based, 4.45 RE), checked against the list; else ours.
+// libmp3z's current track (MP3Reader+0x30, 0-based, 4.45 RE, validated layout only), checked against the list;
+// else ours.
 int AioAudio::currentTrack() const {
     int k = -1;
-    if (reader)
+    if (reader && layoutOk)
         k = *reinterpret_cast<const int *>(reinterpret_cast<const char *>(reader.data()) + 0x30);
     if (k < 0 || k >= tocNames.size())
         k = track >= 0 && track < tocNames.size() ? track : -1;
     return k;
+}
+
+// libmp3z's own track count: the size of its QVector<Shortcover> (MP3Reader+0x2c, 4.45 RE; Qt 5 QArrayData:
+// ref, size, ...). 0 when the layout is not validated or the value is not plausible.
+int AioAudio::stockTrackCount() const {
+    if (!reader || !layoutOk)
+        return 0;
+    const int *d = *reinterpret_cast<const int *const *>(reinterpret_cast<const char *>(reader.data()) + 0x2c);
+    if (!d)
+        return 0;
+    const int n = d[1];
+    return n > 0 && n <= MAX_TRACKS ? n : 0;
 }
 
 void AioAudio::buildToc() {
@@ -1944,6 +2040,10 @@ void AioAudio::buildToc() {
     connect(nx, SIGNAL(tapped()), this, SLOT(tocNext()));
     tocNextTap = nx;
     tocPageText = new AioText(pane, fPage, Qt::AlignHCenter);
+    AioText *note = new AioText(pane, fPage, Qt::AlignLeft);
+    note->setText(QString::fromUtf8("No se pudo verificar el orden de pistas"));
+    note->hide();
+    tocNote = note;
 }
 
 // Manual geometry over the whole reader: header, about 9 rows of at least 106 px, page buttons at the bottom.
@@ -1967,7 +2067,16 @@ void AioAudio::layoutToc() {
     tocPrevTap->setGeometry(m, navY, pw, navH);
     tocNextTap->setGeometry(W - m - nw, navY, nw, navH);
     tocPageText->setGeometry(m + pw, navY, qMax(0, W - 2 * m - pw - nw), navH);
-    const int top = headerH + lineH + px(8), avail = qMax(0, navY - px(8) - top);
+    int top = headerH + lineH + px(8);
+    if (tocNote) { // read-only list: a short note under the line, rows below it
+        const int noteH = QFontMetrics(makeFont("DefaultSansSerif", px(26), false)).height() + px(8);
+        tocNote->setGeometry(m, top, qMax(0, W - 2 * m), noteH);
+        const bool showNote = !tocVerified && !tocNames.isEmpty();
+        tocNote->setVisible(showNote);
+        if (showNote)
+            top += noteH + px(4);
+    }
+    const int avail = qMax(0, navY - px(8) - top);
     int rows = 9, rowH = avail / rows;
     if (rowH < target) {
         rows = qMax(1, avail / target);
@@ -2027,14 +2136,23 @@ void AioAudio::openToc() {
         tocNames = zipNames(bookPath);
         if (tocNames.isEmpty())
             nh_log("AIO Audio: could not read the track list of the .mp3z");
-        else if (trackCount > 0 && tocNames.size() != trackCount)
-            nh_log("AIO Audio: %d entries in the .mp3z, TRCK says %d", tocNames.size(), trackCount);
+    }
+    // Jumps only when the list matches the player's own count (libmp3z's vector, else TRCK), when one is known.
+    const int stock = stockTrackCount(), known = stock > 0 ? stock : trackCount;
+    tocVerified = !tocNames.isEmpty() && (known <= 0 || tocNames.size() == known);
+    if (!tocNames.isEmpty() && !tocVerified) {
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            nh_log("AIO Audio: %d entries in the .mp3z, the player has %d (%s): track list read-only", tocNames.size(),
+                   known, stock > 0 ? "libmp3z" : "TRCK");
+        }
     }
     if (!tocPane)
         buildToc();
     tocPane->setGeometry(rootPane->rect());
     layoutToc();
-    tocCurrent = currentTrack();
+    tocCurrent = tocVerified ? currentTrack() : -1;
     tocPage = tocCurrent >= 0 ? tocCurrent / qMax(1, tocPerPage) : 0;
     fillToc();
     tocPane->raise();
@@ -2067,8 +2185,8 @@ void AioAudio::tocRowTapped() {
     if (!row)
         return;
     const int k = row->property("aioIndex").toInt();
-    if (k < 0 || k >= tocNames.size())
-        return;
+    if (!tocVerified || k < 0 || k >= tocNames.size())
+        return; // read-only list: the order could not be checked against the player
     closeToc();
     if (k == currentTrack())
         return; // already playing: nothing to reload, the position stays
@@ -2078,11 +2196,13 @@ void AioAudio::tocRowTapped() {
 
 // goToPage (1-based) -> setPage(k) -> setMedia: setTrack sees the change and saves the new track from 0:00.
 void AioAudio::jumpNow() {
-    const int k = jumpTarget;
+    int k = jumpTarget;
     jumpTarget = -1;
     QWidget *r = reader.data();
-    if (k < 0 || !r || !MP3Reader_goToPageFn)
+    const int count = tocNames.size();
+    if (k < 0 || !r || !MP3Reader_goToPageFn || !tocVerified || count <= 0)
         return;
+    k = qBound(0, k, count - 1);
     userSkip();       // not an "end of track" for the sleep timer
     pendingSeek = -1; // no resume over the chosen track
     resumeTarget = -1;
@@ -2130,6 +2250,11 @@ void AioAudio::setPlayer(QObject *p) {
         return;
     player = p;
     connect(p, SIGNAL(durationChanged(qint64)), this, SLOT(onDuration()));
+    // Only two ints are stored per signal (no repaint): the last position and the state before the current one.
+    connect(p, SIGNAL(positionChanged(qint64)), this, SLOT(onPosition(qint64)));
+    connect(p, SIGNAL(stateChanged(QMediaPlayer::State)), this, SLOT(onState()));
+    playerState = enumProperty(p, "state");
+    prevPlayerState = -1;
     qreal rate = p->property("playbackRate").toReal();
     int best = 0;
     for (int i = 1; i < RATE_COUNT; i++)
@@ -2140,8 +2265,34 @@ void AioAudio::setPlayer(QObject *p) {
         speedTap->setText(QString::fromLatin1(RATE_NAMES[speedIndex]));
 }
 
+// Validated 4.45 layout: the reader's own AudioPlayer (MP3Reader+0x40). Otherwise no offset is read: any
+// QMediaPlayer set while this is the current reader is taken as its own (one MP3Reader at a time).
 bool AioAudio::owns(QObject *p) const {
-    return p && reader && readerPlayer(reader.data()) == p;
+    if (!p || !reader)
+        return false;
+    if (layoutOk)
+        return readerPlayer(reader.data()) == p;
+    return p->inherits("QMediaPlayer");
+}
+
+// The last position seen. A stopped player back at 0 (end of media on some backends) keeps the last one, so
+// trackEnded() still knows the track ran out.
+void AioAudio::notePos(qint64 pos) {
+    if (pos <= 0 && lastPos > 0 && (playerState == 0 || enumProperty(player.data(), "mediaStatus") == 7))
+        return;
+    lastPos = qMax<qint64>(0, pos);
+}
+
+void AioAudio::onPosition(qint64 pos) {
+    notePos(pos);
+}
+
+void AioAudio::onState() {
+    const int s = enumProperty(player.data(), "state");
+    if (s == playerState)
+        return;
+    prevPlayerState = playerState;
+    playerState = s;
 }
 
 void AioAudio::media(QObject *p, int index, const QByteArray &mp3, bool hasData) {
@@ -2260,6 +2411,11 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
     } else if (changed) {
         pendingSeek = -1;
         resumeTarget = -1;
+        // One normal (non-DU) refresh of the fast widgets: whatever DU left behind is cleaned once per track.
+        normalFlush = true;
+        for (int i = 0; i < fastWidgets.size(); i++)
+            if (QWidget *w = fastWidgets.at(i).data())
+                w->update();
         saveState(false); // new track, from its start
         if (sleepMode == 4 && !(skipClock.isValid() && skipClock.elapsed() < 4000)) {
             pauseOnPlay = true; // "end of track": pause as soon as the next track starts
@@ -2442,7 +2598,7 @@ void AioAudio::tick() {
     const qint64 dur = player->property("duration").toLongLong();
     if (pos < 0)
         pos = 0;
-    lastPos = pos;
+    notePos(pos);
     if (dur > 0) {
         lastDur = dur;
         if (track >= 0 && !durations.contains(track))
@@ -2793,7 +2949,7 @@ extern "C" __attribute__((visibility("default"))) void _aio_reader(void *self, Q
     if (lastMediaPlayer && aio->owns(lastMediaPlayer.data()))
         aio->media(lastMediaPlayer.data(), lastMediaIndex, lastMediaData, lastMediaHasData);
     else if (lastMediaPlayer)
-        nh_log("AIO Audio: pending track is not this reader's player (MP3Reader+0x40), dropped");
+        nh_log("AIO Audio: pending track is not this reader's player, dropped");
     forgetMedia();
 }
 
@@ -2938,8 +3094,9 @@ extern "C" __attribute__((visibility("default"))) void _aio_viewSwipe(void *self
 // -- fast refresh ---------------------------------------------------------------------------------------------
 
 // Kobo's QtWidgets flushes with an empty list (libkobo: default, colour-aware waveform). When only our black and
-// white controls changed, ask for a DU partial update of each rect instead. Every other flush is untouched, and
-// nothing is allocated unless all the conditions hold.
+// white controls of the reader's window changed, ask for one DU partial update of the region's bounding rect (one
+// pair, like Kobo's own flush). Every other flush is untouched, and nothing is allocated unless all the conditions
+// hold.
 extern "C" __attribute__((visibility("default"))) void _aio_flush(QBackingStore *self, const QRegion &region,
                                                                   QWindow *win, const QPoint &offset,
                                                                   const AioFlushList &list) {
@@ -2947,15 +3104,9 @@ extern "C" __attribute__((visibility("default"))) void _aio_flush(QBackingStore 
         fastFlushOn = false;
         nh_log("AIO Audio: QBackingStore::flush without a backing store, fast refresh off");
     }
-    if (fastFlushOn && win && list.isEmpty() && aio && aio->fastRegion(region, win->geometry().topLeft())) {
+    if (fastFlushOn && win && list.isEmpty() && aio && aio->fastRegion(region, win)) {
         AioFlushList du;
-        if (region.rectCount() <= 1) {
-            du.append(qMakePair(region.boundingRect(), quint64(AIO_WAVE_DU_PARTIAL)));
-        } else {
-            const QVector<QRect> rs = region.rects();
-            for (int i = 0; i < rs.size(); i++)
-                du.append(qMakePair(rs.at(i), quint64(AIO_WAVE_DU_PARTIAL)));
-        }
+        du.append(qMakePair(region.boundingRect(), quint64(AIO_WAVE_DU_PARTIAL)));
         static bool logged = false;
         if (!logged) {
             logged = true;
