@@ -309,6 +309,37 @@ class AudiobookTests(TempKobo):
         t = txnmod.Transaction(self.root, "S")
         self.assertEqual(t.add_book("Audiobooks/Autor/Libro/Libro.mp3z", data), "Audiobooks/Autor/Libro/Libro.mp3z")
 
+    def test_mp3z_matches_stock_reader(self):
+        """Rules recovered from libmp3z.so (4.45): ASCII names (toLatin1 lookup), sorted order == play order,
+        only MP3 entries, long tracks split so the per-track bookmark resumes close by."""
+        from kobo_aio.audiobooks import build_mp3z, collect, mp3_duration_ms, strip_tags
+        src = self.tmp / "Autora - Canción de otoño"
+        src.mkdir()
+        (src / "1 - Capítulo único ¿Ñandú?.mp3").write_bytes(silent_mp3(150))
+        (src / "2 - Épílogo.mp3").write_bytes(silent_mp3(20))
+        name, data, _ = build_mp3z(collect(src), part_minutes=1)
+        self.assertEqual(name, "Canción de otoño.mp3z")  # Nickel title = file name (Unicode OK there)
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        names = zf.namelist()
+        self.assertTrue(all(n.isascii() and n.endswith(".mp3") and "/" not in n for n in names), names)
+        self.assertEqual(names, sorted(names))
+        self.assertEqual(names[0], "001 - Capitulo unico Nandu (1-3).mp3")
+        self.assertEqual(names[-1], "004 - Epilogo.mp3")
+        self.assertEqual(len(names), 4)  # 150 s -> 60 + 60 + 30 s, plus the 20 s epilogue
+        durs = [mp3_duration_ms(strip_tags(zf.read(n))) / 1000 for n in names]
+        self.assertAlmostEqual(sum(durs), 170, delta=0.5)
+        self.assertLessEqual(max(durs[:1]), 61)
+        _, one, _ = build_mp3z(collect(src), part_minutes=0)
+        self.assertEqual(len(zipfile.ZipFile(io.BytesIO(one)).namelist()), 2)
+
+    def test_split_drops_xing_header(self):
+        from kobo_aio.audiobooks import split_mp3
+        xing = bytearray(b"\xff\xfb\x90\x64" + b"\x00" * 413)
+        xing[36:40] = b"Xing"
+        parts = split_mp3(bytes(xing) + silent_mp3(4), 2000)
+        self.assertNotIn(b"Xing", b"".join(p for p, _ in parts))
+        self.assertEqual(len(parts), 2)
+
     def test_audio_only_in_audiobooks_folder(self):
         t = txnmod.Transaction(self.root, "S")
         with self.assertRaises(txnmod.SafetyError):

@@ -29,7 +29,7 @@ Requisitos: Python 3.9+ y Pillow (`pip3 install Pillow`; el lanzador lo instala 
 | **Menú** | Atajos validados (suspender, reiniciar, importar libros, modo oscuro, WiFi, capturas, juegos ocultos, búsqueda en RAE/Wikipedia/traductor, respaldo de la base de datos, ReKindle) · Reorden de pestañas · Tarjeta del propietario |
 | **Apps** | KOReader + plugins (Project: Title, App Store, sincronización con Kobo, Hardcover, LocalSend) · Cadmus 0.12 · **Audiolibros** (formato `.mp3z` del lector stock o audiobook.koplugin en KOReader) |
 | **Juegos** | Ink-boy: Game Boy y Game Boy Color nativo para e-ink (color Kaleido 3, 4 grises en Carta, modo turbo A2) |
-| **Biblioteca** | **Conversor de cómics y manga estilo KCC** para CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB, imágenes sueltas, carpetas y lotes, ajustado a cada panel (recorte, páginas dobles, color Kaleido, KEPUB de página fija o CBZ) · Envío de libros con EPUB a KEPUB (kepubify) · **Armador de audiolibros**: MP3 con capítulos y portada · Diccionarios Wiktionary o propios · Pantallas de reposo |
+| **Biblioteca** | **Conversor de cómics y manga estilo KCC** para CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB, imágenes sueltas, carpetas y lotes, ajustado a cada panel (recorte, páginas dobles, color Kaleido, KEPUB de página fija o CBZ) · Envío de libros con EPUB a KEPUB (kepubify) · **Armador de audiolibros**: `.mp3z` para el lector stock (partes cortas y portada) o MP3 con capítulos para KOReader · Diccionarios Wiktionary o propios · Pantallas de reposo |
 | **Ajustes** | ExcludeSyncFolders bien escapado · Capturas, auto USB, apagado, horizontal · Modo sideload |
 | **Mantenimiento** | Respaldo de libros, progreso y mods al computador · Limpieza de `._*` y `.DS_Store` (valida la firma AppleDouble) · Desactivar Spotlight |
 
@@ -47,6 +47,7 @@ Requisitos: Python 3.9+ y Pillow (`pip3 install Pillow`; el lanzador lo instala 
 
 - Los 7 mods de Nickel y Ink-boy son ELF ARM 32 bits EABI5 hard-float; los mods enlazan Qt5, por eso se bloquean en firmware 5.x/6.x (Qt6).
 - Rutas y marcadores de desinstalación confirmados en los binarios (por ejemplo `nh_info` de NickelHome: crear `.adds/nickel-home/uninstall`; nickel-screensaver: `.adds/screensaver/uninstall.txt`; NickelModManager: `.adds/nickel-mod-manager`).
+- Lector de audiolibros stock (`libmp3z.so`): orden, búsqueda de pistas, marcador y portada, ver *Notas*.
 - Parche de firmware verificado byte a byte: solo cambia `ReadingSettings::lineHeightScalars()`, `ReadingFooter::update(...)` y la URL de actualización, según los parches elegidos.
 
 ## Línea de comandos
@@ -63,7 +64,8 @@ python3 -m kobo_aio rollback ~/Kobo-AIO/backups/<serie>/<fecha>/manifest.json
 
 ## Notas y límites conocidos
 
-- **Audiolibros:** Nickel no reproduce audio propio de forma fiable. El AIO arma el MP3 (capítulos ID3 CHAP/CTOC y portada) y lo reproduces en KOReader con audiobook.koplugin. Úsalo solo con audio sin DRM que te pertenezca.
+- **Audiolibros en el lector stock (`.mp3z`):** formato ZIP sin compresión de pistas MP3 que lee `libmp3z.so` del firmware. Validado con REA sobre 4.45.23697: el título sale del nombre del archivo, cada pista es una «Page N» (texto del firmware), el orden es alfabético, la posición se guarda por pista (no por minuto) y un libro de una sola pista se marca como terminado al guardar el marcador. Por eso el AIO divide en partes de 10 min, usa nombres ASCII con numeración fija (el lector busca la pista con `toLatin1()` y falla con tildes) y pone la portada en cada pista (el reproductor la muestra). Sin autor ni portada en la biblioteca. Requiere Bluetooth. Pendiente de prueba de reproducción en el equipo.
+- **Audiolibros en KOReader:** MP3 único con capítulos ID3 (CHAP/CTOC), portada y posición exacta con audiobook.koplugin. Usa solo audio sin DRM que te pertenezca.
 - **Parches de firmware:** por ahora solo para Libra Colour 4.45.23697 en Mac con Apple Silicon. Se pierden al actualizar el firmware. Si algo falla, usa *Restaurar originales* o reinstala el firmware.
 - **ReKindle** (CC BY-NC-SA) se abre como enlace en el navegador de Nickel; no se redistribuye. No inicies sesión con cuentas de trabajo.
 - **Diccionarios oficiales** (es, es-en, en-es): son gratis desde el propio Kobo con WiFi y no se redistribuyen.

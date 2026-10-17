@@ -1,4 +1,4 @@
-"""Audiobook builder for KOReader's audiobook.koplugin (pure Python, no ffmpeg needed for MP3 input).
+"""Audiobook builders: Nickel stock .mp3z and KOReader audiobook.koplugin (pure Python, no ffmpeg for MP3 input).
 
 Output follows what the plugin reads (github.com/stradichenko/audiobook.koplugin, m4bparser.lua):
 one MP3 per book with ID3v2.3 chapters (CHAP + CTOC) and an embedded baseline JPEG cover (APIC).
@@ -14,6 +14,7 @@ import shutil
 import struct
 import subprocess
 import tempfile
+import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -51,12 +52,11 @@ def strip_tags(data: bytes) -> bytes:
     return data[start:end]
 
 
-def mp3_duration_ms(frames: bytes) -> int:
-    """Exact duration by walking MPEG frame headers (works for CBR and VBR)."""
-    i, samples, rate = 0, 0, 0
-    n = len(frames)
+def iter_frames(frames: bytes):
+    """Yield (start, end, samples, sample_rate) for each MPEG audio frame, resyncing over garbage bytes."""
+    i, n = 0, len(frames)
     while i + 4 <= n:
-        b1, b2, b3 = frames[i + 1], frames[i + 2], frames[i + 3]
+        b1, b2 = frames[i + 1], frames[i + 2]
         if frames[i] != 0xFF or (b1 & 0xE0) != 0xE0:
             i += 1
             continue
@@ -77,9 +77,48 @@ def mp3_duration_ms(frames: bytes) -> int:
         if size <= 0:
             i += 1
             continue
-        samples += spf
+        yield i, min(i + size, n), spf, rate
         i += size
+
+
+def mp3_duration_ms(frames: bytes) -> int:
+    """Exact duration by walking MPEG frame headers (works for CBR and VBR)."""
+    samples, rate = 0, 0
+    for _, _, spf, rate in iter_frames(frames):
+        samples += spf
     return int(samples * 1000 / rate) if rate else 0
+
+
+def _is_info_frame(frame: bytes) -> bool:
+    """LAME/Xing 'Info'/'Xing' or Fraunhofer 'VBRI' header frame (carries no audio, describes the whole file)."""
+    return any(frame[o:o + 4] in (b"Xing", b"Info") for o in (13, 21, 36)) or frame[36:40] == b"VBRI"
+
+
+def split_mp3(frames: bytes, max_ms: int = 0, max_bytes: int = 0) -> list[tuple[bytes, int]]:
+    """Cut raw MPEG frames into parts of at most max_ms / max_bytes, always on frame boundaries.
+
+    The Xing/Info/VBRI header frame is dropped: it describes the original file, so in a part it would report
+    the wrong length. Returns [(frames, duration_ms)]; with no limits, a single part.
+    """
+    parts, start, cur_ms, cur_samples, rate, first = [], None, 0, 0, 0, True
+    for a, b, spf, rate in iter_frames(frames):
+        if first:
+            first = False
+            if _is_info_frame(frames[a:b]):
+                continue
+        if start is None:
+            start, cur_samples = a, 0
+        cur_samples += spf
+        cur_ms = cur_samples * 1000 // rate
+        if (max_ms and cur_ms >= max_ms) or (max_bytes and b - start >= max_bytes):
+            parts.append((frames[start:b], cur_ms))
+            start = None
+    if start is not None:
+        parts.append((frames[start:], cur_samples * 1000 // rate if rate else 0))
+    if len(parts) > 1 and parts[-1][1] < min(15000, max_ms // 4 or 15000):  # no tiny trailing part: merge it
+        (pa, da), (pb, db) = parts[-2], parts[-1]
+        parts[-2:] = [(pa + pb, da + db)]
+    return parts or [(frames, 0)]
 
 
 def _syncsafe(n: int) -> bytes:
@@ -213,13 +252,30 @@ def build(book: AudiobookInput, progress=lambda m: None) -> tuple[str, bytes, st
     return _build_ffmpeg(book, safe, cover, progress)
 
 
-def build_mp3z(book: AudiobookInput, progress=lambda m: None) -> tuple[str, bytes, str]:
-    """Nickel's hidden stock audiobook format: a ZIP (stored) of MP3 tracks renamed to .mp3z.
+def ascii_name(text: str, fallback: str = "Pista") -> str:
+    """ASCII-only file name. Nickel's libmp3z.so looks entries up with QString::toLatin1() while libzip stores
+    UTF-8 names, so any accent (or other non-ASCII char) makes the track unplayable."""
+    t = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    t = re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", t)
+    return re.sub(r"\s+", " ", t).strip(" .")[:80] or fallback
 
-    Reported behaviour (the-ebook-reader.com, 2021): Nickel imports it as an audiobook and plays it over
-    Bluetooth; tracks show as chapters in file order, without resume. Each track keeps clean ID3v2.3 tags
-    (title, album, artist, track number) and the cover is embedded in every track so whichever one Nickel
-    reads for artwork has it. Experimental on Libra Colour / firmware 4.45: validate on the device.
+
+PART_MAX_BYTES = 48 * 1024 * 1024   # each track is loaded whole into RAM by Nickel (QByteArray + QBuffer)
+FAT32_MAX = 4 * 1024**3 - 1
+
+
+def build_mp3z(book: AudiobookInput, progress=lambda m: None, part_minutes: int = 10) -> tuple[str, bytes, str]:
+    """Nickel's stock audiobook format (.mp3z, mime application/x-kobo-mp3z), shaped to how firmware 4.45's
+    libmp3z.so really reads it (REA/Ghidra on /usr/local/Kobo/libmp3z.so):
+
+    - MP3ReaderParser::parse lists every ZIP entry, sorts names with QString '<' (case sensitive) and makes each
+      one a chapter titled "Page N". Book title = file name without extension; author/description stay empty and
+      parseCoverImage() returns nothing (generic library tile). So: only MP3 entries, zero padded ASCII names.
+    - MP3Archive::data reads the entry whole into a QByteArray, looked up with toLatin1() -> ASCII names only.
+    - MP3Reader::saveBookmark stores only the track index (no position inside a track) and marks a single track
+      book as finished. So long chapters are cut into parts of `part_minutes` (0 = keep tracks as they are):
+      reopening resumes at most that far back, and memory per track stays bounded.
+    - AudioPlayer shows QMediaMetaData::CoverArtImage, so every track carries the cover (ID3v2.3 APIC).
     """
     exts = {t.suffix.lower() for t in book.tracks}
     if exts != {".mp3"}:
@@ -235,22 +291,33 @@ def build_mp3z(book: AudiobookInput, progress=lambda m: None) -> tuple[str, byte
                 except Exception:  # noqa: BLE001
                     pass
     safe = re.sub(r"[\\/:*?\"<>|]+", " ", book.title).strip() or "Audiolibro"
+    max_ms = max(0, int(part_minutes or 0)) * 60000
+    chapters: list[tuple[str, list[tuple[bytes, int]]]] = []
+    for idx, t in enumerate(book.tracks, 1):
+        parts = split_mp3(strip_tags(t.read_bytes()), max_ms, PART_MAX_BYTES)
+        chapters.append((_chapter_name(t, idx) if len(book.tracks) > 1 else book.title, parts))
+        progress(f"Pista {idx}/{len(book.tracks)}: {t.name} ({len(parts)} parte(s))")
+    total = sum(len(p) for _, p in chapters)
+    width = max(3, len(str(total)))
     buf = io.BytesIO()
-    total = len(book.tracks)
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED) as zf:
-        for idx, t in enumerate(book.tracks, 1):
-            frames = strip_tags(t.read_bytes())
-            chap = _chapter_name(t, idx) if total > 1 else book.title
-            tag = [_text("TIT2", chap), _text("TALB", book.title), _text("TPE1", book.author or "Desconocido"),
-                   _text("TRCK", f"{idx}/{total}"), _text("TCON", "Audiobook")]
-            if cover:
-                tag.append(_frame("APIC", b"\x00image/jpeg\x00\x03Cover\x00" + cover))
-            body = b"".join(tag)
-            clean = re.sub(r'[\\/:*?"<>|]+', " ", chap).strip()[:80]
-            name = f"{idx:03d} - {clean}.mp3"
-            zf.writestr(name, b"ID3\x03\x00\x00" + _syncsafe(len(body)) + body + frames)
-            progress(f"Pista {idx}/{total}: {t.name}")
-    return f"{safe}.mp3z", buf.getvalue(), "mp3z"
+    n = 0
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_STORED, allowZip64=True) as zf:
+        for chap, parts in chapters:
+            for k, (frames, _dur) in enumerate(parts, 1):
+                n += 1
+                label = chap if len(parts) == 1 else f"{chap} ({k}-{len(parts)})"
+                tag = [_text("TIT2", label), _text("TALB", book.title), _text("TPE1", book.author or "Desconocido"),
+                       _text("TRCK", f"{n}/{total}"), _text("TCON", "Audiobook")]
+                if cover:
+                    tag.append(_frame("APIC", b"\x00image/jpeg\x00\x03Cover\x00" + cover))
+                body = b"".join(tag)
+                info = zipfile.ZipInfo(f"{n:0{width}d} - {ascii_name(label)}.mp3", date_time=(2020, 1, 1, 0, 0, 0))
+                info.compress_type = zipfile.ZIP_STORED
+                zf.writestr(info, b"ID3\x03\x00\x00" + _syncsafe(len(body)) + body + frames)
+    data = buf.getvalue()
+    if len(data) > FAT32_MAX:
+        raise RuntimeError("El audiolibro supera 4 GB (límite de archivo del Kobo). Divídelo en dos libros.")
+    return f"{safe}.mp3z", data, "mp3z"
 
 
 def _build_ffmpeg(book: AudiobookInput, safe: str, cover: bytes | None, progress) -> tuple[str, bytes, str]:

@@ -345,27 +345,33 @@ def _abk_apply(mod, ctx, opts):
                              note=f"{len(book.tracks)} pistas, portada: {'sí' if book.cover else 'de las pistas'}")
             continue
         if opts["target"] == "nickel":
-            name, data, _ = build_mp3z(book, ctx.progress)
+            name, data, _ = build_mp3z(book, ctx.progress, int(opts.get("part_minutes") or 0))
         else:
             name, data, _ = build(book, ctx.progress)
         ctx.txn.add_book(f"Audiobooks/{author}/{title_dir}/{safe_component(name, 'audiolibro.mp3')}", data,
                          note="audiolibro")
     if opts["target"] == "nickel":
-        ctx.txn.note("Nickel lo importará como audiolibro al expulsar. Empareja tus audífonos en Ajustes > Bluetooth. "
-                     "Experimental: si no aparece o no suena, usa el formato KOReader.")
+        ctx.txn.note("Nickel lo importará como audiolibro al expulsar (pestaña Audiolibros). Empareja tus audífonos "
+                     "en Ajustes > Bluetooth. El lector stock retoma desde el inicio de la parte en que ibas; por eso "
+                     "las pistas largas se dividen. Si no aparece o no suena, usa el formato KOReader.")
     else:
         ctx.txn.note("Ábrelo en KOReader con el plugin Audiobook.")
 
 
 register(Module(
     id="lib.audiobooks", category="Biblioteca", title="Subir audiolibros (con capítulos y portada)",
-    description="Prepara tus audiolibros con portada. Stock: formato oculto .mp3z que Nickel reproduce por "
-                "Bluetooth (experimental; sin retomar posición). Alternativa: MP3 con capítulos para KOReader. La "
-                "portada sale de la carpeta (cover/folder.jpg), de las pistas o la que subas. Solo audio sin DRM propio.",
+    description="Prepara tus audiolibros para escucharlos por Bluetooth. Stock: formato .mp3z que el propio lector "
+                "reproduce, con portada en el reproductor y partes cortas para retomar cerca de donde ibas. "
+                "Alternativa: MP3 con capítulos y posición exacta en KOReader. La portada sale de la carpeta "
+                "(cover/folder.jpg), de las pistas o la que subas. Solo audio sin DRM propio.",
     risk="bajo", persistent=False, needs_bluetooth=True,
     options=[Option("target", "Reproducir con", "choice", "nickel",
-                    [("nickel", "Lector stock Nickel (.mp3z, experimental)"),
+                    [("nickel", "Lector stock del Kobo (.mp3z)"),
                      ("koreader", "KOReader + audiobook.koplugin (MP3 con capítulos)")]),
+             Option("part_minutes", "Largo de cada parte (solo lector stock)", "choice", "10",
+                    [("5", "5 min (retoma más cerca)"), ("10", "10 min (recomendado)"), ("20", "20 min"),
+                     ("0", "Sin dividir (una parte por pista)")],
+                    help="El lector stock guarda en qué parte ibas, no el minuto exacto."),
              Option("files", "Carpeta(s) del audiolibro o archivos", "files", []),
              Option("cover", "Portada (opcional)", "files", []),
              Option("title", "Título (opcional)", "text", ""),

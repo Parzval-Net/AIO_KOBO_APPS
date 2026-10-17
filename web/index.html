@@ -335,7 +335,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <button class="tile primary" data-go="wizard"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-wand"/></svg></span><b>Mejorar mi Kobo</b><span class="small muted">Asistente en 3 pasos con lo recomendado</span></button>
       <button class="tile" data-lib="lib.comics"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><b>Cómics y manga</b><span class="small muted">Convierte para tu pantalla</span></button>
       <button class="tile" data-lib="lib.books"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-book-plus"/></svg></span><b>Agregar libros</b><span class="small muted">EPUB a KEPUB, más rápido</span></button>
-      <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">Con portada y capítulos</span></button>
+      <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">En el lector stock, con portada</span></button>
       <button class="tile" data-lib="lib.dictionaries"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-dict"/></svg></span><b>Diccionarios</b><span class="small muted">Español e inglés gratis</span></button>
       <button class="tile" data-quick="maint.backup"><span class="badge" style="color:var(--c2)"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg></span><b>Respaldar</b><span class="small muted">Libros y progreso al computador</span></button>
     </div>
@@ -396,7 +396,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <details><summary>¿Cómo deshago todo?</summary><p class="muted">En «Respaldos», elige la instalación y toca «Revertir». Para quitar un módulo, búscalo en «Todos los módulos» y marca «Desinstalar».</p></details>
       <details><summary>¿Qué cómics puedo convertir?</summary><p class="muted">CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB con imágenes y carpetas de imágenes (JPG, PNG, WebP, GIF, BMP, TIFF). Se ajustan a la resolución de tu Kobo y quedan como KEPUB (paso de página rápido en el lector de Kobo) o CBZ (para KOReader). Para CBR instala <code>unar</code> y para PDF instala <code>pymupdf</code>; Kobo AIO te avisa si falta algo.</p></details>
       <details><summary>¿Funcionará si actualizo el firmware?</summary><p class="muted">Los mods se mantienen en las actualizaciones 4.x; los ajustes avanzados del sistema se pierden y hay que volver a aplicarlos. En firmware 5.x los mods del menú aún no funcionan y Kobo AIO los desactiva.</p></details>
-      <details><summary>Audiolibros: ¿por qué dice experimental?</summary><p class="muted">El lector de Kobo solo reproduce oficialmente audiolibros de su tienda. Kobo AIO usa un formato interno (.mp3z) que Nickel reproduce por Bluetooth, pero sin retomar la posición. Si no te funciona, usa la opción KOReader.</p></details>
+      <details><summary>Audiolibros: ¿cómo funcionan en el lector stock?</summary><p class="muted">Kobo AIO usa el formato .mp3z que trae el propio lector y se escucha por Bluetooth (audífonos o parlante). Aparece en tu biblioteca con el nombre del libro; el reproductor muestra la portada y las partes numeradas. El lector recuerda en qué parte ibas, no el minuto exacto, por eso Kobo AIO divide el audio en partes de 10 minutos. No muestra autor ni portada en la biblioteca. Si prefieres posición exacta y nombres de capítulo, usa la opción KOReader.</p></details>
     </div>
     <div class="card" style="margin-top:14px">
       <h3>Créditos y licencias</h3>
@@ -461,7 +461,7 @@ const META = {
   "app.koreader_plugins": ["Plugins para KOReader", "grid", "c5", "Portadas, tienda de plugins, sincronización y envío por WiFi"],
   "lib.comics": ["Cómics y manga", "layers", "c4", "Cualquier formato a tu pantalla: recorta, divide páginas dobles y conserva el color"],
   "lib.books": ["Agregar libros", "book-plus", "c3", "Convierte EPUB a KEPUB para que abran más rápido"],
-  "lib.audiobooks": ["Audiolibros", "headphones", "c5", "Une pistas y agrega portada y capítulos"],
+  "lib.audiobooks": ["Audiolibros", "headphones", "c5", "Escúchalos en el lector stock, con portada"],
   "lib.dictionaries": ["Diccionarios", "dict", "c1", "Wiktionary en español e inglés, o los tuyos"],
   "lib.sleep": ["Pantallas de reposo", "image", "c6", "Tus imágenes a la resolución exacta del Kobo"],
 };
