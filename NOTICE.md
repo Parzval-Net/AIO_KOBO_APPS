@@ -5,6 +5,8 @@
 - `tools/kobo_aio/`, `web/`, `tests/` y los scripts de `tools/`: licencia MIT (ver [LICENSE](LICENSE)).
 - `src/`, `include/` (Ink-boy): licencia MIT, **pero** el binario para Kobo (`dist/Kobo-InkBoy/.adds/inkboy/inkboy`) enlaza estáticamente FBInk, que es **GPL-3.0-or-later**. Por eso ese binario se distribuye bajo **GPL-3.0-or-later**; su código fuente completo está en este repositorio (`src/`, `include/`, `lib/`) y se compila con `make kobo`.
 
+- `mods/aio-audio/` (AIO Audio, mod propio para Nickel): licencia MIT. Usa [NickelHook](https://github.com/pgaskin/NickelHook) (MIT, pgaskin) fijado en el commit `bcd90ba94d90d22562fb64ef2920ed3323c1dae5` y se compila en CI con la imagen `ghcr.io/pgaskin/nickeltc:1.0`. El `KoboRoot.tgz` resultante (versión 0.3, experimental) se publica con su `SHA256SUMS` como asset de las releases `aio-audio-v*` de este repositorio, se fija con `make pin-aioaudio` y se verifica por SHA-256. Se desinstala creando `.adds/aio-audio/uninstall` y reiniciando, o con «Dejar de fábrica». La reproducción depende de la compatibilidad de cada audífono Bluetooth.
+
 ## Código de terceros incluido en `lib/`
 
 | Componente | Licencia |
@@ -43,7 +45,7 @@ Se descargan desde sus publicaciones oficiales y se verifican por SHA-256. Cada 
 El sitio de GitHub Pages (armado por `tools/build_site.py`) aloja copias sin modificar de estos archivos, porque GitHub Releases no permite que una página web los descargue directamente. Cada uno se verifica por SHA-256 y conserva su licencia original:
 
 - Pyodide 0.27.7 (MPL-2.0) con Pillow (MIT-CMU) y sqlite3 (dominio público): https://pyodide.org
-- NickelMenu (MIT), NickelClock (MIT), NickelHome, NickelTypeFix, NickelDissolve y NickelModManager (MIT), nickel-screensaver (MIT)
+- NickelMenu (MIT), NickelClock (MIT), NickelHome, NickelTypeFix, NickelDissolve y NickelModManager (MIT), nickel-screensaver (MIT), AIO Audio (MIT, mod propio)
 - KOReader (AGPL-3.0, código en https://github.com/koreader/koreader) y Cadmus (AGPL-3.0, código en https://github.com/OGKevin/cadmus)
 - Plugins de KOReader: Project: Title (AGPL-3.0), App Store (GPL-3.0), kobo.koplugin (GPL-3.0), Hardcover (MIT), LocalSend (MIT)
 - ebook-fonts (cada familia con su licencia, en su mayoría OFL-1.1): https://github.com/nicoverbruggen/ebook-fonts

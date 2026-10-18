@@ -85,10 +85,6 @@ CATALOG: list[NmItem] = [
     _i("screenshot", "Lectura", "Captura de pantalla", "reader", "nickel_screenshot", "capture",
        "Guarda una captura en la raíz del Kobo."),
     # Sistema
-    _i("screenshots_toggle", "Sistema", "Capturas (botón)", "main", "nickel_setting", "toggle:screenshots",
-       "Activa capturas con el botón de encendido."),
-    _i("auto_usb", "Sistema", "Auto USB", "main", "nickel_setting", "toggle:auto_usb_gadget",
-       "Monta el almacenamiento USB sin preguntar.", default=True),
     _i("invert", "Sistema", "Invertir pantalla", "main", "nickel_setting", "toggle:invert",
        "Invierte colores (requiere reinicio en firmware 4.28+).", chain=[("chain_success", "power", "reboot")]),
     _i("lockscreen", "Sistema", "Pantalla de bloqueo", "main", "nickel_setting", "toggle:lockscreen",
@@ -145,6 +141,8 @@ CATALOG: list[NmItem] = [
        chain=[("chain_success", "dbg_toast", "FTP activo en el puerto 1021")]),
 ]
 CATALOG_BY_ID = {i.id: i for i in CATALOG}
+# Former toggles now set once in "Ajustes ocultos del Kobo" (conf.preferences); old selections ignore them.
+RETIRED = ("screenshots_toggle", "auto_usb")
 
 
 def build_config(item_ids: list[str], header: str = "") -> str:

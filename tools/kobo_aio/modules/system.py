@@ -204,3 +204,38 @@ register(Module(
     apply_fn=_nmm_apply, uninstall_fn=_nmm_uninstall,
     status_fn=_status_file(".adds/nickel-mod-manager"),
 ))
+
+
+# -- AIO Audio (own mod, experimental) -------------------------------------------
+AIOAUDIO_DIR = ".adds/aio-audio"
+
+
+def _aioaudio_apply(mod, ctx, opts):
+    _stage_plugin(ctx, "aioaudio", keep_onboard=(f"{AIOAUDIO_DIR}/uninstall",))
+    if ctx.txn.exists(f"{AIOAUDIO_DIR}/uninstall"):
+        ctx.txn.delete(f"{AIOAUDIO_DIR}/uninstall", note="quita la marca de desinstalación de AIO Audio")
+
+
+def _aioaudio_uninstall(mod, ctx):
+    # NickelHook uninstall_flag: with this file present the mod deletes its library on the next boot.
+    ctx.txn.write_text(f"{AIOAUDIO_DIR}/uninstall", "", note="AIO Audio se desinstala en el próximo reinicio")
+
+
+def _aioaudio_status(mod, dev):
+    if (dev.root / AIOAUDIO_DIR / "uninstall").exists():
+        return "desinstalación pendiente"
+    return "instalado" if (dev.root / AIOAUDIO_DIR).is_dir() else "no instalado"
+
+
+register(Module(
+    id="mod.aioaudio", category="Biblioteca", title="Reproductor de audiolibros renovado (AIO Audio 0.5, experimental)",
+    description="Experimental. Reproductor .mp3z del lector stock al estilo Kobo y pensado para e-ink: portada "
+                "grande, lista de capítulos, barra táctil, ±30 s (también con los botones físicos de página), "
+                "velocidad 0,8x a 2x, volumen sincronizado con los audífonos, temporizador de apagado y retoma en "
+                "el segundo exacto. Solo los controles cambian de pista. Firmware 4.x y audífonos Bluetooth; la "
+                "compatibilidad depende de cada audífono. Si algo falla, desinstálalo y reinicia.",
+    risk="medio", reboot=True, needs_bluetooth=True, min_fw=(4, 23), max_fw=(5,),
+    sources=["https://github.com/Parzval-Net/AIO_KOBO_APPS/tree/main/mods/aio-audio",
+             "https://github.com/pgaskin/NickelHook"], license="MIT",
+    apply_fn=_aioaudio_apply, uninstall_fn=_aioaudio_uninstall, status_fn=_aioaudio_status,
+))

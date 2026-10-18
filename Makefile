@@ -57,7 +57,7 @@ CORE_CPP_SRCS := \
 BUILD_DIR := build
 DIST_DIR  := dist/Kobo-InkBoy
 
-.PHONY: all host test aio-test matrix catalog site app aio demo-roms kobo bundle auto-install installer-web clean
+.PHONY: all host test aio-test matrix catalog pin-aioaudio site app aio demo-roms kobo bundle auto-install installer-web clean
 
 all: host demo-roms test
 
@@ -94,6 +94,12 @@ test: host
 
 catalog:
 	@cd tools && $(PYTHON) -m kobo_aio export-catalog ../web/catalog.json && echo "[AIO] web/catalog.json actualizado"
+
+# Fija un build de AIO Audio: make pin-aioaudio TGZ=ruta/KoboRoot.tgz VERSION=0.3.0
+pin-aioaudio:
+	@test -n "$(TGZ)" -a -n "$(VERSION)" || { echo "uso: make pin-aioaudio TGZ=ruta/KoboRoot.tgz VERSION=0.3.0"; exit 1; }
+	@$(PYTHON) tools/pin_artifact.py "$(TGZ)" "$(VERSION)"
+	@$(MAKE) --no-print-directory catalog
 
 app: catalog
 	@$(PYTHON) -m PyInstaller packaging/kobo-aio.spec --noconfirm --distpath _app/dist --workpath _app/build

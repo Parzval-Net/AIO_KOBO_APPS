@@ -189,6 +189,38 @@ def embedded_cover(mp3: bytes) -> bytes | None:
     return None
 
 
+def id3_text(mp3: bytes, wanted=("TALB", "TPE1", "TPE2", "TIT2")) -> dict[str, str]:
+    """Text frames of an ID3v2.3/2.4 tag (album, artist, title), decoded; damaged frames are skipped."""
+    out: dict[str, str] = {}
+    if mp3[:3] != b"ID3" or len(mp3) < 10 or mp3[3] not in (3, 4):
+        return out
+    ver = mp3[3]
+    size = (mp3[6] << 21) | (mp3[7] << 14) | (mp3[8] << 7) | mp3[9]
+    tag, i = mp3[10:10 + size], 0
+    while i + 10 <= len(tag):
+        fid = tag[i:i + 4]
+        fsz = (int.from_bytes(tag[i + 4:i + 8], "big") if ver == 3 else
+               (tag[i + 4] << 21) | (tag[i + 5] << 14) | (tag[i + 6] << 7) | tag[i + 7])
+        if not fid.strip(b"\x00") or fsz <= 0 or i + 10 + fsz > len(tag):
+            break
+        name = fid.decode("latin-1")
+        if name in wanted and name not in out:
+            body = tag[i + 10:i + 10 + fsz]
+            codec = {0: "latin-1", 1: "utf-16", 2: "utf-16-be", 3: "utf-8"}.get(body[0], "latin-1")
+            try:
+                text = body[1:].decode(codec).split("\x00")[0].strip()
+            except UnicodeDecodeError:
+                text = ""
+            if text:
+                out[name] = text
+        i += 10 + fsz
+    return out
+
+
+# Folder names that only number a part of a longer book ("Parte 1", "CD 2", "Disco 3", "Part 4", "Disc 01").
+_PART_DIR = re.compile(r"^(parte?|part|cd|dis[ck]o?|volumen|vol\.?|tomo)\s*\d+$", re.I)
+
+
 @dataclass
 class AudiobookInput:
     title: str
@@ -212,12 +244,29 @@ def collect(src: Path, title: str = "", author: str = "", cover: Path | None = N
             imgs.sort(key=lambda p: (0 if p.stem.lower() in COVER_NAMES else 1, -p.stat().st_size))
             cover = imgs[0] if imgs else None
         guess = src.name
+        if _PART_DIR.match(guess) and src.parent.name:   # "Mi libro/Parte 1": the book is the parent folder
+            guess = f"{src.parent.name} ({guess})"
     else:
         tracks, guess = [src], src.stem
     if not tracks:
         raise RuntimeError(f"No hay archivos de audio en {src.name}")
+    # Nickel shows the .mp3z file name as the book title, so prefer the album/artist the tracks carry.
+    tags: dict[str, str] = {}
+    if tracks[0].suffix.lower() == ".mp3":
+        with open(tracks[0], "rb") as fh:
+            head = fh.read(10)
+            if head[:3] == b"ID3" and len(head) == 10:
+                head += fh.read((head[6] << 21) | (head[7] << 14) | (head[8] << 7) | head[9])
+        tags = id3_text(head)
     if not title and " - " in guess and not author:
         author, title = [x.strip() for x in guess.split(" - ", 1)]
+    if not title and tags.get("TALB"):
+        title = tags["TALB"]
+        part = re.search(r"\(([^()]*)\)$", guess)
+        if part and _PART_DIR.match(part.group(1)) and part.group(1).lower() not in title.lower():
+            title = f"{title} ({part.group(1)})"
+    if not author:
+        author = tags.get("TPE1") or tags.get("TPE2") or ""
     return AudiobookInput(title or guess, author, tracks, cover)
 
 

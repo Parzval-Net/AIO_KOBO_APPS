@@ -84,22 +84,28 @@ register(Module(
 # How each NickelHook mod removes itself, read from the pinned binaries with REA/Ghidra (nh_info of every
 # NickelHook mod, 2026-10-17): "flag" = create this file, "xflag" = delete this file. The mod deletes its own
 # library from the system on the next boot, so the Kobo must be ejected and restarted afterwards.
+# A Kobo factory reset formats the user storage but keeps /usr/local/Kobo, so mods that only uninstall on a
+# flag (and NickelModManager, which then takes the empty storage for a new install and recreates its marker)
+# keep running. Those flags are written even when their folder is gone ("survives" = True).
 STOCK_MODS = [
-    # (folder that shows it is installed, file to create, file to delete)
-    (".adds/nm", ".adds/nm/uninstall", None),                                        # NickelMenu: flag
-    (".adds/nickel-home", ".adds/nickel-home/uninstall", None),                      # NickelHome: flag
-    (".adds/nickel-type-fix", None, ".adds/nickel-type-fix/uninstall"),              # NickelTypeFix: xflag
-    (".adds/nickelclock", None, ".adds/nickelclock/uninstall"),                      # NickelClock: xflag
-    (".adds/nickel-dissolve", None, ".adds/nickel-dissolve/uninstall"),              # NickelDissolve: xflag
-    (".adds/nickel-mod-manager", None, ".adds/nickel-mod-manager/uninstall"),        # NickelModManager: xflag
-    (".adds/screensaver", ".adds/screensaver/uninstall.txt", None),                  # nickel-screensaver: flag
+    # (folder that shows it is installed, file to create, file to delete, survives a Kobo factory reset)
+    (".adds/nm", ".adds/nm/uninstall", None, True),                                         # NickelMenu: flag
+    (".adds/nickel-home", ".adds/nickel-home/uninstall", None, True),                       # NickelHome: flag
+    (".adds/nickel-type-fix", ".adds/nickel-type-fix/uninstall-now", ".adds/nickel-type-fix/uninstall", False),
+    (".adds/nickelclock", None, ".adds/nickelclock/uninstall", False),                      # NickelClock: xflag
+    (".adds/nickel-dissolve", ".adds/nickel-dissolve/uninstall-now", ".adds/nickel-dissolve/uninstall", False),
+    # NickelModManager 0.3 (src/entrypoint/lifecycle.cpp): removed when uninstall-now exists, or when its receipt
+    # .adds/.nickel-mod-manager.initialized exists and the uninstall marker does not. Not NickelHook.
+    (".adds/nickel-mod-manager", ".adds/nickel-mod-manager/uninstall-now", ".adds/nickel-mod-manager/uninstall", True),
+    (".adds/screensaver", ".adds/screensaver/uninstall.txt", None, True),                   # nickel-screensaver: flag
+    (".adds/aio-audio", ".adds/aio-audio/uninstall", None, True),                           # AIO Audio: flag
 ]
 # Kobo eReader.conf keys that Kobo AIO (or the usual mod guides) set and stock firmware does not have.
 STOCK_CONF_KEYS = [("FeatureSettings", "ExcludeSyncFolders"), ("FeatureSettings", "Screenshots"),
                    ("DeveloperSettings", "AutoUsbGadget"), ("DeveloperSettings", "ForceAllowLandscape"),
                    ("ApplicationPreferences", "SideloadedMode")]
 APP_TREES = (".adds/koreader", ".adds/cadmus", ".adds/plato", ".adds/inkboy")
-KNOWN_ADDS = {p.split("/")[1] for p, _, _ in STOCK_MODS} | {p.split("/")[1] for p in APP_TREES} | {"kobo-aio"}
+KNOWN_ADDS = {p.split("/")[1] for p, _, _, _ in STOCK_MODS} | {p.split("/")[1] for p in APP_TREES} | {"kobo-aio"}
 
 
 def _files_under(ctx, rel: str, keep=()) -> list[str]:
@@ -129,16 +135,23 @@ def _stock_apply(mod, ctx, opts):
     # 2. Nothing queued may install mods on the next boot (except the restored originals added above).
     if txn.exists(".kobo/KoboRoot.tgz"):
         txn.delete(".kobo/KoboRoot.tgz", note="mejoras pendientes de instalar: se descartan")
-    # 3. Every NickelHook mod removes itself on the next boot.
-    for folder, flag, xflag in STOCK_MODS:
-        if not (root / folder).is_dir():
-            continue
+    # 3. Every mod removes itself on the next boot (flags work in every mode, also inside a KoboRoot.tgz).
+    hidden = []
+    for folder, flag, xflag, survives in STOCK_MODS:
         name = folder.split("/")[1]
-        if flag:
-            txn.write_text(flag, "", note=f"{name} se desinstala al reiniciar")
-        if xflag and txn.exists(xflag):
+        present = (root / folder).is_dir()
+        if flag and (present or survives):
+            if present:
+                txn.write_text(flag, "", note=f"{name} se desinstala al reiniciar")
+            elif not txn.exists(flag):
+                txn.write_text(flag, "")
+                hidden.append(name)
+        if present and xflag and txn.exists(xflag):
             txn.delete(xflag, note=f"{name} se desinstala al reiniciar")
-    keep = {flag for _, flag, _ in STOCK_MODS if flag}
+    if hidden:
+        txn.note("Por si el Kobo ya se restableció antes y quedaron mods en el sistema, se dejan avisos de "
+                 f"desinstalación para {', '.join(hidden)} (si no están instalados, no pasa nada).")
+    keep = {flag for _, flag, _, _ in STOCK_MODS if flag}
     # NickelMenu entries and NickelModManager's kept copies (it can put mods back after a system update).
     for rel in _files_under(ctx, ".adds/nm", keep) + _files_under(ctx, ".adds/nickel-mod-manager", keep):
         txn.delete(rel, note="configuración de mods")
@@ -170,7 +183,8 @@ def _stock_apply(mod, ctx, opts):
     if others:
         txn.note(f"Quedan carpetas de mods que Kobo AIO no reconoce ({', '.join(others)}): el restablecimiento de "
                  "fábrica del Kobo las elimina.")
-    txn.note("Expulsa el Kobo: al reiniciar, cada mod se desinstala solo. Tus libros y tu progreso no se tocan.")
+    txn.note("Expulsa el Kobo: al reiniciar, cada mod se desinstala solo. Tus libros y tu progreso no se tocan. "
+             "Si lo vas a vender, haz el restablecimiento de fábrica del Kobo recién después de ese reinicio.")
 
 
 register(Module(

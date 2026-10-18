@@ -358,7 +358,9 @@ def _abk_apply(mod, ctx, opts):
     if opts["target"] == "nickel":
         ctx.txn.note("Nickel lo importará como audiolibro al expulsar (pestaña Audiolibros). Empareja tus audífonos "
                      "en Ajustes > Bluetooth. El lector stock retoma desde el inicio de la parte en que ibas; por eso "
-                     "las pistas largas se dividen. Si no aparece o no suena, usa el formato KOReader.")
+                     "las pistas largas se dividen. Si no aparece o no suena, usa el formato KOReader. "
+                     "Opcional: «Reproductor de audiolibros renovado (AIO Audio)» agrega lista de capítulos, "
+                     "velocidad, temporizador y retoma en el segundo exacto (experimental, firmware 4.x).")
     else:
         ctx.txn.note("Ábrelo en KOReader con el plugin Audiobook.")
 

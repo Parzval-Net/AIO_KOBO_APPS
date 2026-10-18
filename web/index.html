@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="aio-version" content="1.3.1">
+<meta name="aio-version" content="1.4.0">
 <title>Kobo AIO</title>
 <meta name="description" content="Mejora tu Kobo en minutos: menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros, diccionarios y más. Con respaldo y vuelta atrás.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='1.5' width='22' height='29' rx='5' fill='%231E1C18'/%3E%3Crect x='8' y='4.5' width='16' height='20' rx='1.8' fill='%23F3EFE6'/%3E%3Cpath d='M18.5 4.5h4v9l-2-1.6-2 1.6z' fill='%23C2553E'/%3E%3C/svg%3E">
@@ -597,8 +597,9 @@ function stockGuide() {
       <li><b>Respalda tus libros y tu progreso.</b> ${canBackup ? "Copia todo a tu computador con un clic." : "Copia tus libros a tu computador (la app de escritorio lo hace por ti)."}</li>
       <li><b>Quita todos los mods.</b> Kobo AIO desinstala el menú, el inicio, la tipografía, las apps, las fuentes y los ajustes de mods, también los que pusiste con otras herramientas. Te muestra cada cambio antes y guarda una copia. No toca tus libros.</li>
       <li><b>Expulsa el Kobo.</b> Se reinicia y cada mod se desinstala solo (1 a 2 minutos).</li>
-      <li><b>Si lo vas a vender o regalar:</b> en el Kobo ve a Más > Ajustes > Información del dispositivo > Avanzado y toca el restablecimiento de fábrica (Factory reset). Cierra tu cuenta y borra los libros y notas del equipo; lo que compraste en Kobo sigue en tu cuenta.</li>
+      <li><b>Si lo vas a vender o regalar:</b> recién después de ese reinicio, en el Kobo ve a Más > Ajustes > Información del dispositivo > Avanzado y toca el restablecimiento de fábrica (Factory reset). Cierra tu cuenta y borra los libros y notas del equipo; lo que compraste en Kobo sigue en tu cuenta.</li>
     </ol>
+    <div class="finding info">${icon("info")}<div class="body small">El restablecimiento del Kobo borra tus archivos pero no los mods del sistema (por ejemplo «Manage Mods»). Si ya lo hiciste y siguen ahí, conecta el Kobo, usa «Quitar todos los mods», expulsa y reinicia.</div></div>
     ${d ? "" : `<div class="finding info">${icon("info")}<div class="body small">Conecta tu Kobo para hacer los pasos 1 y 2.</div></div>`}
     ${state.web === "zip" ? `<div class="finding warn">${icon("alert")}<div class="body small">Este navegador no puede borrar archivos del Kobo. Para quitar los mods usa Chrome o Edge, o la app de escritorio.</div></div>` : ""}`,
     [["Cerrar", "", () => dlg.close()],
@@ -666,8 +667,8 @@ const META = {
   "maint.backup": ["Respaldo al computador", "archive", "c2", "Copia libros, progreso y notas antes de cambiar nada"],
   "maint.clean_macos": ["Limpiar basura del Mac", "broom", "c2", "Borra los archivos ._ que deja macOS"],
   "maint.no_spotlight": ["Que el Mac no indexe el Kobo", "eye-off", "c2", "Spotlight deja de escribir en el lector"],
-  "mod.nickelmenu": ["Menú de atajos", "menu", "c3", "Base para lanzar apps y atajos desde el lector"],
-  "nm.menu": ["Atajos rápidos", "zap", "c3", "Suspender, importar libros, modo oscuro, WiFi y más"],
+  "mod.nickelmenu": ["Base de menús (NickelMenu)", "menu", "c3", "Necesaria para la pestaña de atajos y para abrir apps"],
+  "nm.menu": ["Pestaña de atajos", "zap", "c3", "Botones en el Kobo: suspender, importar libros, modo oscuro, WiFi y más"],
   "nm.owner": ["Si lo pierdes", "id", "c3", "Muestra cómo contactarte si alguien lo encuentra"],
   "mod.nickelhome": ["Inicio sin publicidad", "home", "c3", "Oculta recomendaciones y promociones de la tienda"],
   "conf.sideloaded": ["Modo sin cuenta Kobo", "user", "c3", "Inicio centrado en tus libros, sin tienda"],
@@ -675,10 +676,11 @@ const META = {
   "fonts.ebook": ["Fuentes para leer", "type", "c4", "Familias pensadas para tinta electrónica"],
   "mod.nickelclock": ["Reloj y batería", "clock", "c4", "La hora y la carga mientras lees"],
   "mod.nickeldissolve": ["Animación al pasar página", "sparkle", "c4", "Transición suave entre páginas"],
-  "conf.preferences": ["Preferencias rápidas", "sliders", "c4", "Capturas, USB automático y apagado"],
+  "conf.preferences": ["Ajustes ocultos del Kobo", "sliders", "c3", "Se fijan una vez: capturas con el botón, USB sin preguntar y apagado"],
   "app.koreader": ["KOReader", "book", "c5", "Lector avanzado para PDF, cómics y más"],
   "app.cadmus": ["Cadmus", "book", "c5", "Lector minimalista y rápido"],
   "app.audiobook": ["Audiolibros en KOReader", "headphones", "c5", "Reproductor con capítulos y Bluetooth"],
+  "mod.aioaudio": ["Reproductor de audiolibros", "headphones", "c4", "El lector stock con portada, capítulos, ±30 s, velocidad y temporizador"],
   "app.inkboy": ["Game Boy (Ink-boy)", "gamepad", "c6", "Juega Game Boy y GBC en tinta electrónica"],
   "fw.kobopatch": ["Ajustes avanzados del sistema", "cpu", "c2", "Interlineado, márgenes y más (parches de firmware)"],
   "mod.nickelmodmanager": ["Gestor de mods en el Kobo", "sliders", "c1", "Activa o desactiva cada mod desde el propio lector"],
@@ -692,14 +694,15 @@ const META = {
 const meta = m => { const x = META[m.id] || [m.title, "grid", "c3", m.description]; return { name: x[0], icon: x[1], color: `var(--${x[2]})`, benefit: x[3] }; };
 const GROUPS = [
   ["Protección y respaldo", "shield", ["maint.backup", "conf.exclude_sync", "maint.clean_macos", "maint.no_spotlight", "mod.nickelmodmanager"]],
-  ["Inicio y menú", "home", ["mod.nickelhome", "mod.nickelmenu", "nm.menu", "conf.sideloaded", "nm.owner"]],
-  ["Lectura", "book", ["mod.nickeltypefix", "fonts.ebook", "mod.nickelclock", "mod.nickeldissolve", "conf.preferences"]],
+  ["Inicio y menú", "home", ["mod.nickelhome", "mod.nickelmenu", "nm.menu", "conf.preferences", "conf.sideloaded", "nm.owner"],
+    "«Pestaña de atajos» agrega botones que tocas en el Kobo cuando los necesitas. «Ajustes ocultos» cambia opciones de Kobo una sola vez y no instala nada."],
+  ["Lectura", "book", ["mod.nickeltypefix", "fonts.ebook", "mod.nickelclock", "mod.nickeldissolve", "mod.aioaudio"]],
   ["Apps y juegos", "gamepad", ["app.koreader", "app.koreader_plugins", "app.cadmus", "app.audiobook", "app.inkboy"]],
   ["Avanzado", "cpu", ["fw.kobopatch"]],
 ];
 const BASE = ["maint.backup", "conf.exclude_sync", "mod.nickelmenu", "nm.menu", "mod.nickelhome", "mod.nickeltypefix", "fonts.ebook", "maint.clean_macos", "maint.no_spotlight"];
 const PROFILES = [
-  { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad", "Menú de atajos", "Mejor tipografía y fuentes", "Respaldo y limpieza"], mods: BASE },
+  { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad", "Pestaña de atajos", "Mejor tipografía y fuentes", "Respaldo y limpieza"], mods: BASE },
   { id: "minimal", name: "Lector minimalista", desc: "Solo tus libros, sin tienda.", items: ["Todo lo esencial", "Modo sin cuenta Kobo", "Pestañas simplificadas"], mods: [...BASE, "conf.sideloaded"],
     opts: { "nm.menu": { simple_tabs: true, hide_discover: true } } },
   { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock"],
@@ -1127,9 +1130,9 @@ function renderWizard() {
   const notice = nm && nm.compatible === false
     ? `<div class="finding info" style="margin-top:14px">${icon("info")}<div class="body"><b>Tu ${esc(state.device ? state.device.name : "Kobo")} tiene ${hiddenN} opciones no disponibles</b><div class="small muted">${esc(nm.incompatible_reason)}. ${state.device && /^[5-9]\./.test(state.device.firmware || "") ? "Los mods del menú de Nickel aún no funcionan en firmware 5 o 6. Las herramientas de biblioteca (cómics, libros, fuentes, respaldo) sí están disponibles." : "Actualiza el firmware desde Ajustes > Información del dispositivo y vuelve a conectar el Kobo para habilitarlas."}</div></div></div>` : "";
   if (state.step === 2) {
-    $("#groups").innerHTML = notice + GROUPS.map(([title, ic, ids]) => {
+    $("#groups").innerHTML = notice + GROUPS.map(([title, ic, ids, note]) => {
       const mods = ids.map(byId).filter(m => m && (m.compatible !== false || needsDesktop(m))); if (!mods.length) return "";
-      return `<section class="group"><h3>${icon(ic)}${esc(title)}</h3>${mods.map(m => modRow(m)).join("")}</section>`;
+      return `<section class="group"><h3>${icon(ic)}${esc(title)}</h3>${note ? `<p class="small muted" style="margin:-4px 0 10px">${esc(note)}</p>` : ""}${mods.map(m => modRow(m)).join("")}</section>`;
     }).join("");
     bindRows($("#groups"));
   }
@@ -1149,7 +1152,7 @@ async function planNow(sel = state.selection) {
   return waitJob(job);
 }
 const AREAS = [[/^\.kobo\/Kobo\//, "Ajustes del Kobo"], [/^\.kobo\/KoboRoot\.tgz$/, "Mejoras que se instalan al reiniciar"],
-  [/^fonts\//, "Fuentes"], [/^\.adds\/nm\//, "Menú de atajos"], [/^\.adds\/koreader\//, "KOReader"], [/^\.adds\/cadmus\//, "Cadmus"],
+  [/^fonts\//, "Fuentes"], [/^\.adds\/nm\//, "Pestaña de atajos"], [/^\.adds\/koreader\//, "KOReader"], [/^\.adds\/cadmus\//, "Cadmus"],
   [/^\.adds\/inkboy\//, "Ink-boy"], [/^\.kobo\/custom-dict\//, "Diccionarios"], [/^\.kobo\/screensaver\//, "Pantallas de reposo"],
   [/^\.adds\//, "Archivos de los mods"], [/(^|\/)\._|\.DS_Store$/, "Basura del Mac"], [/./, "Biblioteca"]];
 function groupChanges(changes) {
@@ -1380,7 +1383,7 @@ function pvScreen(inner, d, w = 150) {
   return `<div class="mini ${d && d.color ? "" : "bw"}" style="width:${w + 16}px;height:${h + 22}px"><div class="scr">${inner}</div></div>`;
 }
 const txt = (top, n, cls = "") => `<div class="pv-txt ${cls}" style="top:${top}%">${Array.from({ length: n }, (_, i) => `<i style="width:${cls ? 100 : 70 + (i * 37) % 30}%"></i>`).join("")}</div>`;
-function aioTab() {   // the NickelMenu tab exactly as configured in "Atajos rápidos" (label + icon)
+function aioTab() {   // the NickelMenu tab exactly as configured in "Pestaña de atajos" (label + icon)
   const m = byId("nm.menu"), o = (m && (state.selection["nm.menu"] || defaults(m))) || {};
   const op = m && m.options.find(x => x.id === "tab_icon"), svg = op && op.icons ? (op.icons[o.tab_icon] || [])[1] || "" : "";
   return `<b>${svg}${esc(o.tab_label || "Kobo AIO")}</b>`;
@@ -1404,13 +1407,25 @@ const PREVIEW = {
   "lib.sleep": d => [[`<div style="position:absolute;inset:0;background:${d && d.color ? "linear-gradient(160deg,#5a7a9a,#c9a35a)" : "linear-gradient(160deg,#555,#ddd)"}"></div><div style="position:absolute;bottom:6%;left:0;right:0;text-align:center;font:8px var(--sans);color:#fff">Tu imagen</div>`, "Pantalla de reposo propia"]],
   "lib.audiobooks": d => [[`${book(25, 8, 50, 40, "#5a5a8a")}<div class="pv-row" style="top:54%;height:4%;background:#bcb5a6"><span style="display:block;width:40%;height:100%;background:#22201C"></span></div><div class="pv-row" style="top:62%;text-align:center;font:9px var(--sans)">⏮ ⏯ ⏭</div><div class="pv-txt" style="top:74%;font:7px var(--sans)">Capítulo 3 · 12:41</div>`, "Portada y capítulos"]],
   "app.audiobook": d => PREVIEW["lib.audiobooks"](d),
+  "mod.aioaudio": d => [[`<div class="pv-txt" style="top:3%;left:6%;text-align:left;font:7px var(--sans)">← Mis libros<span style="float:right;margin-right:6%">☰ 1x</span></div>${book(27, 10, 46, 34, "#5a5a8a")}<div class="pv-txt" style="top:47%;font:bold 8px var(--serif)">Título del libro</div><div class="pv-txt" style="top:52%;font:italic 6px var(--serif)">Capítulo 3</div><div class="pv-row" style="top:58%;height:1.2%;background:#bcb5a6"><span style="display:block;width:35%;height:100%;background:#22201C"></span></div><div class="pv-txt" style="top:61%;font:6px var(--sans)"><span style="float:left;margin-left:8%">12:41</span><span style="float:right;margin-right:8%">-21:07</span></div><div class="pv-txt" style="top:68%;font:11px var(--sans)">⏮ ⟲ ▶ ⟳ ⏭</div><div class="pv-txt" style="top:82%;font:6px var(--sans)">− 55% + · ⏱ 30 min · ᛒ Audífonos</div><div class="pv-txt" style="top:90%;font:5px var(--sans)">Pista 3 de 15 · 23% del libro</div>`, "Reproductor estilo nativo"]],
   "lib.dictionaries": d => [[`${txt(8, 8)}<div class="pv-row" style="top:44%;height:38%;background:#fff;border:1px solid #22201C;font:7px var(--serif);padding:4px"><b>libro</b> m. Conjunto de hojas…<br><i>Wiktionary (Custom)</i></div>`, "Definición al mantener presionada una palabra"]],
   "fw.kobopatch": d => [[`${txt(10, 12)}`, "Interlineado estándar"], [`<div class="pv-txt" style="top:10%">${"<i style='margin-bottom:2px'></i>".repeat(18)}</div>`, "Interlineado fino (parche)"]],
   "maint.backup": d => [[`<div style="position:absolute;inset:0;display:grid;place-items:center;font:9px var(--sans);text-align:center">Libros · progreso · notas<br>→ tu computador</div>`, "Copia antes de cambiar nada"]],
 };
+// Real screenshots taken on a Kobo (personal data removed, book cover replaced by a neutral one).
+const PHOTOS = {
+  "mod.aioaudio": [["shots/aio-audio-reproductor.png", "Reproductor"], ["shots/aio-audio-capitulos.png", "Lista de capítulos"]],
+};
 function showPreview(id) {
   const m = byId(id), d = state.device, f = PREVIEW[id];
   if (!m || !f) return;
+  if (PHOTOS[id]) {
+    dialog(`Vista previa: ${meta(m).name}`, "Capturas reales en un Kobo Libra Colour",
+      `<div class="previews">${PHOTOS[id].map(([src, cap]) => `<figure><img src="${esc(src)}" alt="${esc(cap)}" loading="lazy" style="width:min(240px,70vw);height:auto;border:1px solid var(--rule);border-radius:10px;background:#fff"><figcaption>${esc(cap)}</figcaption></figure>`).join("")}</div>
+       <p class="small muted" style="margin-top:16px">${esc(meta(m).benefit)}</p>`,
+      [["Cerrar", "primary", () => dlg.close()]]);
+    return;
+  }
   const shots = f(d);
   dialog(`Vista previa: ${meta(m).name}`, `${d ? d.name : "Kobo"} · ilustración, el resultado real puede variar`,
     `<div class="previews">${shots.map(([inner, cap]) => `<figure>${pvScreen(inner, d, shots.length > 1 ? 140 : 180)}<figcaption>${esc(cap)}</figcaption></figure>`).join("")}</div>

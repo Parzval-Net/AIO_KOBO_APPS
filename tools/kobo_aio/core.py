@@ -36,6 +36,7 @@ class Option:
     choices: list = field(default_factory=list)   # [(value, label)]
     help: str = ""
     icons: dict = field(default_factory=dict)     # choice value -> [svg idle, svg active] (shown as a picker)
+    retired: tuple = ()                           # multi values that no longer exist: dropped without error
 
     def to_dict(self) -> dict:
         d = {"id": self.id, "label": self.label, "type": self.type, "default": self.default,
@@ -88,8 +89,9 @@ class Context:
         return data
 
     # -- KoboRoot.tgz ----------------------------------------------------
-    def add_koboroot(self, label: str, data: bytes) -> None:
-        validate_koboroot(data, label)
+    def add_koboroot(self, label: str, data: bytes, extra_allowed: "KoboRootAllowance | None" = None) -> None:
+        """Queue a KoboRoot.tgz part. `extra_allowed` widens the mod-tree allowlist for this part only."""
+        validate_koboroot(data, label, extra_allowed)
         self.koboroot_parts.append((label, data))
 
     def add_firmware(self, label: str, data: bytes) -> None:
@@ -181,8 +183,24 @@ def _member_name(m: tarfile.TarInfo) -> str:
     return name.rstrip("/")
 
 
-def validate_koboroot(data: bytes, label: str) -> list[str]:
-    """Reject archives that could touch core system paths. Only regular files/dirs under mod trees."""
+@dataclass(frozen=True)
+class KoboRootAllowance:
+    """Narrow, explicit exception to ALLOWED_KOBOROOT_PREFIXES for one module's KoboRoot.tgz part.
+
+    `paths` are exact file paths, `prefixes` whole trees. A path listed in `pinned` must also have one of the
+    given SHA-256 digests, so a system file can only ever be replaced by a known, reviewed content.
+    """
+    paths: frozenset = frozenset()
+    prefixes: tuple = ()
+    pinned: dict = field(default_factory=dict)     # path -> frozenset of allowed sha256 hex digests
+
+    def allows(self, name: str) -> bool:
+        return name in self.paths or (bool(self.prefixes) and name.startswith(self.prefixes))
+
+
+def validate_koboroot(data: bytes, label: str, extra_allowed: KoboRootAllowance | None = None) -> list[str]:
+    """Reject archives that could touch core system paths. Only regular files/dirs under mod trees
+    (plus the exact paths/trees of `extra_allowed`, with pinned contents where it says so)."""
     names = []
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as tf:
         for m in tf.getmembers():
@@ -192,7 +210,12 @@ def validate_koboroot(data: bytes, label: str) -> list[str]:
             if not (m.isfile() or m.isdir()):
                 raise AioError(f"{label}: tipo de entrada no permitido (enlace o dispositivo): {m.name}")
             if m.isfile() and not name.startswith(ALLOWED_KOBOROOT_PREFIXES):
-                raise AioError(f"{label}: KoboRoot.tgz escribe fuera de rutas de mods ({m.name}). Abortado.")
+                if extra_allowed is None or not extra_allowed.allows(name):
+                    raise AioError(f"{label}: KoboRoot.tgz escribe fuera de rutas de mods ({m.name}). Abortado.")
+                if name in extra_allowed.pinned:
+                    digest = hashlib.sha256(tf.extractfile(m).read()).hexdigest()
+                    if digest not in extra_allowed.pinned[name]:
+                        raise AioError(f"{label}: contenido no reconocido para {name}. Abortado.")
             names.append(name)
     return names
 
@@ -305,6 +328,7 @@ class Module:
                     v = [x for x in v.split(",") if x] if o.type == "multi" or "," in v else ([v] if v else [])
                 v = list(v or [])
                 if o.type == "multi" and o.choices:
+                    v = [x for x in v if str(x) not in o.retired]
                     allowed = {str(c[0]) for c in o.choices}
                     bad = [x for x in v if str(x) not in allowed]
                     if bad:

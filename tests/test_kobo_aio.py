@@ -293,6 +293,22 @@ class AudiobookTests(TempKobo):
         self.assertLessEqual(max(Image.open(io.BytesIO(cover)).size), 1000)
         self.assertAlmostEqual(mp3_duration_ms(strip_tags(data)) / 1000, 5.0, delta=0.1)
 
+    def test_book_title_from_tags_and_part_folder(self):
+        from kobo_aio.audiobooks import _text, _syncsafe, collect
+        def tagged(**frames):
+            body = b"".join(_text(k, v) for k, v in frames.items())
+            return b"ID3\x03\x00\x00" + _syncsafe(len(body)) + body + silent_mp3(1)
+        book = self.tmp / "Jurassic Park Audiolibro"
+        part = book / "Parte 1"
+        part.mkdir(parents=True)
+        (part / "01.mp3").write_bytes(silent_mp3(1))
+        b = collect(part)                                      # untagged: the parent folder names the book
+        self.assertEqual(b.title, "Jurassic Park Audiolibro (Parte 1)")
+        (part / "01.mp3").write_bytes(tagged(TALB="Parque Jurásico", TPE1="Michael Crichton"))
+        b = collect(part)                                      # tags win; the part stays in the title
+        self.assertEqual((b.title, b.author), ("Parque Jurásico (Parte 1)", "Michael Crichton"))
+        self.assertEqual(collect(part, title="Mi título").title, "Mi título")
+
     def test_nickel_mp3z(self):
         from kobo_aio.audiobooks import build_mp3z, collect, embedded_cover
         src = self.tmp / "Autor - Libro"
@@ -841,6 +857,7 @@ class StockTests(TempKobo):
             ".adds/nickel-home/default": "x", ".adds/nickel-type-fix/uninstall": "", ".adds/nickelclock/uninstall": "",
             ".adds/nickel-dissolve/uninstall": "", ".adds/nickel-mod-manager/uninstall": "",
             ".adds/nickel-mod-manager/restore/Kobo.tgz": "copia", ".adds/screensaver/x.png": "x",
+            ".adds/aio-audio/LEEME.txt": "leeme",
             ".adds/koreader/koreader.sh": "#!/bin/sh", ".adds/koreader/settings.reader.lua": "x",
             ".adds/kfmon/config/kfmon.ini": "x", ".adds/kobo-aio/state.json": json.dumps({"installed": {"mod.nickelmenu": {}}}),
             ".adds/kobo-aio/tab-icon.png": "png", "fonts/KF_Literata-Regular.ttf": "ttf", "fonts/MiFuente.otf": "otf",
@@ -866,6 +883,11 @@ class StockTests(TempKobo):
         self.assertTrue((r / ".adds/nm/uninstall").is_file())            # NickelMenu flag
         self.assertTrue((r / ".adds/nickel-home/uninstall").is_file())   # NickelHome flag
         self.assertTrue((r / ".adds/screensaver/uninstall.txt").is_file())
+        self.assertTrue((r / ".adds/aio-audio/uninstall").is_file())     # AIO Audio: NickelHook uninstall_flag
+        self.assertTrue((r / ".adds/aio-audio/LEEME.txt").is_file())
+        self.assertTrue((r / ".adds/nickel-mod-manager/uninstall-now").is_file())  # NickelModManager request
+        self.assertTrue((r / ".adds/nickel-type-fix/uninstall-now").is_file())
+        self.assertFalse((r / ".adds/nickelclock/uninstall-now").exists())         # NickelClock has no flag
         self.assertTrue((r / ".adds/kfmon/config/kfmon.ini").is_file())  # unknown mods are left alone
         text = conf.read_text()
         for key in ("ExcludeSyncFolders", "Screenshots", "SideloadedMode"):
@@ -879,6 +901,148 @@ class StockTests(TempKobo):
         self.assertIn("ExcludeSyncFolders", conf.read_text())
         self.assertFalse((r / ".adds/nm/uninstall").exists())
 
+
+    def test_back_to_stock_after_kobo_reset(self):
+        # A Kobo factory reset wipes .adds but not /usr/local/Kobo: flag-only mods and NickelModManager survive.
+        r = self.root
+        res = engine.apply(parse_version_file(r), {"maint.stock": {}}, offline=True)
+        for flag in (".adds/nm/uninstall", ".adds/nickel-home/uninstall", ".adds/screensaver/uninstall.txt",
+                     ".adds/nickel-mod-manager/uninstall-now", ".adds/aio-audio/uninstall"):
+            self.assertTrue((r / flag).is_file(), flag)
+        for absent in (".adds/nickel-type-fix", ".adds/nickelclock", ".adds/nickel-dissolve"):
+            self.assertFalse((r / absent).exists(), absent)     # xflag mods remove themselves without a folder
+        self.assertTrue(any("restableci" in n for n in res.get("notes", res.get("log", []))))
+
+class AioAudioTests(TempKobo):
+    """Own experimental NickelHook mod: staged through the artifact cache, removed with its uninstall flag."""
+
+    def setUp(self):
+        super().setUp()
+        from kobo_aio import core
+        from kobo_aio.modules import _util
+        engine.catalog()
+        self.core, self.util = core, _util
+        self.pkg = tgz({"./usr/local/Kobo/imageformats/libaioaudio.so": b"\x7fELF",
+                        "./mnt/onboard/.adds/aio-audio/LEEME.txt": b"AIO Audio"})
+        self._saved = (core.CACHE_DIR, _util.ART["aioaudio"])
+        old = _util.ART["aioaudio"]
+        _util.ART["aioaudio"] = core.Artifact(old.url, hashlib.sha256(self.pkg).hexdigest(), old.filename, len(self.pkg))
+        core.CACHE_DIR = self.tmp / "cache"
+        core.CACHE_DIR.mkdir()
+        (core.CACHE_DIR / f"{_util.ART['aioaudio'].sha256[:16]}-KoboRoot.tgz").write_bytes(self.pkg)
+
+    def tearDown(self):
+        self.core.CACHE_DIR, self.util.ART["aioaudio"] = self._saved
+        super().tearDown()
+
+    def test_metadata(self):
+        from kobo_aio.core import REGISTRY
+        m = REGISTRY["mod.aioaudio"]
+        self.assertEqual((m.category, m.risk, m.reboot, m.recommended), ("Biblioteca", "medio", True, False))
+        self.assertEqual((m.min_fw, m.max_fw, m.requires), ((4, 23), (5,), []))
+        self.assertIn("xperimental", m.title)
+
+    def test_apply_stages_koboroot_and_clears_flag(self):
+        (self.root / ".adds/aio-audio").mkdir(parents=True)
+        (self.root / ".adds/aio-audio/uninstall").write_text("")
+        res = engine.apply(parse_version_file(self.root), {"mod.aioaudio": {}}, offline=True)
+        self.assertTrue(res["needs_reboot"])
+        with tarfile.open(self.root / ".kobo/KoboRoot.tgz") as tf:
+            names = {m.name.lstrip("./") for m in tf.getmembers()}
+        self.assertIn("usr/local/Kobo/imageformats/libaioaudio.so", names)
+        self.assertFalse((self.root / ".adds/aio-audio/uninstall").exists())
+
+    def test_uninstall_writes_flag(self):
+        (self.root / ".adds/kobo-aio").mkdir(parents=True)
+        (self.root / ".adds/kobo-aio/state.json").write_text(json.dumps({"installed": {"mod.aioaudio": {}}}))
+        (self.root / ".adds/aio-audio").mkdir(parents=True)
+        engine.apply(parse_version_file(self.root), {}, ["mod.aioaudio"], offline=True)
+        self.assertTrue((self.root / ".adds/aio-audio/uninstall").is_file())
+
+    def test_firmware_5_is_incompatible(self):
+        (self.root / ".kobo/version").write_text(
+            "N428000000000,4.9.77,5.1.12345,4.9.77,4.9.77,00000000-0000-0000-0000-000000000390\n")
+        cat = {m["id"]: m for m in engine.catalog(parse_version_file(self.root))}
+        self.assertFalse(cat["mod.aioaudio"]["compatible"])
+
+
+class PinArtifactTests(unittest.TestCase):
+    """tools/pin_artifact.py: validates an AIO Audio build and rewrites ART['aioaudio'] (on a copy of the text)."""
+
+    GOOD = {"./usr/local/Kobo/imageformats/libaioaudio.so": b"\x7fELF", "./mnt/onboard/.adds/aio-audio/LEEME.txt": b"x"}
+
+    def setUp(self):
+        import pin_artifact
+        self.pa = pin_artifact
+        self.tmp = Path(tempfile.mkdtemp())
+        self.text = pin_artifact.UTIL.read_text(encoding="utf-8")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _tgz(self, files: dict) -> Path:
+        p = self.tmp / "KoboRoot.tgz"
+        p.write_bytes(tgz(files))
+        return p
+
+    def test_rewrite_entry(self):
+        import ast
+        sha = "ab" * 32
+        new = self.pa.rewrite_util(self.text, "0.3.0", sha, 12345)
+        ast.parse(new)                                                               # still valid Python
+        entry = self.pa.render_entry("0.3.0", sha, 12345)
+        self.assertIn('"https://github.com/Parzval-Net/AIO_KOBO_APPS/releases/download/aio-audio-v0.3.0/KoboRoot.tgz"',
+                      entry)
+        self.assertIn(f'"{sha}", "KoboRoot.tgz", 12345)', entry)
+        old = self.pa.ENTRY_RE.search(self.text).group(0)
+        self.assertEqual(new.replace(entry, "@"), self.text.replace(old, "@"))     # nothing else changes
+        self.assertEqual(self.pa.rewrite_util(new, "0.3.0", sha, 12345), new)       # idempotent
+
+    def test_rewrite_rejects_bad_input(self):
+        with self.assertRaises(ValueError):
+            self.pa.rewrite_util(self.text, "v0.3", "ab" * 32, 1)
+        with self.assertRaises(ValueError):
+            self.pa.rewrite_util(self.text, "0.3.0", "xyz", 1)
+        with self.assertRaises(ValueError):
+            self.pa.rewrite_util("ART = {}\n", "0.3.0", "ab" * 32, 1)
+
+    def test_validate_tgz(self):
+        self.pa.validate_tgz(self._tgz(self.GOOD))
+        for files in ({"./usr/local/Kobo/imageformats/libaioaudio.so": b"x"},
+                      {**self.GOOD, "./mnt/onboard/.adds/extra.txt": b"x"},
+                      {**self.GOOD, "../etc/passwd": b"x"}):
+            with self.subTest(files=sorted(files)), self.assertRaises(ValueError):
+                self.pa.validate_tgz(self._tgz(files))
+        bad = self.tmp / "bad.tgz"
+        bad.write_bytes(b"not a tar")
+        with self.assertRaises(ValueError):
+            self.pa.validate_tgz(bad)
+
+    def test_main_writes_copy(self):
+        util = self.tmp / "_util.py"
+        util.write_text(self.text, encoding="utf-8")
+        pkg = self._tgz(self.GOOD)
+        import contextlib
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.pa.main([str(pkg), "0.3.1", "--util", str(util)]), 0)
+        out = util.read_text(encoding="utf-8")
+        self.assertIn("aio-audio-v0.3.1/KoboRoot.tgz", out)
+        self.assertIn(hashlib.sha256(pkg.read_bytes()).hexdigest(), out)
+        self.assertEqual(self.pa.UTIL.read_text(encoding="utf-8"), self.text)        # real file untouched
+
+
+
+class RetiredOptionTests(unittest.TestCase):
+    def test_old_menu_selection_still_valid(self):
+        from kobo_aio.core import REGISTRY
+        from kobo_aio.nickelmenu import CATALOG_BY_ID
+        mod = REGISTRY["nm.menu"]
+        opts = mod.resolved_options({"items": ["sleep", "screenshots_toggle", "auto_usb"]})
+        self.assertEqual(opts["items"], ["sleep"])           # moved to "Ajustes ocultos del Kobo"
+        self.assertNotIn("screenshots_toggle", CATALOG_BY_ID)
+        self.assertIn("screenshot", CATALOG_BY_ID)           # taking a screenshot stays a shortcut
+        with self.assertRaises(Exception):
+            mod.resolved_options({"items": ["no_existe"]})
 
 class WebCatalogTests(unittest.TestCase):
     def test_page_version_matches_engine(self):

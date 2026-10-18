@@ -1,0 +1,7 @@
+AIO Audio (Kobo AIO)
+
+Reproductor de audiolibros .mp3z más claro: textos en español, portada, tiempo
+transcurrido, saltos de 30 segundos y botones ordenados.
+
+Para quitarlo: crea aquí un archivo vacío llamado "uninstall", expulsa el Kobo
+y reinícialo. También lo quita "Dejar de fábrica" en Kobo AIO.

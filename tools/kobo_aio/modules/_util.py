@@ -27,6 +27,9 @@ ART = {
                                  "17593550bd4f7c26ca1c277b0852bc175deba5a3409f20c71d0afdac7758084b", "KoboRoot.tgz", 122065),
     "nickeldissolve": Artifact("https://github.com/nicoverbruggen/NickelDissolve/releases/download/v0.7/KoboRoot.tgz",
                                "d543c90ffac8f5cc49b66df1b3d68b0335dbd8d69984745ba533d2c4ea8f27c6", "KoboRoot.tgz", 28200),
+    # Own mod (mods/aio-audio, NickelHook). Built in CI; published as a release asset of this repo.
+    "aioaudio": Artifact("https://github.com/Parzval-Net/AIO_KOBO_APPS/releases/download/aio-audio-v0.5.1/KoboRoot.tgz",
+                         "1813dbbf02de3c262980e4381e6619bd43155e234641bd7a4e9939851caa5489", "KoboRoot.tgz", 93178),
     "nickelhome": Artifact("https://github.com/nicoverbruggen/NickelHome/releases/download/v0.6/KoboRoot.tgz",
                            "05b131d8d185b00dbf48bbfc7cba1fb63b7bcb7276f2ebc31324422de1fd187e", "KoboRoot.tgz", 16804),
     "koreader": Artifact("https://github.com/koreader/koreader/releases/download/v2026.07.1/koreader-kobo-v2026.07.1.zip",

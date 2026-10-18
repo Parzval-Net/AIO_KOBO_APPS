@@ -1,5 +1,5 @@
 {
- "version": "1.3.1",
+ "version": "1.4.0",
  "device": null,
  "modules": [
   {
@@ -1315,8 +1315,8 @@
   {
    "id": "nm.menu",
    "category": "Menú",
-   "title": "Menú rápido de NickelMenu",
-   "description": "Atajos validados contra la documentación oficial: suspender, reiniciar, importar libros, modo oscuro, WiFi, capturas, juegos ocultos, búsqueda en RAE/Wikipedia y respaldo de la base de datos.",
+   "title": "Pestaña de atajos (NickelMenu)",
+   "description": "Una pestaña en la barra inferior del Kobo con botones que tocas cuando los necesitas: suspender, reiniciar, importar libros, modo oscuro, WiFi, tomar una captura, juegos ocultos, búsqueda en RAE/Wikipedia y respaldo de la base de datos. Los ajustes que se fijan una sola vez están en «Ajustes ocultos del Kobo».",
    "risk": "bajo",
    "recommended": true,
    "requires": [
@@ -1333,7 +1333,6 @@
       "shutdown",
       "rescan_full",
       "dark_mode",
-      "auto_usb",
       "wifi_toggle"
      ],
      "choices": [
@@ -1392,14 +1391,6 @@
       {
        "value": "screenshot",
        "label": "[Lectura] Captura de pantalla"
-      },
-      {
-       "value": "screenshots_toggle",
-       "label": "[Sistema] Capturas (botón)"
-      },
-      {
-       "value": "auto_usb",
-       "label": "[Sistema] Auto USB"
       },
       {
        "value": "invert",
@@ -1723,8 +1714,8 @@
   {
    "id": "conf.preferences",
    "category": "Ajustes",
-   "title": "Preferencias rápidas de Nickel",
-   "description": "Capturas con el botón de encendido, montaje USB sin preguntar, apagado automático y rotación horizontal en todas las vistas.",
+   "title": "Ajustes ocultos del Kobo",
+   "description": "Opciones de Kobo que no aparecen en sus menús y se fijan una sola vez, sin instalar mods: capturas con el botón de encendido, montaje USB sin preguntar, apagado automático y rotación horizontal en todas las vistas. Para botones de acción en el lector, usa «Pestaña de atajos».",
    "risk": "bajo",
    "recommended": false,
    "requires": [],
@@ -2002,6 +1993,24 @@
    "options": [],
    "sources": [
     "https://github.com/nicoverbruggen/NickelModManager"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.aioaudio",
+   "category": "Biblioteca",
+   "title": "Reproductor de audiolibros renovado (AIO Audio 0.5, experimental)",
+   "description": "Experimental. Reproductor .mp3z del lector stock al estilo Kobo y pensado para e-ink: portada grande, lista de capítulos, barra táctil, ±30 s (también con los botones físicos de página), velocidad 0,8x a 2x, volumen sincronizado con los audífonos, temporizador de apagado y retoma en el segundo exacto. Solo los controles cambian de pista. Firmware 4.x y audífonos Bluetooth; la compatibilidad depende de cada audífono. Si algo falla, desinstálalo y reinicia.",
+   "risk": "medio",
+   "recommended": false,
+   "requires": [],
+   "options": [],
+   "sources": [
+    "https://github.com/Parzval-Net/AIO_KOBO_APPS/tree/main/mods/aio-audio",
+    "https://github.com/pgaskin/NickelHook"
    ],
    "license": "MIT",
    "reboot": true,

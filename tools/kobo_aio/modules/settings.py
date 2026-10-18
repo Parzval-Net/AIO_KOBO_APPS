@@ -56,9 +56,10 @@ def _prefs_status(mod, dev):
 
 
 register(Module(
-    id="conf.preferences", category="Ajustes", title="Preferencias rápidas de Nickel",
-    description="Capturas con el botón de encendido, montaje USB sin preguntar, apagado automático y rotación "
-                "horizontal en todas las vistas.",
+    id="conf.preferences", category="Ajustes", title="Ajustes ocultos del Kobo",
+    description="Opciones de Kobo que no aparecen en sus menús y se fijan una sola vez, sin instalar mods: "
+                "capturas con el botón de encendido, montaje USB sin preguntar, apagado automático y rotación "
+                "horizontal en todas las vistas. Para botones de acción en el lector, usa «Pestaña de atajos».",
     risk="bajo",
     options=[
         Option("screenshots", "Capturas de pantalla (botón de encendido)", "bool", False),

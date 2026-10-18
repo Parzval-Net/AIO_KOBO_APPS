@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .. import tabicons
 from ..core import AioError, Module, Option, register
-from ..nickelmenu import CATALOG, build_config
+from ..nickelmenu import CATALOG, RETIRED, build_config
 from ._util import ONBOARD
 
 NM_DIR = ".adds/nm"
@@ -86,12 +86,14 @@ def _menu_uninstall(mod, ctx):
 
 _choices = [(i.id, f"[{i.group}] {i.label}" + (" (riesgo alto)" if i.risk == "alto" else "")) for i in CATALOG]
 register(Module(
-    id="nm.menu", category="Menú", title="Menú rápido de NickelMenu",
-    description="Atajos validados contra la documentación oficial: suspender, reiniciar, importar libros, modo "
-                "oscuro, WiFi, capturas, juegos ocultos, búsqueda en RAE/Wikipedia y respaldo de la base de datos.",
+    id="nm.menu", category="Menú", title="Pestaña de atajos (NickelMenu)",
+    description="Una pestaña en la barra inferior del Kobo con botones que tocas cuando los necesitas: suspender, "
+                "reiniciar, importar libros, modo oscuro, WiFi, tomar una captura, juegos ocultos, búsqueda en "
+                "RAE/Wikipedia y respaldo de la base de datos. Los ajustes que se fijan una sola vez están en "
+                "«Ajustes ocultos del Kobo».",
     risk="bajo", recommended=True, requires=["mod.nickelmenu"],
     options=[
-        Option("items", "Atajos", "multi", [i.id for i in CATALOG if i.default], _choices),
+        Option("items", "Atajos", "multi", [i.id for i in CATALOG if i.default], _choices, retired=RETIRED),
         Option("tab_label", "Nombre de la pestaña (máx. 12 letras)", "text", "Kobo AIO"),
         Option("tab_icon", "Ícono de la pestaña", "choice", tabicons.DEFAULT, tabicons.choices(),
                help="Mismo tamaño y estilo que los íconos de Kobo: contorno en reposo, relleno al tocarla.",
