@@ -58,7 +58,7 @@ private:
 };
 
 // Our own button: icon and/or one line of text, optional pill outline ("chip"). Reports taps from touch events
-// or from the mouse events Qt synthesizes out of them; the pressed state is painted (inverted) for 120 ms.
+// or from the mouse events Qt synthesizes out of them; the pressed state is a 3 px outline for 120 ms.
 class AioTap : public QWidget {
     Q_OBJECT
 public:
@@ -85,7 +85,7 @@ private:
     QRect box() const;
     void press();
     void release(bool inside);
-    QPixmap icon, iconInv;
+    QPixmap icon;
     QString str;
     QFont face;
     Qt::Alignment align;
@@ -200,6 +200,7 @@ public Q_SLOTS:
     void jumpNow();
     void onPosition(qint64 pos);
     void onState();
+    void headsetVolume(int left, bool leftMuted, int right, bool rightMuted); // Device1ProxyFacade::volumeChanged
 
 private:
     int px(int dragon) const;
@@ -207,7 +208,7 @@ private:
     void seek(qint64 delta);
     void showVolume();
     void stepVolume(int delta);
-    void setIcon(QLabel *label, const QPixmap &pm, const QSize &box, const QPixmap &inv = QPixmap());
+    void setIcon(QLabel *label, const QPixmap &pm); // the pressed state shows the same icon
     void updateSleepLabel();
     void updateFooter(qint64 pos, qint64 dur);
     void schedule();
@@ -216,6 +217,7 @@ private:
     void applyGain();
     bool sendVolume();                  // false: this AioAudio was deleted during a libnickel call
     void updateBtChip();
+    void watchHeadset(QObject *facade); // the headset's own volume changes (Device1ProxyFacade::volumeChanged)
     void loadState();
     void saveState(bool askPlayer);
     QString bookKey() const;
@@ -223,8 +225,12 @@ private:
     bool gestureOnPane(QGestureEvent *e) const;
     bool isGestureHost(QObject *o) const;
     void setKeyFilter(bool on);
-    void relayout();                    // cover size from the reader's real height (Show/Resize)
+    void relayout();                    // the track list over the reader's real size (Show/Resize)
+    void layoutCover();                 // the cover square from its row's real size (row Resize)
+    bool decodeCover();                 // coverJpeg at coverBox (scaled JPEG decode), framed; false: nothing decoded
     void redrawCover();
+    void resolveBook();                 // the .mp3z path once the Volume is filled: title fallback, track list
+    void updateChapterLine();
     void drawPlaceholder();
     bool inFast(const QRect &global) const;
     int currentTrack() const;
@@ -249,7 +255,7 @@ private:
     QElapsedTimer burstClock, saveClock; // first flip of a play/pause burst; last position save on pause
     int wantPlaying = -1;
     bool iconSet = false;
-    QPixmap playIcon, pauseIcon, playIconInv, pauseIconInv; // *Inv: TouchLabel pressed state, built once
+    QPixmap playIcon, pauseIcon;
     QSize playBox, coverBox;
     qreal scale = 1;
     int coverKey = 0;
@@ -267,13 +273,17 @@ private:
     QString btDev, btName;
     bool btChecked = false, btRequested = false, btRetried = false, btMine = false, btRetryPending = false;
     int btTries = 0;                    // 1 s retries while another reader's read is in flight (at most 5)
-    int sentVolume = -1;                // last level sent to btDev by this reader
-    // Layout from the real reader height: everything but the cover has a fixed height.
+    int sentVolume = -1;                // last level sent to btDev by this reader (or reported by it)
+    QElapsedTimer volSendClock;         // last setVolume: the headset's echo of it is not a user change
+    QPointer<QObject> btFacade;         // btDev's Device1ProxyFacade (volumeChanged connected)
+    // Every row but the cover has a fixed height; the cover row takes the rest (its Resize sizes the cover).
     QPointer<AioPane> coverRow;
-    int fixedH = 0;
     QImage coverSrc;                    // the picture of the cover shown (re-framed when the box changes)
+    QByteArray coverJpeg;               // the track's APIC, kept to decode again at a new size (never upscaled)
     bool placeholder = false;
     QString bookPath, fallbackTitle;    // the .mp3z (Content::getId), its folder or file name
+    bool pathLogged = false;
+    QString chapterName;                // the cleaned track name from the stock title label
     // Fast refresh: these widgets only ever paint black and white.
     QList<QPointer<QWidget> > fastWidgets;
     QPointer<QWindow> readerWin;        // the reader's top-level window (refreshed on Show)

@@ -6,14 +6,15 @@
 // no cover (AudioPlayer::broadcastMetadata only emits trackImageChanged when Qt reports metadata).
 //
 // Layout, built in our own pane on top of the stock Ui_MP3Reader form (portrait, black on white, sizes scaled
-// from a 1680 px tall screen, tap targets >= 106 px). Every row but the cover has a fixed height; the cover is
-// the largest square that fits the reader's real height (measured on Show/Resize) and the space left over is
-// spread evenly between the groups, so nothing is clipped:
+// from a 1680 px tall screen, tap targets >= 106 px). Every row but the cover has a fixed height and the groups
+// have fixed gaps; the cover row is the only expanding item and the cover is the largest square that fits it
+// (sized on the row's Resize, decoded again from the APIC at that size), so nothing is clipped:
 //   header      [<] Mis libros ................................... [toc] ( 1,25x )   112 px, thin black line
-//   cover       square, min(78% of the width, 48% of the height), thin black frame, 16 grey levels, read from
+//               ([toc] appears once the .mp3z path is known; its slot is reserved from the start)
+//   cover       largest square of the remaining height, thin black frame, 16 grey levels, read from
 //               the track's ID3 APIC (placeholder box with the book title when there is none)
 //   title       book title: ID3 TALB, else the .mp3z's folder name, else its file name; bold, one line
-//   chapter     cleaned track name, italic, one line
+//   chapter     cleaned track name, italic, one line ("Pista k de n" when the name only repeats the title)
 //   scrubber    seek slider (tap or drag); elapsed / "-remaining" 8 px under it, aligned with the line ends
 //   transport   [|<]  [-30]  [ play/pause ]  [+30]  [>|]   (stock prev/next chapter buttons keep their wiring)
 //   bottom bar  [-] 55% [+]          ( timer 15 min )          [bt] headset name
@@ -37,7 +38,9 @@
 //   - BluetoothManager: read once per reader, deferred after the first setMedia (sink path and name). Software
 //     volume and unmute at most once per device per Nickel run; setVolume only when the level changed, 300 ms
 //     after the last volume tap. Never on taps, ticks or play/pause changes. btVolume is saved 2 s after the
-//     last tap. The Bluetooth chip only consumes the tap (one deferred re-read per reader).
+//     last tap. The Bluetooth chip only consumes the tap (one deferred re-read per reader). Volume changes made
+//     on the headset arrive as Device1ProxyFacade::volumeChanged (a Qt signal, no polling): the % follows, nothing
+//     is sent back.
 //   - Monochrome: icons are pure black/white (no antialiased greys), the cover has 16 grey levels (dithered).
 //   - Fast refresh: a flush that only covers our black/white controls (times, slider, buttons in their pressed
 //     state, volume, sleep label) asks the Kobo platform plugin for a DU partial update instead of the default
@@ -46,8 +49,9 @@
 //   - Fixed geometry: every row has a fixed height, every changing text a fixed width from its worst case; our
 //     texts paint themselves, so a text change repaints its own rect and never relayouts.
 //   - The slider is opaque and repaints only the band between the old and the new knob position.
-//   - Tap feedback: our buttons paint a pressed state for 120 ms; stock TouchLabels use their own selected
-//     pixmap. No stylesheet repolish ever, no feedback on the back link or the cover.
+//   - Tap feedback: our buttons paint a 3 px outline for 120 ms (never a filled block); the stock TouchLabels
+//     (play/pause, +-30, prev/next) get their normal icon as the selected pixmap, so pressing shows no change.
+//     No stylesheet repolish ever, no feedback on the back link or the cover.
 //   - Ticks: every 5 s while playing and visible, only elapsed/remaining and the slider (one band); the footer
 //     at most every 60 s or on a track change; the sleep label only when its minute changes. The timer stops
 //     when paused or when the reader is hidden; nothing under the track list is repainted while it is open.
@@ -201,21 +205,33 @@ static int volumePercent() {
     return (btVolumeLoad() * 100 + 63) / 127;
 }
 
-// The headset's display name, or empty. Only from the deferred Bluetooth read.
-static QString headsetName(const QString &dev) {
-    if (dev.isEmpty() || !BluetoothDevice_BluetoothDevice || !BluetoothDevice_displayName || !BluetoothDevice_destroy)
+// The headset's display name (or empty) and its Device1ProxyFacade (or null). Only from the deferred Bluetooth
+// read. 4.45 (RE): BluetoothDevice is a QPointer {ExternalRefCountData *d, QObject *object} to the facade that
+// BluetoothManager keeps in its QMap<QString, Device1ProxyFacade*> (the ctor stores getAndRef(object), object),
+// or {0, 0} when the device left that map. The facade outlives this temporary (the map owns it).
+static QString headsetInfo(const QString &dev, QPointer<QObject> *facade) {
+    if (dev.isEmpty() || !BluetoothDevice_BluetoothDevice || !BluetoothDevice_destroy)
         return QString();
     void *device[8]; // 8 bytes on 4.45, padded in case a firmware grows it
     memset(device, 0, sizeof device);
     BluetoothDevice_BluetoothDevice(device, dev);
-    // 4.45 (RE): the ctor stores {QPointer d, object} or {0, 0} when the device left the manager's map;
     // displayName -> name()/address() check isValid() first. Skip the call (and its warning) when empty.
     QString name;
-    if (device[0] && device[1])
-        name = BluetoothDevice_displayName(device);
+    if (device[0] && device[1]) {
+        if (BluetoothDevice_displayName)
+            name = BluetoothDevice_displayName(device);
+        if (facade)
+            *facade = static_cast<QObject *>(device[1]); // still referenced by `device` here
+    }
     BluetoothDevice_destroy(device);
     return name.trimmed();
 }
+
+// Device1ProxyFacade::volumeChanged(int left, bool leftMuted, int right, bool rightMuted), 4.45 (RE, moc data and
+// Device1ProxyFacade::propertiesChanged): emitted from the D-Bus PropertiesChanged of the device's PCM "Volume"
+// (uint16: left = bits 8-14, right = bits 0-6, 0..127, bit 7 of each byte = muted), after the cached values were
+// updated. That is the headset's own volume buttons, and the echo of our setVolume. Connected by name, with that
+// exact normalized signature, in AioAudio::watchHeadset.
 
 // MP3Reader layout on 4.45 (RE): Volume embedded at +0x24 (the constructor runs Volume::Volume on this+0x24,
 // which stores &_ZTV6Volume + 8 as its first word), QVector<Shortcover> at +0x2c, current index at +0x30,
@@ -816,19 +832,6 @@ static QImage grey16(const QImage &src) {
     return img.convertToFormat(QImage::Format_Indexed8, greys, Qt::OrderedDither);
 }
 
-// Pressed state: the icon in white on a black box.
-static QPixmap inverted(const QPixmap &pm, const QSize &box) {
-    QSize sz = box.expandedTo(pm.size());
-    QImage img(sz, QImage::Format_ARGB32_Premultiplied);
-    img.fill(Qt::white);
-    {
-        QPainter p(&img);
-        p.drawPixmap((sz.width() - pm.width()) / 2, (sz.height() - pm.height()) / 2, pm);
-    }
-    img.invertPixels();
-    return QPixmap::fromImage(img);
-}
-
 // Thin black frame of width lw around `r` (inside it).
 static void drawFrame(QPainter &p, const QRect &r, int lw) {
     p.fillRect(QRect(r.left(), r.top(), r.width(), lw), Qt::black);
@@ -952,8 +955,6 @@ AioTap::AioTap(QWidget *parent, const QPixmap &i, const QFont &f, bool c, bool f
       pressTimer(new QTimer(this)), inverted(false), inset(0) {
     setAttribute(Qt::WA_AcceptTouchEvents);
     setAttribute(Qt::WA_OpaquePaintEvent);
-    if (!icon.isNull() && feedback)
-        iconInv = ::inverted(icon, icon.size());
     pressTimer->setSingleShot(true);
     pressTimer->setInterval(120);
     connect(pressTimer, SIGNAL(timeout()), this, SLOT(unpress()));
@@ -1005,20 +1006,34 @@ void AioTap::fitWidth(const QStringList &texts, int minWidth) {
     setFixedWidth(qMax(minWidth, w));
 }
 
-// Pure black and white (no antialiased outline): the pressed state and the inverted state are white on black.
+// Pure black and white (no antialiased outline). The inverted state (current track) is white on black; the
+// pressed state is only a 3 px outline (chip: its pill drawn 3 px wide), never a filled block.
 void AioTap::paintEvent(QPaintEvent *) {
     QPainter p(this);
-    const bool dark = pressed != inverted;
+    const bool dark = inverted;
     p.fillRect(rect(), Qt::white);
     const QRect b = box();
     if (chip) {
-        const int lw = qMax(2, height() / 48);
+        const int lw = pressed ? qMax(3, height() / 48) : qMax(2, height() / 48);
         const qreal radius = b.height() / 2.0;
         p.setPen(dark ? QPen(Qt::NoPen) : QPen(Qt::black, lw));
         p.setBrush(dark ? QBrush(Qt::black) : QBrush(Qt::NoBrush));
         p.drawRoundedRect(QRectF(b).adjusted(lw / 2.0, lw / 2.0, -lw / 2.0, -lw / 2.0), radius, radius);
-    } else if (dark) {
-        p.fillRect(b, Qt::black);
+        if (dark && pressed) {
+            p.setPen(QPen(Qt::white, 3));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(QRectF(b).adjusted(4.5, 4.5, -4.5, -4.5), radius - 3, radius - 3);
+        }
+    } else {
+        if (dark)
+            p.fillRect(b, Qt::black);
+        if (pressed) {
+            const QColor c = dark ? Qt::white : Qt::black;
+            p.fillRect(QRect(b.left(), b.top(), b.width(), 3), c);
+            p.fillRect(QRect(b.left(), b.bottom() - 2, b.width(), 3), c);
+            p.fillRect(QRect(b.left(), b.top(), 3, b.height()), c);
+            p.fillRect(QRect(b.right() - 2, b.top(), 3, b.height()), c);
+        }
     }
     QFontMetrics fm(face);
     const int pad = padding();
@@ -1032,7 +1047,7 @@ void AioTap::paintEvent(QPaintEvent *) {
     else if (align & Qt::AlignRight)
         x = b.right() + 1 - pad - dw - cw;
     if (!icon.isNull()) {
-        p.drawPixmap(x, (height() - icon.height()) / 2, dark && !iconInv.isNull() ? iconInv : icon);
+        p.drawPixmap(x, (height() - icon.height()) / 2, icon);
         x += icon.width() + g;
     }
     p.setFont(face);
@@ -1288,7 +1303,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     scale = h / 1680.0;
     if (w > h)
         nh_log("AIO Audio: landscape screen (%dx%d), layout scaled by %.2f", w, h, double(scale));
-    // First guess from the screen; relayout() measures the reader on Show and resizes the cover to fit.
+    // First guess from the screen (refined once the fixed rows are known); the cover row's Resize sets the real one.
     int side = qMax(px(200), qMin(w * 78 / 100, h * 48 / 100));
     coverBox = QSize(side, side);
     const int target = px(106);                  // 9 mm at 300 ppi
@@ -1372,18 +1387,6 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         }
     }
 
-    // The book: its .mp3z path names the title when the tags do not.
-    if (layoutOk)
-        bookPath = readerPath(r);
-    if (!bookPath.isEmpty()) {
-        const QFileInfo fi(bookPath);
-        const QString dir = fi.dir().dirName();
-        const bool generic = dir.isEmpty() || dir.startsWith(QLatin1Char('.')) || dir == QLatin1String("onboard") ||
-                             dir == QLatin1String("mnt");
-        fallbackTitle = generic ? fi.completeBaseName() : dir;
-        fallbackTitle = fallbackTitle.trimmed();
-    }
-
     AioPane *root = new AioPane(r, Qt::white);
     root->setObjectName("aioRoot");
     rootPane = root;
@@ -1391,12 +1394,12 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     const int bottomMargin = px(16);
     v->setContentsMargins(px(32), 0, px(32), bottomMargin);
     v->setSpacing(0);
-    const int gapMin = px(8);                    // under every stretch: groups never touch
+    const int gapMin = px(8);
+    const int gap = px(24);                      // between groups: fixed, the cover row takes what is left
     int fixed = bottomMargin;
-    auto addGap = [v, gapMin, &fixed]() {
-        v->addSpacing(gapMin);
-        v->addStretch(1);
-        fixed += gapMin;
+    auto addGap = [v, gap, &fixed]() {
+        v->addSpacing(gap);
+        fixed += gap;
     };
 
     // Header: [<] Mis libros .............. [toc] (1x)
@@ -1419,13 +1422,19 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         hl->addWidget(backTap);
     }
     hl->addStretch(1);
-    if (layoutOk && MP3Reader_goToPageFn && !bookPath.isEmpty()) {
-        AioTap *tt = new AioTap(header, nickelIcon(":/images/reading/reading_toc.png", px(48), G_TOC), fChip, false, true);
+    if (layoutOk && MP3Reader_goToPageFn) {
+        // The book path is only known once libmp3z fills its Volume (setPage): the button waits hidden in a
+        // fixed-size slot (resolveBook shows it), so nothing in the header moves when it appears.
+        AioPane *slot = new AioPane(header);
+        slot->setFixedSize(target, headerH);
+        AioTap *tt = new AioTap(slot, nickelIcon(":/images/reading/reading_toc.png", px(48), G_TOC), fChip, false, true);
         tt->setObjectName("aioToc");
         tt->setFixedSize(target, headerH);
+        tt->move(0, 0);
+        tt->hide();
         connect(tt, SIGNAL(tapped()), this, SLOT(openToc()));
         tocTap = tt;
-        hl->addWidget(tt);
+        hl->addWidget(slot);
         hl->addSpacing(px(12));
         fastWidgets << QPointer<QWidget>(tt);
     }
@@ -1449,23 +1458,20 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     fixed += headerH + lineH;
     addGap();
 
-    // Cover, centred, framed (its size follows the reader's height: relayout()).
+    // Cover row: the only expanding item of the column. No layout inside it (its minimum size stays small, so
+    // it can also shrink): layoutCover() centres the largest square that fits whenever the row is resized.
     AioPane *cvr = new AioPane(root);
-    cvr->setFixedHeight(side);
+    cvr->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
+    cvr->setMinimumHeight(px(160));
     coverRow = cvr;
-    QHBoxLayout *cr = new QHBoxLayout(cvr);
-    cr->setContentsMargins(0, 0, 0, 0);
-    cr->setSpacing(0);
+    cover->setParent(cvr);
     cover->setFixedSize(coverBox);
+    cover->move(0, 0);
     cover->setAlignment(Qt::AlignCenter);
     cover->setProperty("aioCoverSlot", true); // the stock cover lambda may not move it, its pictures get framed
-    cr->addStretch(1);
-    cr->addWidget(cover);
-    cr->addStretch(1);
-    v->addWidget(cvr);
-    if (const QPixmap *pm = cover->pixmap())
-        if (!pm->isNull())
-            cover->setPixmap(framedCover(*pm));
+    cover->show();
+    v->addWidget(cvr, 1);
+    cvr->installEventFilter(this);            // Resize: the cover follows the row
     addGap();
 
     // Book title and chapter, one line each.
@@ -1539,7 +1545,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         prev->setFixedSize(cb);
         prev->setAlignment(Qt::AlignCenter);
         prev->setText(QString());
-        setIcon(prev, glyph(G_SKIP_PREV, px(60)), cb);
+        setIcon(prev, glyph(G_SKIP_PREV, px(60)));
         prev->setProperty("aioOwned", true);
         onTap(prev, this, "userSkip()");
         addButton(prev);
@@ -1547,7 +1553,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     if (seekButtons) {
         back->setFixedSize(sb, sb);
         back->setAlignment(Qt::AlignCenter);
-        setIcon(back, nickelIcon(":/images/audiobook/backward_button.png", px(100), G_BACK30), QSize(sb, sb));
+        setIcon(back, nickelIcon(":/images/audiobook/backward_button.png", px(100), G_BACK30));
         back->setProperty("aioOwned", true);
         onTap(back, this, "rewind()"); // stock: empty slots
         addButton(back);
@@ -1555,17 +1561,13 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     playPause->setFixedSize(playBox);
     playPause->setAlignment(Qt::AlignCenter);
     playPause->setProperty("aioOwned", true);
-    if (TouchLabel_setSelectedPixmap && playPause->inherits("TouchLabel")) { // pressed states, once per reader
-        playIconInv = inverted(playIcon, playBox);
-        pauseIconInv = inverted(pauseIcon, playBox);
-    }
     playing = playPause->text() == QString::fromUtf8("Pausa") || playPause->text() == QLatin1String("Pause");
-    setIcon(playPause, playing ? pauseIcon : playIcon, playBox, playing ? pauseIconInv : playIconInv);
+    setIcon(playPause, playing ? pauseIcon : playIcon);
     addButton(playPause);
     if (seekButtons) {
         fwd->setFixedSize(sb, sb);
         fwd->setAlignment(Qt::AlignCenter);
-        setIcon(fwd, nickelIcon(":/images/audiobook/forward_button.png", px(100), G_FWD30), QSize(sb, sb));
+        setIcon(fwd, nickelIcon(":/images/audiobook/forward_button.png", px(100), G_FWD30));
         fwd->setProperty("aioOwned", true);
         onTap(fwd, this, "ahead()");
         addButton(fwd);
@@ -1574,7 +1576,7 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
         next->setFixedSize(cb);
         next->setAlignment(Qt::AlignCenter);
         next->setText(QString());
-        setIcon(next, glyph(G_SKIP_NEXT, px(60)), cb);
+        setIcon(next, glyph(G_SKIP_NEXT, px(60)));
         next->setProperty("aioOwned", true);
         onTap(next, this, "userSkip()");
         addButton(next);
@@ -1620,8 +1622,8 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
             l->setAlignment(Qt::AlignCenter);
             l->setProperty("aioOwned", true);
         }
-        setIcon(volDown, glyph(G_MINUS, px(48)), cb);
-        setIcon(volUp, glyph(G_PLUS, px(48)), cb);
+        setIcon(volDown, glyph(G_MINUS, px(48)));
+        setIcon(volUp, glyph(G_PLUS, px(48)));
         if (volume->text().startsWith(QString::fromUtf8("Volumen ")))
             volume->setText(volume->text().mid(8));
         volume->setAlignment(Qt::AlignCenter);
@@ -1667,7 +1669,14 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     footerText = ft;
     v->addWidget(ft);
     fixed += footH;
-    fixedH = fixed;
+    // Better first guess for the decode at the first setMedia (before the reader is laid out): the screen
+    // height minus every fixed row. The row's real size replaces it (layoutCover).
+    side = qMax(px(160), qMin(w - 2 * px(32), h - fixed) - px(16));
+    coverBox = QSize(side, side);
+    cover->setFixedSize(coverBox);
+    if (const QPixmap *pm = cover->pixmap())
+        if (!pm->isNull())
+            cover->setPixmap(framedCover(*pm));
 
     col->insertWidget(0, root, 1);
     col->invalidate();
@@ -1772,6 +1781,7 @@ bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
             refreshWindow();
             installGestureFilters();
             setKeyFilter(true);
+            resolveBook(); // retry: the path may have been empty at the first track
             relayout();
             tick();
             if (playing && !timer->isActive())
@@ -1779,6 +1789,8 @@ bool AioAudio::eventFilter(QObject *watched, QEvent *e) {
         } else if (type == QEvent::Resize) {
             relayout();
         }
+    } else if (watched == coverRow.data() && type == QEvent::Resize) {
+        layoutCover(); // only on layout changes, never per tick
     }
     return QObject::eventFilter(watched, e);
 }
@@ -1931,22 +1943,11 @@ bool AioAudio::fastRegion(const QRegion &region, QWindow *win) {
     return true;
 }
 
-// The cover: the largest square that fits the reader's height once every fixed row is placed.
+// The reader changed size: the column relays itself out (the cover row's Resize follows); the open track list
+// takes the new size.
 void AioAudio::relayout() {
-    if (!rootPane || !reader || !cover || !coverRow)
+    if (!rootPane || !reader)
         return;
-    const int h = reader->height(), w = reader->width();
-    if (h < px(400) || w < px(300))
-        return; // not laid out yet
-    int side = qMin((w - 2 * px(32)) * 78 / 100, h * 48 / 100);
-    side = qMin(side, h - fixedH);
-    side = qMax(side, px(160));
-    if (side == coverBox.width() && coverRow->minimumHeight() == side)
-        return;
-    coverBox = QSize(side, side);
-    cover->setFixedSize(coverBox);
-    coverRow->setFixedHeight(side);
-    redrawCover();
     if (tocPane && tocPane->isVisible()) {
         tocPane->setGeometry(rootPane->rect());
         layoutToc();
@@ -1954,13 +1955,68 @@ void AioAudio::relayout() {
     }
 }
 
+// The largest square that fits the cover row (a small margin around it), centred. A change of more than 8 px
+// decodes the picture again at the new size from the kept APIC bytes (the small cached image is never scaled up).
+void AioAudio::layoutCover() {
+    if (!cover || !coverRow || !reader)
+        return;
+    const int rw = coverRow->width(), rh = coverRow->height();
+    if (rw < px(100) || rh < px(100))
+        return; // not laid out yet
+    const int side = qMax(px(80), qMin(rw, rh) - px(8));
+    const bool resize = qAbs(side - coverBox.width()) > 8;
+    if (resize) {
+        coverBox = QSize(side, side);
+        cover->setFixedSize(coverBox);
+    }
+    cover->move((rw - coverBox.width()) / 2, (rh - coverBox.height()) / 2);
+    if (!resize)
+        return;
+    static int logged = 0;
+    if (logged < 3) {
+        logged++;
+        nh_log("AIO Audio: reader %dx%d, cover row %dx%d, cover %d px", reader->width(), reader->height(), rw, rh,
+               side);
+    }
+    redrawCover();
+}
+
 void AioAudio::redrawCover() {
     if (!cover)
+        return;
+    if (!coverJpeg.isEmpty() && decodeCover())
         return;
     if (!coverSrc.isNull())
         cover->setPixmap(framed(coverSrc, coverBox, frameWidth())); // straight to QtWidgets (not hooked)
     else if (placeholder)
         drawPlaceholder();
+}
+
+// coverJpeg decoded at the size of coverBox (the JPEG handler scales while decoding), 16 greys, framed.
+bool AioAudio::decodeCover() {
+    if (!cover || coverJpeg.isEmpty())
+        return false;
+    const int lw = frameWidth();
+    QBuffer buf(&coverJpeg);
+    buf.open(QIODevice::ReadOnly);
+    QImageReader jr(&buf);
+    const QSize native = jr.size();
+    if (!native.isValid() || native.width() > 8000 || native.height() > 8000)
+        return false;
+    const QByteArray fmt = jr.format().toLower();
+    if (fmt != "jpeg" && fmt != "jpg" && qint64(native.width()) * native.height() > 4000000)
+        return false; // only JPEG decodes at the scaled size: others would be decoded whole first
+    const QSize inner(qMax(1, coverBox.width() - 2 * lw), qMax(1, coverBox.height() - 2 * lw));
+    if (native.width() > inner.width() || native.height() > inner.height())
+        jr.setScaledSize(native.scaled(inner, Qt::KeepAspectRatio)); // smaller pictures stay at their own size
+    const QImage img = jr.read();
+    if (img.isNull())
+        return false;
+    cover->setProperty("aioCover", true);
+    coverSrc = img;
+    placeholder = false;
+    cover->setPixmap(framed(img, coverBox, lw)); // straight to QtWidgets (not hooked)
+    return true;
 }
 
 // No picture anywhere yet: a framed box with the book title (the stock lambda may still replace it).
@@ -2224,23 +2280,25 @@ void AioAudio::schedule() {
     }
 }
 
-// `inv`: the pressed state already built (play/pause flips often), otherwise built here.
-void AioAudio::setIcon(QLabel *l, const QPixmap &pm, const QSize &box, const QPixmap &inv) {
+// No visual pressed state on the stock buttons: the TouchLabel's selected pixmap is the same icon (a black
+// inverted block looked bad on e-ink; the play/pause swap and the time are the feedback).
+void AioAudio::setIcon(QLabel *l, const QPixmap &pm) {
     if (!l || pm.isNull())
         return;
     l->setPixmap(pm); // straight to QtWidgets: our setPixmap hook only covers libmp3z's PLT
-    if (l->inherits("TouchLabel")) { // the TouchLabel paints its own pressed state with the selected pixmap
+    if (l->inherits("TouchLabel")) { // the TouchLabel swaps to its selected pixmap while pressed
         if (TouchLabel_setDeselectedPixmap)
             TouchLabel_setDeselectedPixmap(l, pm);
         if (TouchLabel_setSelectedPixmap)
-            TouchLabel_setSelectedPixmap(l, inv.isNull() ? inverted(pm, box) : inv);
+            TouchLabel_setSelectedPixmap(l, pm);
     }
 }
 
 QPixmap AioAudio::framedCover(const QPixmap &pm) {
     if (pm.isNull())
         return pm;
-    coverSrc = pm.toImage(); // re-framed if relayout() changes the box
+    coverSrc = pm.toImage(); // re-framed if layoutCover() changes the box
+    coverJpeg = QByteArray(); // this picture is the one shown, not an older APIC
     placeholder = false;
     return framed(coverSrc, coverBox, frameWidth());
 }
@@ -2300,6 +2358,11 @@ void AioAudio::media(QObject *p, int index, const QByteArray &mp3, bool hasData)
     // AUDIO-FIX: stock setPage just called applyVolume(10) (10 % stream gain) and never sets the headset's
     // volume. Full stream gain (local, no D-Bus); the headset level goes once, deferred, per reader.
     applyGain();
+    resolveBook(); // setPage has filled the Volume (it opened the archive from its id): before setTrack's title
+    if (bookPath.isEmpty() && layoutOk && !pathLogged) {
+        pathLogged = true;
+        nh_log("AIO Audio: .mp3z path still unknown at the first track (no track list, no folder title yet)");
+    }
     setTrack(index, mp3);
     if (hasData)
         setCover(mp3);
@@ -2308,6 +2371,39 @@ void AioAudio::media(QObject *p, int index, const QByteArray &mp3, bool hasData)
         requestBluetooth();
     }
     tick();
+}
+
+// The .mp3z path (Content::getId of the Volume at MP3Reader+0x24), read until it is valid: empty in the
+// constructor (the Volume is filled later by renderVolume/setPage), so this runs on every setMedia and Show until
+// it succeeds. Then: the folder (or file) name as the fallback title, and the track list button.
+void AioAudio::resolveBook() {
+    if (!bookPath.isEmpty() || !layoutOk || !reader)
+        return;
+    bookPath = readerPath(reader.data());
+    if (bookPath.isEmpty())
+        return;
+    const QFileInfo fi(bookPath);
+    const QString dir = fi.dir().dirName();
+    const bool generic = dir.isEmpty() || dir.startsWith(QLatin1Char('.')) || dir == QLatin1String("onboard") ||
+                         dir == QLatin1String("mnt");
+    fallbackTitle = (generic ? fi.completeBaseName() : dir).trimmed();
+    if (pathLogged)
+        nh_log("AIO Audio: .mp3z path known now");
+    if (tocTap)
+        tocTap->show(); // its slot keeps the space reserved: nothing else in the header moves
+    // A track already started without TALB and without a name: the folder names it now (setTrack does this
+    // itself when the path is known before the first track, which keeps the resume of the saved position).
+    if (started && bookTitle.isEmpty() && !fallbackTitle.isEmpty()) {
+        bookTitle = fallbackTitle;
+        if (titleText)
+            titleText->setText(bookTitle);
+        const QMap<int, qint64> learned = durations;
+        loadState();
+        for (QMap<int, qint64>::const_iterator it = learned.constBegin(); it != learned.constEnd(); ++it)
+            durations.insert(it.key(), it.value());
+        footerDirty = true;
+        updateChapterLine();
+    }
 }
 
 QString AioAudio::bookKey() const {
@@ -2424,6 +2520,7 @@ void AioAudio::setTrack(int index, const QByteArray &mp3) {
     }
     if (speedIndex != 0)
         QTimer::singleShot(1500, this, SLOT(applyRate()));
+    updateChapterLine(); // the title or the track number may have changed
 }
 
 void AioAudio::applyPending() {
@@ -2516,7 +2613,7 @@ void AioAudio::applyPlayState() {
         return;
     iconSet = true;
     QLabel *label = playPause.data();
-    setIcon(label, now ? pauseIcon : playIcon, playBox, now ? pauseIconInv : playIconInv);
+    setIcon(label, now ? pauseIcon : playIcon);
     const bool was = playing;
     playing = now;
     tick();
@@ -2546,14 +2643,46 @@ void AioAudio::savePaused() {
 }
 
 void AioAudio::setChapter(const QString &name) {
-    if (chapterText)
-        chapterText->setText(dedupe(name)); // the track name only ("Pista k de n" is in the footer)
+    chapterName = name;
+    updateChapterLine();
+}
+
+// The track name; when it only repeats the book title ("Parte 1 · 2/15" under "Parte 1"), "Pista k de n" instead
+// (k/n from the name's " · k/n", else the track number). The footer is unchanged.
+void AioAudio::updateChapterLine() {
+    if (!chapterText)
+        return;
+    const QString line = dedupe(chapterName);
+    const QString title = (titleText ? titleText->text() : bookTitle).trimmed();
+    QString base = line;
+    int k = 0, n = 0;
+    static const QRegExp suffix(QString::fromUtf8("\\s*·\\s*(\\d+)/(\\d+)$"));
+    QRegExp re(suffix);
+    const int at = re.indexIn(line);
+    if (at > 0) {
+        base = line.left(at);
+        k = re.cap(1).toInt();
+        n = re.cap(2).toInt();
+    }
+    if (title.isEmpty() || base.trimmed().compare(title, Qt::CaseInsensitive) != 0) {
+        chapterText->setText(line);
+        return;
+    }
+    if (k <= 0 || n < k) {
+        k = trackNo;
+        n = trackCount;
+    }
+    if (k <= 0)
+        chapterText->setText(line); // nothing to number: the name, even if it repeats the title
+    else if (n >= k)
+        chapterText->setText(QString("Pista %1 de %2").arg(k).arg(n));
+    else
+        chapterText->setText(QString("Pista %1").arg(k));
 }
 
 void AioAudio::setCover(const QByteArray &mp3) {
     if (!cover)
         return;
-    const int lw = frameWidth();
     QByteArray jpeg = apic(mp3);
     if (jpeg.isEmpty()) {
         const QPixmap *cur = cover->pixmap();
@@ -2567,25 +2696,11 @@ void AioAudio::setCover(const QByteArray &mp3) {
     int key = int(qHash(jpeg));
     if (key == coverKey && cover->property("aioCover").toBool())
         return;
-    QBuffer buf(&jpeg);
-    buf.open(QIODevice::ReadOnly);
-    QImageReader jr(&buf);
-    QSize native = jr.size();
-    if (!native.isValid() || native.width() > 8000 || native.height() > 8000)
+    coverJpeg = jpeg; // kept: decoded again when the cover box changes size
+    if (!decodeCover()) {
+        coverJpeg = QByteArray();
         return;
-    const QByteArray fmt = jr.format().toLower();
-    if (fmt != "jpeg" && fmt != "jpg" && qint64(native.width()) * native.height() > 4000000)
-        return; // only JPEG decodes at the scaled size: others would be decoded whole first
-
-    const QSize inner(qMax(1, coverBox.width() - 2 * lw), qMax(1, coverBox.height() - 2 * lw));
-    jr.setScaledSize(native.scaled(inner, Qt::KeepAspectRatio)); // the JPEG handler decodes at that scale
-    QImage img = jr.read();
-    if (img.isNull())
-        return;
-    cover->setProperty("aioCover", true);
-    coverSrc = img;
-    placeholder = false;
-    cover->setPixmap(framed(img, coverBox, lw));
+    }
     coverKey = key;
 }
 
@@ -2819,6 +2934,7 @@ bool AioAudio::sendVolume() {
     if (!self)
         return false;
     sentVolume = v;
+    volSendClock.start(); // the headset reports it back: not a change made on the headset
     nh_log("AIO Audio: headset volume %d/127", v);
     return true;
 }
@@ -2906,11 +3022,14 @@ bool AioAudio::readBluetooth() {
         }
         if (!sendVolume())
             return false;
-        const QString name = headsetName(dev);
+        QPointer<QObject> facade;
+        const QString name = headsetInfo(dev, &facade);
         if (!self)
             return false;
-        if (btDev == dev)
+        if (btDev == dev) {
             btName = name;
+            watchHeadset(facade.data());
+        }
     }
     applyGain();
     updateBtChip();
@@ -2928,6 +3047,49 @@ void AioAudio::btTapped() {
 void AioAudio::updateBtChip() {
     if (btTap)
         btTap->setText(btName.isEmpty() ? QString::fromLatin1("Bluetooth") : btName);
+}
+
+// The headset's volume buttons: a Qt signal of the cached facade (no D-Bus call of ours, no polling). Only with our
+// own volume (the % label); checked by class and signal name, else nothing is connected.
+void AioAudio::watchHeadset(QObject *facade) {
+    if (facade == btFacade.data())
+        return;
+    if (btFacade)
+        btFacade->disconnect(this); // every connection from the old facade to us
+    btFacade = 0;
+    if (!facade || !volText)
+        return;
+    const QMetaObject *mo = facade->metaObject();
+    if (qstrcmp(mo->className(), "Device1ProxyFacade") ||
+        mo->indexOfSignal("volumeChanged(int,bool,int,bool)") < 0) {
+        nh_log("AIO Audio: headset volume signal not found, the %% follows our buttons only");
+        return;
+    }
+    if (!connect(facade, SIGNAL(volumeChanged(int,bool,int,bool)), this, SLOT(headsetVolume(int,bool,int,bool))))
+        return;
+    btFacade = facade;
+}
+
+// The headset changed its volume: our level and the % follow (saved 2 s later), nothing is sent back. Ignored
+// while our own change is pending or just sent (its echo, or an older one, must not undo a newer tap).
+void AioAudio::headsetVolume(int left, bool, int, bool) {
+    if (!btFacade || sender() != btFacade.data() || btDev.isEmpty() || !volText)
+        return;
+    if (volApplyTimer->isActive() || (volSendClock.isValid() && volSendClock.elapsed() < 1500))
+        return;
+    if (left < 0 || left > 127)
+        return;
+    sentVolume = left; // the headset already has it
+    if (left == btVolumeLoad())
+        return;
+    btVolume = left;
+    showVolume(); // AioText: repaints only when the text changes
+    volSaveTimer->start();
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        nh_log("AIO Audio: headset volume changed on the headset (%d/127), followed", left);
+    }
 }
 
 // -- hooks ----------------------------------------------------------------------------------------------
