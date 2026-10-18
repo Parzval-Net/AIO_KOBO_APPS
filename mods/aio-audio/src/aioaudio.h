@@ -184,6 +184,7 @@ public Q_SLOTS:
     void applyRate();
     void onDuration();
     void applyPlayState();
+    void tapPlayPause();
     void volumeDown();
     void volumeUp();
     void refreshBluetooth();
@@ -255,6 +256,8 @@ private:
     QElapsedTimer burstClock, saveClock; // first flip of a play/pause burst; last position save on pause
     int wantPlaying = -1;
     bool iconSet = false;
+    int shownPlaying = -1;      // icon on screen: 1 pause icon, 0 play icon
+    void showPlayIcon(bool playing);
     QPixmap playIcon, pauseIcon;
     QSize playBox, coverBox;
     qreal scale = 1;

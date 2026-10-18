@@ -1563,6 +1563,8 @@ AioAudio::AioAudio(QWidget *r) : QObject(r), reader(r) {
     playPause->setProperty("aioOwned", true);
     playing = playPause->text() == QString::fromUtf8("Pausa") || playPause->text() == QLatin1String("Pause");
     setIcon(playPause, playing ? pauseIcon : playIcon);
+    shownPlaying = playing ? 1 : 0;
+    onTap(playPause, this, "tapPlayPause()"); // the icon flips on the tap; GStreamer confirms it later
     addButton(playPause);
     if (seekButtons) {
         fwd->setFixedSize(sb, sb);
@@ -2007,8 +2009,7 @@ bool AioAudio::decodeCover() {
     if (fmt != "jpeg" && fmt != "jpg" && qint64(native.width()) * native.height() > 4000000)
         return false; // only JPEG decodes at the scaled size: others would be decoded whole first
     const QSize inner(qMax(1, coverBox.width() - 2 * lw), qMax(1, coverBox.height() - 2 * lw));
-    if (native.width() > inner.width() || native.height() > inner.height())
-        jr.setScaledSize(native.scaled(inner, Qt::KeepAspectRatio)); // smaller pictures stay at their own size
+    jr.setScaledSize(native.scaled(inner, Qt::KeepAspectRatio)); // always fill the box: small covers grow too
     const QImage img = jr.read();
     if (img.isNull())
         return false;
@@ -2604,6 +2605,19 @@ bool AioAudio::playPauseText(QLabel *label, const QString &text) {
     return true;
 }
 
+// Tap on play/pause: show the new state at once (GStreamer needs a moment, then applyPlayState confirms it).
+void AioAudio::tapPlayPause() {
+    const bool current = wantPlaying >= 0 ? wantPlaying == 1 : playing;
+    showPlayIcon(!current);
+}
+
+void AioAudio::showPlayIcon(bool pl) {
+    if (!playPause || shownPlaying == (pl ? 1 : 0))
+        return;
+    shownPlaying = pl ? 1 : 0;
+    setIcon(playPause.data(), pl ? pauseIcon : playIcon);
+}
+
 void AioAudio::applyPlayState() {
     if (wantPlaying < 0 || !playPause)
         return;
@@ -2612,8 +2626,7 @@ void AioAudio::applyPlayState() {
     if (now == playing && iconSet)
         return;
     iconSet = true;
-    QLabel *label = playPause.data();
-    setIcon(label, now ? pauseIcon : playIcon);
+    showPlayIcon(now);
     const bool was = playing;
     playing = now;
     tick();
