@@ -1032,6 +1032,22 @@ class PinArtifactTests(unittest.TestCase):
 
 
 
+class HideHomeTabTests(TempKobo):
+    def test_hide_home_tab(self):
+        from kobo_aio.core import REGISTRY
+        from kobo_aio.modules import menu
+        from kobo_aio.core import Context
+        (self.root / ".adds" / "nm").mkdir(parents=True)
+        mod = REGISTRY["nm.menu"]
+        ctx = Context(device=parse_version_file(self.root), txn=txnmod.Transaction(self.root, "S"))
+        self.assertFalse(mod.resolved_options({})["hide_home"])   # off unless asked
+        menu._menu_apply(mod, ctx, mod.resolved_options({"simple_tabs": True, "hide_home": True}))
+        cfg = (self.root / ".adds/nm/kobo-aio-menu").read_text()
+        self.assertIn("experimental :menu_main_15505_0_enabled :0", cfg)   # Home button hidden
+        self.assertIn("experimental :menu_main_15505_1_label :Libros", cfg)
+        menu._menu_apply(mod, ctx, mod.resolved_options({"simple_tabs": True}))
+        self.assertIn("experimental :menu_main_15505_0_enabled :1", (self.root / ".adds/nm/kobo-aio-menu").read_text())
+
 class RetiredOptionTests(unittest.TestCase):
     def test_old_menu_selection_still_valid(self):
         from kobo_aio.core import REGISTRY

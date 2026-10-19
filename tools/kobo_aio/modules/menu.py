@@ -62,7 +62,7 @@ def _menu_apply(mod, ctx, opts):
         # Tab indexes on 4.41+: 0 Home, 1 My Books, 2 Activity, 3 My Notebooks, 4 Discover, 5 More (NickelMenu doc)
         header += [
             "experimental :menu_main_15505_enabled :1",
-            "experimental :menu_main_15505_0_enabled :1",
+            f"experimental :menu_main_15505_0_enabled :{0 if opts['hide_home'] else 1}",
             "experimental :menu_main_15505_1_label :Libros",
             "experimental :menu_main_15505_2_enabled :1",
             "experimental :menu_main_15505_2_label :Actividad",
@@ -102,6 +102,9 @@ register(Module(
         Option("simple_tabs", "Reordenar pestañas inferiores", "bool", False),
         Option("notebooks", "Mostrar Cuadernos", "bool", False),
         Option("hide_discover", "Ocultar Descubrir (tienda)", "bool", True),
+        Option("hide_home", "Ocultar Inicio (sin cuenta Kobo muestra lo mismo que Mis libros)", "bool", False,
+               help="Requiere «Reordenar pestañas inferiores». Al cerrar un libro vuelves a Mis libros (probado en "
+                    "una Libra Colour con firmware 4.45)."),
         Option("replace_kp_preset", "Reemplazar el preset antiguo de KoboPatch Web UI (si existe)", "bool", True),
     ],
     sources=["https://github.com/pgaskin/NickelMenu/blob/master/res/doc",

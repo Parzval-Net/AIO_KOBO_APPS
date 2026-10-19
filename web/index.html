@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="aio-version" content="1.4.0">
+<meta name="aio-version" content="1.4.1">
 <title>Kobo AIO</title>
 <meta name="description" content="Mejora tu Kobo en minutos: menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros, diccionarios y más. Con respaldo y vuelta atrás.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='1.5' width='22' height='29' rx='5' fill='%231E1C18'/%3E%3Crect x='8' y='4.5' width='16' height='20' rx='1.8' fill='%23F3EFE6'/%3E%3Cpath d='M18.5 4.5h4v9l-2-1.6-2 1.6z' fill='%23C2553E'/%3E%3C/svg%3E">
@@ -703,8 +703,8 @@ const GROUPS = [
 const BASE = ["maint.backup", "conf.exclude_sync", "mod.nickelmenu", "nm.menu", "mod.nickelhome", "mod.nickeltypefix", "fonts.ebook", "maint.clean_macos", "maint.no_spotlight"];
 const PROFILES = [
   { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad", "Pestaña de atajos", "Mejor tipografía y fuentes", "Respaldo y limpieza"], mods: BASE },
-  { id: "minimal", name: "Lector minimalista", desc: "Solo tus libros, sin tienda.", items: ["Todo lo esencial", "Modo sin cuenta Kobo", "Pestañas simplificadas"], mods: [...BASE, "conf.sideloaded"],
-    opts: { "nm.menu": { simple_tabs: true, hide_discover: true } } },
+  { id: "minimal", name: "Lector minimalista", desc: "Solo tus libros, sin tienda.", items: ["Todo lo esencial", "Modo sin cuenta Kobo", "Pestañas simplificadas, sin Inicio repetido"], mods: [...BASE, "conf.sideloaded"],
+    opts: { "nm.menu": { simple_tabs: true, hide_discover: true, hide_home: true } } },
   { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
   { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Game Boy (Ink-boy)", "Animación de página"], mods: [...BASE, "mod.nickelclock", "app.koreader", "app.koreader_plugins", "app.inkboy", "mod.nickeldissolve"],

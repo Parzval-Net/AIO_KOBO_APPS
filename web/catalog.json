@@ -1,5 +1,5 @@
 {
- "version": "1.4.0",
+ "version": "1.4.1",
  "device": null,
  "modules": [
   {
@@ -1605,6 +1605,14 @@
      "default": true,
      "choices": [],
      "help": ""
+    },
+    {
+     "id": "hide_home",
+     "label": "Ocultar Inicio (sin cuenta Kobo muestra lo mismo que Mis libros)",
+     "type": "bool",
+     "default": false,
+     "choices": [],
+     "help": "Requiere «Reordenar pestañas inferiores». Al cerrar un libro vuelves a Mis libros (probado en una Libra Colour con firmware 4.45)."
     },
     {
      "id": "replace_kp_preset",
