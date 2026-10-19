@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<meta name="aio-version" content="1.4.1">
+<meta name="aio-version" content="1.4.2">
 <title>Kobo AIO</title>
 <meta name="description" content="Mejora tu Kobo en minutos: menú de atajos, inicio sin publicidad, mejor tipografía, fuentes, cómics, audiolibros, diccionarios y más. Con respaldo y vuelta atrás.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='5' y='1.5' width='22' height='29' rx='5' fill='%231E1C18'/%3E%3Crect x='8' y='4.5' width='16' height='20' rx='1.8' fill='%23F3EFE6'/%3E%3Cpath d='M18.5 4.5h4v9l-2-1.6-2 1.6z' fill='%23C2553E'/%3E%3C/svg%3E">
@@ -682,6 +682,7 @@ const META = {
   "app.audiobook": ["Audiolibros en KOReader", "headphones", "c5", "Reproductor con capítulos y Bluetooth"],
   "mod.aioaudio": ["Reproductor de audiolibros", "headphones", "c4", "El lector stock con portada, capítulos, ±30 s, velocidad y temporizador"],
   "app.inkboy": ["Game Boy (Ink-boy)", "gamepad", "c6", "Juega Game Boy y GBC en tinta electrónica"],
+  "games.kobo": ["Juegos ocultos de Kobo", "gamepad", "c6", "Sudoku, Solitario, Word Scramble y Unblock It, a un toque"],
   "fw.kobopatch": ["Ajustes avanzados del sistema", "cpu", "c2", "Interlineado, márgenes y más (parches de firmware)"],
   "mod.nickelmodmanager": ["Gestor de mods en el Kobo", "sliders", "c1", "Activa o desactiva cada mod desde el propio lector"],
   "app.koreader_plugins": ["Plugins para KOReader", "grid", "c5", "Portadas, tienda de plugins, sincronización y envío por WiFi"],
@@ -697,7 +698,9 @@ const GROUPS = [
   ["Inicio y menú", "home", ["mod.nickelhome", "mod.nickelmenu", "nm.menu", "conf.preferences", "conf.sideloaded", "nm.owner"],
     "«Pestaña de atajos» agrega botones que tocas en el Kobo cuando los necesitas. «Ajustes ocultos» cambia opciones de Kobo una sola vez y no instala nada."],
   ["Lectura", "book", ["mod.nickeltypefix", "fonts.ebook", "mod.nickelclock", "mod.nickeldissolve", "mod.aioaudio"]],
-  ["Apps y juegos", "gamepad", ["app.koreader", "app.koreader_plugins", "app.cadmus", "app.audiobook", "app.inkboy"]],
+  ["Apps", "grid", ["app.koreader", "app.koreader_plugins", "app.cadmus", "app.audiobook"]],
+  ["Juegos", "gamepad", ["games.kobo", "app.inkboy"],
+    "Cada juego aparece como un botón en la Pestaña de atajos del Kobo. Actívalos o quítalos cuando quieras."],
   ["Avanzado", "cpu", ["fw.kobopatch"]],
 ];
 const BASE = ["maint.backup", "conf.exclude_sync", "mod.nickelmenu", "nm.menu", "mod.nickelhome", "mod.nickeltypefix", "fonts.ebook", "maint.clean_macos", "maint.no_spotlight"];
@@ -707,7 +710,7 @@ const PROFILES = [
     opts: { "nm.menu": { simple_tabs: true, hide_discover: true, hide_home: true } } },
   { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
-  { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Game Boy (Ink-boy)", "Animación de página"], mods: [...BASE, "mod.nickelclock", "app.koreader", "app.koreader_plugins", "app.inkboy", "mod.nickeldissolve"],
+  { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Juegos: Game Boy y los ocultos de Kobo", "Animación de página"], mods: [...BASE, "mod.nickelclock", "app.koreader", "app.koreader_plugins", "app.inkboy", "games.kobo", "mod.nickeldissolve"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
   { id: "custom", name: "A mi manera", desc: "Empieza en blanco y elige tú.", items: ["Sin nada marcado", "Ideal si ya conoces los mods"], mods: [] },
 ];
@@ -1407,6 +1410,7 @@ const PREVIEW = {
   "lib.sleep": d => [[`<div style="position:absolute;inset:0;background:${d && d.color ? "linear-gradient(160deg,#5a7a9a,#c9a35a)" : "linear-gradient(160deg,#555,#ddd)"}"></div><div style="position:absolute;bottom:6%;left:0;right:0;text-align:center;font:8px var(--sans);color:#fff">Tu imagen</div>`, "Pantalla de reposo propia"]],
   "lib.audiobooks": d => [[`${book(25, 8, 50, 40, "#5a5a8a")}<div class="pv-row" style="top:54%;height:4%;background:#bcb5a6"><span style="display:block;width:40%;height:100%;background:#22201C"></span></div><div class="pv-row" style="top:62%;text-align:center;font:9px var(--sans)">⏮ ⏯ ⏭</div><div class="pv-txt" style="top:74%;font:7px var(--sans)">Capítulo 3 · 12:41</div>`, "Portada y capítulos"]],
   "app.audiobook": d => PREVIEW["lib.audiobooks"](d),
+  "games.kobo": d => [[`<div class="pv-txt" style="top:4%;left:6%;text-align:left;font:bold 8px var(--sans)">Atajos</div>${["Sudoku", "Solitario", "Word Scramble", "Unblock It"].map((g, i) => `<div class="pv-row" style="top:${14 + i * 14}%;height:11%;border-bottom:1px solid #bcb5a6;font:8px var(--sans);padding-left:6%">${g}</div>`).join("")}`, "Botones en la Pestaña de atajos"]],
   "mod.aioaudio": d => [[`<div class="pv-txt" style="top:3%;left:6%;text-align:left;font:7px var(--sans)">← Mis libros<span style="float:right;margin-right:6%">☰ 1x</span></div>${book(27, 10, 46, 34, "#5a5a8a")}<div class="pv-txt" style="top:47%;font:bold 8px var(--serif)">Título del libro</div><div class="pv-txt" style="top:52%;font:italic 6px var(--serif)">Capítulo 3</div><div class="pv-row" style="top:58%;height:1.2%;background:#bcb5a6"><span style="display:block;width:35%;height:100%;background:#22201C"></span></div><div class="pv-txt" style="top:61%;font:6px var(--sans)"><span style="float:left;margin-left:8%">12:41</span><span style="float:right;margin-right:8%">-21:07</span></div><div class="pv-txt" style="top:68%;font:11px var(--sans)">⏮ ⟲ ▶ ⟳ ⏭</div><div class="pv-txt" style="top:82%;font:6px var(--sans)">− 55% + · ⏱ 30 min · ᛒ Audífonos</div><div class="pv-txt" style="top:90%;font:5px var(--sans)">Pista 3 de 15 · 23% del libro</div>`, "Reproductor estilo nativo"]],
   "lib.dictionaries": d => [[`${txt(8, 8)}<div class="pv-row" style="top:44%;height:38%;background:#fff;border:1px solid #22201C;font:7px var(--serif);padding:4px"><b>libro</b> m. Conjunto de hojas…<br><i>Wiktionary (Custom)</i></div>`, "Definición al mantener presionada una palabra"]],
   "fw.kobopatch": d => [[`${txt(10, 12)}`, "Interlineado estándar"], [`<div class="pv-txt" style="top:10%">${"<i style='margin-bottom:2px'></i>".repeat(18)}</div>`, "Interlineado fino (parche)"]],

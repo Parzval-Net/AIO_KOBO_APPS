@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .. import tabicons
 from ..core import AioError, Module, Option, register
-from ..nickelmenu import CATALOG, RETIRED, build_config
+from ..nickelmenu import CATALOG, CATALOG_BY_ID, GAMES, RETIRED, build_config
 from ._util import ONBOARD
 
 NM_DIR = ".adds/nm"
@@ -70,6 +70,10 @@ def _menu_apply(mod, ctx, opts):
             f"experimental :menu_main_15505_4_enabled :{0 if opts['hide_discover'] else 1}",
             "experimental :menu_main_15505_5_enabled :1",
         ]
+    old = ctx.txn.read_text(f"{NM_DIR}/kobo-aio-menu") if ctx.txn.exists(f"{NM_DIR}/kobo-aio-menu") else ""
+    if ":nickel_extras :" in old and any(f":{CATALOG_BY_ID[g].arg}" in old for g in GAMES) \
+            and not ctx.txn.exists(f"{NM_DIR}/kobo-aio-games"):
+        ctx.txn.note("Los juegos de Kobo se movieron a «Juegos ocultos de Kobo»: actívalo para seguir viéndolos.")
     ctx.txn.write_text(f"{NM_DIR}/kobo-aio-menu", build_config(items, "\n".join(header)), note="menú NickelMenu")
     legacy = f"{NM_DIR}/webui-preset"
     if opts["replace_kp_preset"] and ctx.txn.exists(legacy):
@@ -84,16 +88,18 @@ def _menu_uninstall(mod, ctx):
         ctx.txn.delete(rel)
 
 
-_choices = [(i.id, f"[{i.group}] {i.label}" + (" (riesgo alto)" if i.risk == "alto" else "")) for i in CATALOG]
+_choices = [(i.id, f"[{i.group}] {i.label}" + (" (riesgo alto)" if i.risk == "alto" else "")) for i in CATALOG
+            if i.id not in GAMES]
 register(Module(
     id="nm.menu", category="Menú", title="Pestaña de atajos (NickelMenu)",
     description="Una pestaña en la barra inferior del Kobo con botones que tocas cuando los necesitas: suspender, "
-                "reiniciar, importar libros, modo oscuro, WiFi, tomar una captura, juegos ocultos, búsqueda en "
+                "reiniciar, importar libros, modo oscuro, WiFi, tomar una captura, búsqueda en "
                 "RAE/Wikipedia y respaldo de la base de datos. Los ajustes que se fijan una sola vez están en "
                 "«Ajustes ocultos del Kobo».",
     risk="bajo", recommended=True, requires=["mod.nickelmenu"],
     options=[
-        Option("items", "Atajos", "multi", [i.id for i in CATALOG if i.default], _choices, retired=RETIRED),
+        Option("items", "Atajos", "multi", [i.id for i in CATALOG if i.default and i.id not in GAMES], _choices,
+               retired=RETIRED + GAMES),
         Option("tab_label", "Nombre de la pestaña (máx. 12 letras)", "text", "Kobo AIO"),
         Option("tab_icon", "Ícono de la pestaña", "choice", tabicons.DEFAULT, tabicons.choices(),
                help="Mismo tamaño y estilo que los íconos de Kobo: contorno en reposo, relleno al tocarla.",
@@ -146,4 +152,31 @@ register(Module(
     sources=["https://github.com/Parzval-Net/NickelMenu-Builder"], license="MIT",
     apply_fn=_owner_apply, uninstall_fn=_owner_uninstall,
     status_fn=lambda m, d: "instalado" if (d.root / NM_DIR / "kobo-aio-owner").exists() else "no instalado",
+))
+
+
+# -- Juegos de Kobo -----------------------------------------------------------
+GAMES_REL = f"{NM_DIR}/kobo-aio-games"
+
+
+def _games_apply(mod, ctx, opts):
+    ids = [g for g in GAMES if g in opts["games"]]
+    if not ids:
+        raise AioError("Elige al menos un juego (o desinstala «Juegos de Kobo»)")
+    ctx.txn.write_text(GAMES_REL, build_config(ids, "# Juegos que Kobo trae escondidos, en la Pestaña de atajos"),
+                       note="juegos en la pestaña de atajos")
+
+
+def _games_uninstall(mod, ctx):
+    ctx.txn.delete(GAMES_REL)
+
+
+register(Module(
+    id="games.kobo", category="Juegos", title="Juegos ocultos de Kobo",
+    description="Kobo trae juegos que no muestra en sus menús. Este módulo los agrega a la Pestaña de atajos para "
+                "abrirlos con un toque: Sudoku, Solitario, Word Scramble y Unblock It. No instala nada nuevo.",
+    risk="bajo", requires=["mod.nickelmenu"],
+    options=[Option("games", "Juegos", "multi", list(GAMES), [(g, CATALOG_BY_ID[g].label) for g in GAMES])],
+    apply_fn=_games_apply, uninstall_fn=_games_uninstall,
+    status_fn=lambda m, d: "instalado" if (d.root / GAMES_REL).is_file() else "no instalado",
 ))

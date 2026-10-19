@@ -104,10 +104,10 @@ CATALOG: list[NmItem] = [
        "500:/sbin/ifconfig | /usr/bin/awk '/inet addr/{print substr($2,6)}'", "Muestra la IP del lector."),
     # Extras de Nickel
     _i("sketch", "Extras", "Bloc de dibujo", "main", "nickel_extras", "sketch_pad", "Bloc de dibujo oculto."),
-    _i("sudoku", "Extras", "Sudoku", "main", "nickel_extras", "sudoku", "Sudoku integrado."),
-    _i("solitaire", "Extras", "Solitario", "main", "nickel_extras", "solitaire", "Solitario integrado."),
-    _i("scramble", "Extras", "Word Scramble", "main", "nickel_extras", "word_scramble", "Juego de palabras."),
-    _i("unblock", "Extras", "Unblock It", "main", "nickel_extras", "unblock_it", "Juego de bloques."),
+    _i("sudoku", "Juegos", "Sudoku", "main", "nickel_extras", "sudoku", "Sudoku integrado."),
+    _i("solitaire", "Juegos", "Solitario", "main", "nickel_extras", "solitaire", "Solitario integrado."),
+    _i("scramble", "Juegos", "Word Scramble", "main", "nickel_extras", "word_scramble", "Juego de palabras."),
+    _i("unblock", "Juegos", "Unblock It", "main", "nickel_extras", "unblock_it", "Juego de bloques."),
     _i("browser", "Extras", "Navegador", "main", "nickel_browser", "modal", "Navegador en ventana."),
     _i("wikipedia", "Extras", "Wikipedia", "main", "nickel_browser", "modal:https://es.m.wikipedia.org/"),
     _i("rekindle", "Extras", "ReKindle (apps web)", "main", "nickel_browser", "modal:https://rekindle.ink/",
@@ -143,6 +143,8 @@ CATALOG: list[NmItem] = [
 CATALOG_BY_ID = {i.id: i for i in CATALOG}
 # Former toggles now set once in "Ajustes ocultos del Kobo" (conf.preferences); old selections ignore them.
 RETIRED = ("screenshots_toggle", "auto_usb")
+# Kobo's built-in games: offered by "Juegos de Kobo" (games.kobo), no longer in the shortcuts tab list.
+GAMES = ("sudoku", "solitaire", "scramble", "unblock")
 
 
 def build_config(item_ids: list[str], header: str = "") -> str:

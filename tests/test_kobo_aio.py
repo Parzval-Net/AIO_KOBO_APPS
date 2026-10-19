@@ -1048,6 +1048,25 @@ class HideHomeTabTests(TempKobo):
         menu._menu_apply(mod, ctx, mod.resolved_options({"simple_tabs": True}))
         self.assertIn("experimental :menu_main_15505_0_enabled :1", (self.root / ".adds/nm/kobo-aio-menu").read_text())
 
+class KoboGamesTests(TempKobo):
+    def test_games_module_and_tab_list(self):
+        from kobo_aio.core import REGISTRY, Context
+        from kobo_aio.modules import menu
+        (self.root / ".adds" / "nm").mkdir(parents=True)
+        ctx = Context(device=parse_version_file(self.root), txn=txnmod.Transaction(self.root, "S"))
+        games = REGISTRY["games.kobo"]
+        self.assertEqual(games.category, "Juegos")
+        menu._games_apply(games, ctx, games.resolved_options({"games": ["sudoku", "solitaire"]}))
+        cfg = (self.root / ".adds/nm/kobo-aio-games").read_text()
+        self.assertIn("menu_item :main :Sudoku :nickel_extras :sudoku", cfg)
+        self.assertNotIn("word_scramble", cfg)
+        self.assertEqual(lint_dir(self.root / ".adds/nm", self.root), [])
+        tab = REGISTRY["nm.menu"]
+        self.assertNotIn("sudoku", {c[0] for c in tab.options[0].choices})          # not in the tab list anymore
+        self.assertEqual(tab.resolved_options({"items": ["sleep", "sudoku"]})["items"], ["sleep"])  # old picks
+        menu._games_uninstall(games, ctx)
+        self.assertFalse((self.root / ".adds/nm/kobo-aio-games").exists())
+
 class RetiredOptionTests(unittest.TestCase):
     def test_old_menu_selection_still_valid(self):
         from kobo_aio.core import REGISTRY

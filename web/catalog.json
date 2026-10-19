@@ -1,5 +1,5 @@
 {
- "version": "1.4.1",
+ "version": "1.4.2",
  "device": null,
  "modules": [
   {
@@ -1316,7 +1316,7 @@
    "id": "nm.menu",
    "category": "Menú",
    "title": "Pestaña de atajos (NickelMenu)",
-   "description": "Una pestaña en la barra inferior del Kobo con botones que tocas cuando los necesitas: suspender, reiniciar, importar libros, modo oscuro, WiFi, tomar una captura, juegos ocultos, búsqueda en RAE/Wikipedia y respaldo de la base de datos. Los ajustes que se fijan una sola vez están en «Ajustes ocultos del Kobo».",
+   "description": "Una pestaña en la barra inferior del Kobo con botones que tocas cuando los necesitas: suspender, reiniciar, importar libros, modo oscuro, WiFi, tomar una captura, búsqueda en RAE/Wikipedia y respaldo de la base de datos. Los ajustes que se fijan una sola vez están en «Ajustes ocultos del Kobo».",
    "risk": "bajo",
    "recommended": true,
    "requires": [
@@ -1427,22 +1427,6 @@
       {
        "value": "sketch",
        "label": "[Extras] Bloc de dibujo"
-      },
-      {
-       "value": "sudoku",
-       "label": "[Extras] Sudoku"
-      },
-      {
-       "value": "solitaire",
-       "label": "[Extras] Solitario"
-      },
-      {
-       "value": "scramble",
-       "label": "[Extras] Word Scramble"
-      },
-      {
-       "value": "unblock",
-       "label": "[Extras] Unblock It"
       },
       {
        "value": "browser",
@@ -1688,6 +1672,54 @@
     "https://github.com/Parzval-Net/NickelMenu-Builder"
    ],
    "license": "MIT",
+   "reboot": false,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "games.kobo",
+   "category": "Juegos",
+   "title": "Juegos ocultos de Kobo",
+   "description": "Kobo trae juegos que no muestra en sus menús. Este módulo los agrega a la Pestaña de atajos para abrirlos con un toque: Sudoku, Solitario, Word Scramble y Unblock It. No instala nada nuevo.",
+   "risk": "bajo",
+   "recommended": false,
+   "requires": [
+    "mod.nickelmenu"
+   ],
+   "options": [
+    {
+     "id": "games",
+     "label": "Juegos",
+     "type": "multi",
+     "default": [
+      "sudoku",
+      "solitaire",
+      "scramble",
+      "unblock"
+     ],
+     "choices": [
+      {
+       "value": "sudoku",
+       "label": "Sudoku"
+      },
+      {
+       "value": "solitaire",
+       "label": "Solitario"
+      },
+      {
+       "value": "scramble",
+       "label": "Word Scramble"
+      },
+      {
+       "value": "unblock",
+       "label": "Unblock It"
+      }
+     ],
+     "help": ""
+    }
+   ],
+   "sources": [],
+   "license": "",
    "reboot": false,
    "can_uninstall": true,
    "persistent": true
