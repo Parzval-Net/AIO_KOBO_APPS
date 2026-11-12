@@ -1335,7 +1335,9 @@ async function applyNow(sel = state.selection) {
     const tips = (res.log || []).filter(l => /^(Activa|Reinicia|Ábre|Nickel lo importará|Empareja|Expulsa el Kobo: al reiniciar|Quedan carpetas|No se pudo restaurar)/.test(l));
     dialog("¡Listo!", `${res.changes.length} cambio${res.changes.length === 1 ? "" : "s"} aplicado${res.changes.length === 1 ? "" : "s"} con respaldo`, `
       <div class="health ok" style="margin-top:0">${icon("check-circle")}<div><b>Instalación completa</b><div class="small">Todo quedó respaldado en tu computador.</div></div></div>
-      ${res.needs_reboot ? `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo.</li><li>El Kobo instala las mejoras y <b>se reinicia solo</b> (1 a 2 minutos).</li><li>${res.results.some(r => r.id === "nm.menu" && r.ok) ? `Abajo verás la pestaña ${aioTab().replace("<b>", "<b class='tabchip'>")} con tus atajos.` : "Listo para leer."}</li></ol>` : ""}
+      ${res.needs_reboot
+        ? `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo.</li><li>El Kobo instala las mejoras y <b>se reinicia solo</b> (1 a 2 minutos).</li><li>${res.results.some(r => r.id === "nm.menu" && r.ok) ? `Abajo verás la pestaña ${aioTab().replace("<b>", "<b class='tabchip'>")} con tus atajos.` : "Listo para leer."}</li></ol>`
+        : `<h3 style="margin-top:18px">Último paso</h3><ol class="steps"><li><b>Expulsa el Kobo</b> con el botón de abajo antes de desconectar el cable para proteger tu biblioteca.</li></ol>`}
       ${tips.map(l => `<div class="finding info">${icon("info")}<div class="body small">${esc(l)}</div></div>`).join("")}`,
       [["Cerrar", "", () => { dlg.close(); refresh(); go("home"); }], [`${icon("eject")}Expulsar Kobo`, "primary", eject]]);
   } catch (e) {
@@ -1352,6 +1354,7 @@ function download(bytes, name, type) {
 }
 function zipDone(res) {
   const n = res.sync.length;
+  let downloaded = false;
   dialog("Descarga el paquete para tu Kobo", `${n} archivo${n === 1 ? "" : "s"} en un solo KoboRoot.tgz`, `
     <ol class="steps">
       <li><b>Descarga KoboRoot.tgz</b> con el botón de abajo. No lo descomprimas.</li>
@@ -1360,9 +1363,14 @@ function zipDone(res) {
     </ol>
     <p class="tiny muted" style="margin:0 0 10px">Para preparar otro paquete, vuelve a conectar el Kobo después de reiniciarlo: así Kobo AIO parte de lo que realmente tiene.</p>
     ${res.backupZip ? `<div class="finding info">${icon("info")}<div class="body small">Guarda también el respaldo: trae los archivos originales que se reemplazan, por si quieres volver atrás. Queda en tu computador, no lo copies al Kobo.</div></div>` : ""}`,
-    [...(res.backupZip ? [["Descargar respaldo", "", () => download(res.backupZip, "Kobo-AIO-respaldo.zip", "application/zip")]] : []),
-     ["Cerrar", "", () => { dlg.close(); go("home"); }],
-     [`${icon("upload")}Descargar KoboRoot.tgz`, "primary", () => download(res.zip, "KoboRoot.tgz", "application/gzip")]]);
+    [...(res.backupZip ? [["Descargar respaldo", "", () => { download(res.backupZip, "Kobo-AIO-respaldo.zip", "application/zip"); toast("Respaldo descargado en tu computador"); }]] : []),
+     ["Cerrar", "", () => { if (!downloaded) toast("Recuerda descargar KoboRoot.tgz antes de copiarlo al Kobo"); dlg.close(); go("home"); }],
+     [`${icon("upload")}Descargar KoboRoot.tgz`, "primary", e => {
+       download(res.zip, "KoboRoot.tgz", "application/gzip");
+       downloaded = true;
+       if (e && e.currentTarget) e.currentTarget.innerHTML = `${icon("check")}Descargado (volver a bajar)`;
+       toast("KoboRoot.tgz descargado — cópialo en .kobo/");
+     }]]);
 }
 async function eject() {
   if (state.web) {
@@ -1380,17 +1388,17 @@ async function eject() {
 function renderLibrary() {
   const lib = state.modules.filter(m => m.id.startsWith("lib.") && (m.compatible !== false || needsDesktop(m)));
   $("#libTasks").innerHTML = lib.map(m => {
-    const mt = meta(m);
+    const mt = meta(m), desk = needsDesktop(m);
     if (!state.lib[m.id]) state.lib[m.id] = defaults(m);
     const fileOps = m.options.filter(o => o.type === "files"), other = m.options.filter(o => o.type !== "files");
     return `<article class="card task" data-task="${esc(m.id)}">
       <div class="head"><span class="badge" style="color:${mt.color}">${icon(mt.icon, "ic lg")}</span>
-        <div><h3>${esc(mt.name)}</h3><div class="small muted">${esc(m.compatible === false ? m.incompatible_reason : mt.benefit)}</div>
-        ${m.risk === "medio" ? '<span class="pill warn" style="margin-top:6px">experimental</span>' : ""}
+        <div><h3>${esc(mt.name)}</h3><div class="small muted">${esc(m.compatible === false && !desk ? m.incompatible_reason : mt.benefit)}</div>
+        <div class="row" style="gap:6px;margin-top:6px">${desk ? '<span class="pill desk">App de escritorio</span>' : ""}${m.risk === "medio" ? '<span class="pill warn">experimental</span>' : ""}</div>
         ${PREVIEW[m.id] ? `<div><button class="pvbtn" data-preview="${esc(m.id)}">Vista previa</button></div>` : ""}</div></div>
-      ${fileOps.slice(0, 1).map(op => optionHtml(m, op)).join("")}
-      ${other.length || fileOps.length > 1 ? `<details><summary>Opciones</summary><div class="optsbox">${[...fileOps.slice(1), ...other].map(op => optionHtml(m, op)).join("")}</div></details>` : ""}
-      ${needsDesktop(m) ? `<div class="finding info" style="margin:0">${icon("info")}<div class="body small">Necesita la app de escritorio: ${esc(m.engine_reason || "")}.</div></div>
+      ${desk ? "" : fileOps.slice(0, 1).map(op => optionHtml(m, op)).join("")}
+      ${!desk && (other.length || fileOps.length > 1) ? `<details><summary>Opciones</summary><div class="optsbox">${[...fileOps.slice(1), ...other].map(op => optionHtml(m, op)).join("")}</div></details>` : ""}
+      ${desk ? `<div class="finding info" style="margin:0">${icon("info")}<div class="body small">Necesita la app de escritorio: ${esc(m.engine_reason || "")}.</div></div>
         <button class="btn send" data-desktop="${esc(m.engine_reason || "")}">${icon("upload")}Descargar la app</button>`
       : `<button class="btn primary send" data-send ${m.compatible === false || !state.device ? "disabled" : ""}>${icon("upload")}Enviar al Kobo</button>`}
     </article>`;
