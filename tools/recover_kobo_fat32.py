@@ -57,12 +57,19 @@ def decode_sfn(entry: bytes) -> str:
     return f"{base}.{ext}" if ext else base
 
 
+def _pread(fd: int, size: int, offset: int) -> bytes:
+    if hasattr(os, "pread"):
+        return os.pread(fd, size, offset)
+    os.lseek(fd, offset, os.SEEK_SET)
+    return os.read(fd, size)
+
+
 class Fat32Reader:
     def __init__(self, dev_path: str):
         self.dev_path = dev_path
-        self.fd = os.open(dev_path, os.O_RDONLY)
+        self.fd = os.open(dev_path, os.O_RDONLY | getattr(os, "O_BINARY", 0))
         try:
-            bpb = os.pread(self.fd, 512, 0)
+            bpb = _pread(self.fd, 512, 0)
             if len(bpb) < 512:
                 raise ValueError(f"Short BPB read ({len(bpb)} bytes)")
             self.bytes_per_sector = struct.unpack_from("<H", bpb, 11)[0]
@@ -98,7 +105,7 @@ class Fat32Reader:
                 f"[FAT32] cluster_size={self.cluster_size} root_cluster={self.root_cluster} "
                 f"data_offset={self.data_offset}"
             )
-            raw_fat = os.pread(self.fd, self.fat_size_bytes, self.fat_offset)
+            raw_fat = _pread(self.fd, self.fat_size_bytes, self.fat_offset)
             num_entries = len(raw_fat) // 4
             self.fat = struct.unpack(f"<{num_entries}I", raw_fat[: num_entries * 4])
         except BaseException:
@@ -119,7 +126,7 @@ class Fat32Reader:
         visited = set()
         while 2 <= cur < len(self.fat) and cur not in visited and len(chunks) < max_clusters:
             visited.add(cur)
-            chunks.append(os.pread(self.fd, self.cluster_size, self.cluster_to_offset(cur)))
+            chunks.append(_pread(self.fd, self.cluster_size, self.cluster_to_offset(cur)))
             nxt = self.fat[cur] & 0x0FFFFFFF
             if nxt >= 0x0FFFFFF8 or nxt == 0:
                 break
@@ -260,7 +267,7 @@ class Fat32Reader:
         chunk_sz = 4 * 1024 * 1024
         while rem > 0:
             to_read = min(rem, chunk_sz)
-            part = os.pread(self.fd, to_read, off)
+            part = _pread(self.fd, to_read, off)
             if not part:
                 break
             buf.extend(part)
@@ -279,7 +286,7 @@ class Fat32Reader:
         cur = start_cluster
         while len(chunks) < needed and cur < len(self.fat):
             if cur == start_cluster or ((self.fat[cur] & 0x0FFFFFFF) == 0 and cur not in reserved_starts):
-                chunks.append(os.pread(self.fd, self.cluster_size, self.cluster_to_offset(cur)))
+                chunks.append(_pread(self.fd, self.cluster_size, self.cluster_to_offset(cur)))
             cur += 1
         return b"".join(chunks)[:capped_size]
 
