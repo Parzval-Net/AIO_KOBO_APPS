@@ -57,12 +57,12 @@ class EmulatorSession {
 
   // Set active-high joypad mask (INKBOY_PAD_*)
   void setJoypadMask(uint8_t mask);
-  uint8_t joypadMask() const { return joypad_mask_; }
+  uint8_t joypadMask() const { return joypad_mask_.load(std::memory_order_acquire); }
 
   // Cycle DMG colorization palette (used when playing .gb ROMs on Kobo Libra Colour)
   void cycleDmgPalette();
-  void setDmgPalette(DmgColorPalette pal) { dmg_palette_ = pal; }
-  DmgColorPalette dmgPalette() const { return dmg_palette_; }
+  void setDmgPalette(DmgColorPalette pal) { dmg_palette_.store(pal, std::memory_order_release); }
+  DmgColorPalette dmgPalette() const { return dmg_palette_.load(std::memory_order_acquire); }
 
   // Lock-free triple-buffer consumer API for the display thread / loop
   const EmulatorFrame* acquireLatestFrame();
@@ -117,8 +117,8 @@ class EmulatorSession {
   size_t cart_ram_size_ = 0;
   bool save_dirty_ = false;
 
-  uint8_t joypad_mask_ = 0;
-  DmgColorPalette dmg_palette_ = DmgColorPalette::PokeRedBlue;
+  std::atomic<uint8_t> joypad_mask_{0};
+  std::atomic<DmgColorPalette> dmg_palette_{DmgColorPalette::PokeRedBlue};
   char title_[32] = {};
 
   // Lock-free triple buffer (3 slots guarantee zero emulation stalls while EPDC refreshes).

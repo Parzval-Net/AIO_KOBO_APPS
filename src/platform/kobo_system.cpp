@@ -19,12 +19,69 @@ namespace {
 
 std::atomic<bool> g_quit_requested{false};
 #if defined(__linux__)
-bool g_nickel_suspended = false;
+constexpr int kMaxNickelPids = 16;
+pid_t g_nickel_pids[kMaxNickelPids] = {};
+std::atomic<int> g_nickel_pid_count{0};
+std::atomic<bool> g_nickel_suspended{false};
+
+void resumeNickelAsyncSafe() {
+  if (g_nickel_suspended.exchange(false, std::memory_order_acq_rel)) {
+    const int count = g_nickel_pid_count.load(std::memory_order_acquire);
+    for (int i = 0; i < count; ++i) {
+      const pid_t pid = g_nickel_pids[i];
+      if (pid > 0) {
+        ::kill(pid, SIGCONT);
+      }
+    }
+  }
+}
+
+void findNickelPids() {
+  int count = 0;
+  DIR* proc = ::opendir("/proc");
+  if (proc) {
+    struct dirent* ent = nullptr;
+    while ((ent = ::readdir(proc)) != nullptr && count < kMaxNickelPids) {
+      if (ent->d_name[0] < '0' || ent->d_name[0] > '9') continue;
+      char* end = nullptr;
+      const long pid = std::strtol(ent->d_name, &end, 10);
+      if (pid <= 0 || !end || *end != '\0') continue;
+
+      char comm_path[64];
+      std::snprintf(comm_path, sizeof(comm_path), "/proc/%ld/comm", pid);
+      FILE* fp = std::fopen(comm_path, "r");
+      if (!fp) continue;
+      char comm[64] = {};
+      const bool got = (std::fgets(comm, sizeof(comm), fp) != nullptr);
+      std::fclose(fp);
+      if (got) {
+        const size_t len = std::strlen(comm);
+        if (len > 0 && comm[len - 1] == '\n') comm[len - 1] = '\0';
+        if (std::strcmp(comm, "nickel") == 0) {
+          g_nickel_pids[count++] = static_cast<pid_t>(pid);
+        }
+      }
+    }
+    ::closedir(proc);
+  }
+  g_nickel_pid_count.store(count, std::memory_order_release);
+}
 #endif
 
 void onPosixSignal(int sig) {
   (void)sig;
   g_quit_requested.store(true, std::memory_order_release);
+}
+
+void onFatalSignal(int sig) {
+#if defined(__linux__)
+  resumeNickelAsyncSafe();
+#endif
+  struct sigaction sa {};
+  sa.sa_handler = SIG_DFL;
+  sigemptyset(&sa.sa_mask);
+  sigaction(sig, &sa, nullptr);
+  ::raise(sig);
 }
 
 bool hasGameBoyExtension(const char* name, std::string* out_clean_label) {
@@ -55,11 +112,32 @@ bool kobo_system_init(const kobo_system_config_t* cfg) {
   sigaction(SIGTERM, &sa, nullptr);
   sigaction(SIGHUP, &sa, nullptr);
 
+  struct sigaction fatal_sa {};
+  fatal_sa.sa_handler = onFatalSignal;
+  sigemptyset(&fatal_sa.sa_mask);
+  fatal_sa.sa_flags = static_cast<int>(SA_RESETHAND);
+  sigaction(SIGSEGV, &fatal_sa, nullptr);
+  sigaction(SIGABRT, &fatal_sa, nullptr);
+  sigaction(SIGBUS, &fatal_sa, nullptr);
+
+  static bool atexit_registered = false;
+  if (!atexit_registered) {
+    std::atexit(kobo_system_shutdown);
+    atexit_registered = true;
+  }
+
 #if defined(__linux__)
   if (cfg && cfg->suspend_nickel) {
-    // Suspend Nickel cleanly via SIGSTOP so it stops polling touchscreen or updating the EPDC
-    if (std::system("killall -STOP nickel >/dev/null 2>&1") == 0) {
-      g_nickel_suspended = true;
+    findNickelPids();
+    const int count = g_nickel_pid_count.load(std::memory_order_acquire);
+    bool stopped_any = false;
+    for (int i = 0; i < count; ++i) {
+      if (::kill(g_nickel_pids[i], SIGSTOP) == 0) {
+        stopped_any = true;
+      }
+    }
+    if (stopped_any) {
+      g_nickel_suspended.store(true, std::memory_order_release);
     }
   }
 #else
@@ -71,10 +149,8 @@ bool kobo_system_init(const kobo_system_config_t* cfg) {
 void kobo_system_shutdown(void) {
   ::sync();
 #if defined(__linux__)
-  if (g_nickel_suspended) {
-    std::system("killall -CONT nickel >/dev/null 2>&1");
-    g_nickel_suspended = false;
-  }
+  resumeNickelAsyncSafe();
+  g_nickel_pid_count.store(0, std::memory_order_release);
 #endif
 }
 
@@ -119,7 +195,10 @@ size_t kobo_system_scan_roms(const char* roms_dir, char rom_paths[][512],
     std::string label;
     if (hasGameBoyExtension(ent->d_name, &label)) {
       std::string full = std::string(roms_dir) + "/" + ent->d_name;
-      entries.push_back({full, label});
+      struct stat st {};
+      if (::stat(full.c_str(), &st) == 0 && S_ISREG(st.st_mode)) {
+        entries.push_back({full, label});
+      }
     }
   }
   ::closedir(dir);

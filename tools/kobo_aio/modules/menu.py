@@ -45,7 +45,7 @@ def _menu_apply(mod, ctx, opts):
     if opts["tab_label"]:
         label = re.sub(r"[:\t\n]", "", str(opts["tab_label"]))[:12]
         header.append(f"experimental :menu_main_15505_label :{nickel_latin1(label)}")
-    own = [Path(p) for p in (opts.get("tab_icon_file") or [])]
+    own = [Path(p).expanduser() for p in (opts.get("tab_icon_file") or [])]
     if own:
         try:
             idle, active = tabicons.from_image(own[0].read_bytes())

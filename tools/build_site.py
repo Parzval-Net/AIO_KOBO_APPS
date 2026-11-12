@@ -16,6 +16,7 @@ import hashlib
 import io
 import shutil
 import sys
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -75,25 +76,45 @@ def engine_zip() -> bytes:
 
 
 def build(out: Path, skip_artifacts: bool = False) -> None:
-    if out.exists():
-        shutil.rmtree(out)
-    shutil.copytree(REPO / "web", out)
-    (out / "py").mkdir()
-    (out / "py" / "kobo_aio.zip").write_bytes(engine_zip())
-    print("Pyodide", PYODIDE_VERSION)
-    (out / "pyodide").mkdir()
-    for name, (sha, _size) in PYODIDE_FILES.items():
-        (out / "pyodide" / name).write_bytes(fetch_pinned(f"{PYODIDE_CDN}/{name}", sha, f"pyodide-{PYODIDE_VERSION}-{name}"))
-    (out / "artifacts").mkdir()
-    if skip_artifacts:
-        print("Artefactos omitidos (--skip-artifacts)")
-        return
-    total = 0
-    for art in web_artifacts():
-        data = fetch_pinned(art.url, art.sha256, art.filename)
-        (out / "artifacts" / f"{art.sha256[:16]}-{art.filename}").write_bytes(data)
-        total += len(data)
-    print(f"{len(web_artifacts())} artefactos, {total / 1024 ** 2:.0f} MB")
+    out = out.resolve()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}-staging-", dir=out.parent))
+    try:
+        shutil.copytree(REPO / "web", tmp, dirs_exist_ok=True)
+        (tmp / "py").mkdir()
+        (tmp / "py" / "kobo_aio.zip").write_bytes(engine_zip())
+        print("Pyodide", PYODIDE_VERSION)
+        (tmp / "pyodide").mkdir()
+        for name, (sha, _size) in PYODIDE_FILES.items():
+            (tmp / "pyodide" / name).write_bytes(fetch_pinned(f"{PYODIDE_CDN}/{name}", sha, f"pyodide-{PYODIDE_VERSION}-{name}"))
+        (tmp / "artifacts").mkdir()
+        if skip_artifacts:
+            print("Artefactos omitidos (--skip-artifacts)")
+        else:
+            total = 0
+            for art in web_artifacts():
+                data = fetch_pinned(art.url, art.sha256, art.filename)
+                (tmp / "artifacts" / f"{art.sha256[:16]}-{art.filename}").write_bytes(data)
+                total += len(data)
+            print(f"{len(web_artifacts())} artefactos, {total / 1024 ** 2:.0f} MB")
+
+        backup = None
+        if out.exists():
+            backup = Path(tempfile.mkdtemp(prefix=f".{out.name}-old-", dir=out.parent))
+            backup.rmdir()
+            out.rename(backup)
+        try:
+            tmp.rename(out)
+        except Exception:
+            if backup is not None and backup.exists() and not out.exists():
+                backup.rename(out)
+            raise
+        finally:
+            if backup is not None and backup.exists():
+                shutil.rmtree(backup, ignore_errors=True)
+    finally:
+        if tmp.exists():
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def main() -> None:

@@ -308,35 +308,43 @@ void triggerEpdcRefresh(const kobo_rect_t& rect, kobo_waveform_t wfm, bool full_
         break;
     }
 
-    fbink_print_raw_data(g_disp.fbfd, g_disp.rgba_staging.data(), rw, rh, total_bytes,
-                         static_cast<short int>(x0), static_cast<short int>(y0), &cfg);
+    if (fbink_print_raw_data(g_disp.fbfd, g_disp.rgba_staging.data(), rw, rh, total_bytes,
+                             static_cast<short int>(x0), static_cast<short int>(y0), &cfg) < 0) {
+      std::fprintf(stderr, "[Ink-boy] fbink_print_raw_data failed\n");
+    }
     return;
   }
 #endif
 
   if (g_disp.fbfd >= 0 && g_disp.fb_mmap) {
-    for (int y = y0; y < y1; ++y) {
-      const uint32_t* src_row = &g_disp.surface_bgra[static_cast<size_t>(y) * g_disp.info.screen_width];
-      uint8_t* dst_row = g_disp.fb_mmap + static_cast<size_t>(y) * g_disp.info.stride_bytes;
-      if (g_disp.info.bpp == 32) {
-        std::memcpy(dst_row + static_cast<size_t>(x0) * 4, src_row + x0,
-                    static_cast<size_t>(rw) * sizeof(uint32_t));
-      } else if (g_disp.info.bpp == 16) {
-        uint16_t* dst16 = reinterpret_cast<uint16_t*>(dst_row);
-        for (int x = x0; x < x1; ++x) {
-          const uint32_t p = src_row[x];
-          const uint8_t r = static_cast<uint8_t>((p >> 16) & 0xFF);
-          const uint8_t g = static_cast<uint8_t>((p >> 8) & 0xFF);
-          const uint8_t b = static_cast<uint8_t>(p & 0xFF);
-          dst16[x] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
-        }
-      } else if (g_disp.info.bpp == 8) {
-        for (int x = x0; x < x1; ++x) {
-          const uint32_t p = src_row[x];
-          const uint8_t r = static_cast<uint8_t>((p >> 16) & 0xFF);
-          const uint8_t g = static_cast<uint8_t>((p >> 8) & 0xFF);
-          const uint8_t b = static_cast<uint8_t>(p & 0xFF);
-          dst_row[x] = static_cast<uint8_t>((299U * r + 587U * g + 114U * b) / 1000U);
+    const size_t bytes_per_pixel =
+        (g_disp.info.bpp == 32) ? 4U : (g_disp.info.bpp == 16 ? 2U : (g_disp.info.bpp == 8 ? 1U : 0U));
+    if (bytes_per_pixel > 0 && static_cast<size_t>(x1) * bytes_per_pixel <= g_disp.info.stride_bytes) {
+      for (int y = y0; y < y1; ++y) {
+        const size_t row_off = static_cast<size_t>(y) * g_disp.info.stride_bytes;
+        if (row_off + static_cast<size_t>(x1) * bytes_per_pixel > g_disp.fb_mmap_size) break;
+        const uint32_t* src_row = &g_disp.surface_bgra[static_cast<size_t>(y) * g_disp.info.screen_width];
+        uint8_t* dst_row = g_disp.fb_mmap + row_off;
+        if (g_disp.info.bpp == 32) {
+          std::memcpy(dst_row + static_cast<size_t>(x0) * 4U, src_row + x0,
+                      static_cast<size_t>(rw) * sizeof(uint32_t));
+        } else if (g_disp.info.bpp == 16) {
+          uint16_t* dst16 = reinterpret_cast<uint16_t*>(dst_row);
+          for (int x = x0; x < x1; ++x) {
+            const uint32_t p = src_row[x];
+            const uint8_t r = static_cast<uint8_t>((p >> 16) & 0xFF);
+            const uint8_t g = static_cast<uint8_t>((p >> 8) & 0xFF);
+            const uint8_t b = static_cast<uint8_t>(p & 0xFF);
+            dst16[x] = static_cast<uint16_t>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+          }
+        } else if (g_disp.info.bpp == 8) {
+          for (int x = x0; x < x1; ++x) {
+            const uint32_t p = src_row[x];
+            const uint8_t r = static_cast<uint8_t>((p >> 16) & 0xFF);
+            const uint8_t g = static_cast<uint8_t>((p >> 8) & 0xFF);
+            const uint8_t b = static_cast<uint8_t>(p & 0xFF);
+            dst_row[x] = static_cast<uint8_t>((299U * r + 587U * g + 114U * b) / 1000U);
+          }
         }
       }
     }
@@ -349,7 +357,9 @@ void triggerEpdcRefresh(const kobo_rect_t& rect, kobo_waveform_t wfm, bool full_
       mtk_upd.waveform_mode = (wfm == KOBO_WFM_A2 || wfm == KOBO_WFM_DU) ? 1U : 11U;
       mtk_upd.update_mode = (full_flash || mtk_upd.waveform_mode == 11U) ? UPDATE_MODE_FULL_LOCAL : UPDATE_MODE_PARTIAL_LOCAL;
       mtk_upd.update_marker = marker;
-      ::ioctl(g_disp.fbfd, LOCAL_HWTCON_SEND_UPDATE, &mtk_upd);
+      if (::ioctl(g_disp.fbfd, LOCAL_HWTCON_SEND_UPDATE, &mtk_upd) < 0) {
+        std::fprintf(stderr, "[Ink-boy] LOCAL_HWTCON_SEND_UPDATE ioctl failed\n");
+      }
     } else {
       struct mxcfb_update_data_v2_local nxp_upd {};
       nxp_upd.update_region = {static_cast<uint32_t>(y0), static_cast<uint32_t>(x0),
@@ -358,7 +368,9 @@ void triggerEpdcRefresh(const kobo_rect_t& rect, kobo_waveform_t wfm, bool full_
       nxp_upd.update_mode = full_flash ? UPDATE_MODE_FULL_LOCAL : UPDATE_MODE_PARTIAL_LOCAL;
       nxp_upd.temp = TEMP_USE_AMBIENT_LOCAL;
       nxp_upd.update_marker = marker;
-      ::ioctl(g_disp.fbfd, LOCAL_MXCFB_SEND_UPDATE_V2, &nxp_upd);
+      if (::ioctl(g_disp.fbfd, LOCAL_MXCFB_SEND_UPDATE_V2, &nxp_upd) < 0) {
+        std::fprintf(stderr, "[Ink-boy] LOCAL_MXCFB_SEND_UPDATE_V2 ioctl failed\n");
+      }
     }
   }
 #endif
@@ -409,26 +421,30 @@ bool kobo_display_init(kobo_device_type_t simulated_or_override, kobo_display_in
   if (g_disp.fbfd >= 0) {
     g_disp.fbink_cfg.is_quiet = false;
     if (fbink_init(g_disp.fbfd, &g_disp.fbink_cfg) >= 0) {
-      fbink_get_state(&g_disp.fbink_cfg, &g_disp.fbink_state);
-      if (g_disp.fbink_state.screen_width > 0 && g_disp.fbink_state.screen_height > 0) {
-        g_disp.info.screen_width = g_disp.fbink_state.screen_width;
-        g_disp.info.screen_height = g_disp.fbink_state.screen_height;
-      }
-      g_disp.info.bpp = g_disp.fbink_state.bpp;
-      g_disp.info.stride_bytes = g_disp.fbink_state.scanline_stride;
-      g_disp.info.current_rota = g_disp.fbink_state.current_rota;
-      g_disp.info.has_color_panel = g_disp.fbink_state.has_color_panel;
-      g_disp.info.is_mtk = g_disp.fbink_state.is_mtk;
-      g_disp.info.touch_swap_axes = g_disp.fbink_state.touch_swap_axes;
-      g_disp.info.touch_mirror_x = g_disp.fbink_state.touch_mirror_x;
-      g_disp.info.touch_mirror_y = g_disp.fbink_state.touch_mirror_y;
-      if (g_disp.fbink_state.device_name[0] != '\0') {
-        std::snprintf(g_disp.info.device_name, sizeof(g_disp.info.device_name),
-                      "Kobo %s (%s)", g_disp.fbink_state.device_name, g_disp.fbink_state.device_codename);
+      if (fbink_get_state(&g_disp.fbink_cfg, &g_disp.fbink_state) >= 0) {
+        if (g_disp.fbink_state.screen_width > 0 && g_disp.fbink_state.screen_height > 0) {
+          g_disp.info.screen_width = g_disp.fbink_state.screen_width;
+          g_disp.info.screen_height = g_disp.fbink_state.screen_height;
+        }
+        g_disp.info.bpp = g_disp.fbink_state.bpp;
+        g_disp.info.stride_bytes = g_disp.fbink_state.scanline_stride;
+        g_disp.info.current_rota = g_disp.fbink_state.current_rota;
+        g_disp.info.has_color_panel = g_disp.fbink_state.has_color_panel;
+        g_disp.info.is_mtk = g_disp.fbink_state.is_mtk;
+        g_disp.info.touch_swap_axes = g_disp.fbink_state.touch_swap_axes;
+        g_disp.info.touch_mirror_x = g_disp.fbink_state.touch_mirror_x;
+        g_disp.info.touch_mirror_y = g_disp.fbink_state.touch_mirror_y;
+        if (g_disp.fbink_state.device_name[0] != '\0') {
+          std::snprintf(g_disp.info.device_name, sizeof(g_disp.info.device_name),
+                        "Kobo %s (%s)", g_disp.fbink_state.device_name, g_disp.fbink_state.device_codename);
+        }
       }
       if (fbink_dump(g_disp.fbfd, &g_disp.nickel_dump) == 0) {
         g_disp.has_nickel_dump = true;
       }
+    } else {
+      fbink_close(g_disp.fbfd);
+      g_disp.fbfd = -1;
     }
   }
 #else
@@ -437,7 +453,8 @@ bool kobo_display_init(kobo_device_type_t simulated_or_override, kobo_display_in
     struct fb_var_screeninfo vinfo {};
     struct fb_fix_screeninfo finfo {};
     if (::ioctl(g_disp.fbfd, FBIOGET_VSCREENINFO, &vinfo) == 0 &&
-        ::ioctl(g_disp.fbfd, FBIOGET_FSCREENINFO, &finfo) == 0) {
+        ::ioctl(g_disp.fbfd, FBIOGET_FSCREENINFO, &finfo) == 0 &&
+        finfo.smem_len > 0) {
       g_disp.info.screen_width = vinfo.xres;
       g_disp.info.screen_height = vinfo.yres;
       g_disp.info.bpp = vinfo.bits_per_pixel;
@@ -447,7 +464,14 @@ bool kobo_display_init(kobo_device_type_t simulated_or_override, kobo_display_in
       void* mapped = ::mmap(nullptr, g_disp.fb_mmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, g_disp.fbfd, 0);
       if (mapped != MAP_FAILED) {
         g_disp.fb_mmap = static_cast<uint8_t*>(mapped);
+      } else {
+        g_disp.fb_mmap_size = 0;
+        ::close(g_disp.fbfd);
+        g_disp.fbfd = -1;
       }
+    } else {
+      ::close(g_disp.fbfd);
+      g_disp.fbfd = -1;
     }
   }
 #endif
@@ -466,13 +490,14 @@ void kobo_display_shutdown(void) {
 #if defined(HAVE_FBINK)
   if (g_disp.fbfd >= 0) {
     // Let every queued EPDC update finish before touching the screen Nickel will own again
-    fbink_wait_for_complete(g_disp.fbfd, LAST_MARKER);
+    (void)fbink_wait_for_complete(g_disp.fbfd, LAST_MARKER);
     if (g_disp.has_nickel_dump) {
       FBInkConfig restore_cfg = g_disp.fbink_cfg;
       restore_cfg.wfm_mode = WFM_GC16;
       restore_cfg.is_flashing = true;
-      fbink_restore(g_disp.fbfd, &restore_cfg, &g_disp.nickel_dump);
-      fbink_wait_for_complete(g_disp.fbfd, LAST_MARKER);
+      if (fbink_restore(g_disp.fbfd, &restore_cfg, &g_disp.nickel_dump) == 0) {
+        (void)fbink_wait_for_complete(g_disp.fbfd, LAST_MARKER);
+      }
       fbink_free_dump_data(&g_disp.nickel_dump);
       g_disp.has_nickel_dump = false;
     }
@@ -624,16 +649,17 @@ bool kobo_display_present_frame(const uint16_t* rgb565_frame,
   for (int gy = gy0; gy < gy1; ++gy) {
     const size_t src_row = static_cast<size_t>(gy) * GB_LCD_WIDTH;
     for (int gx = gx0; gx < gx1; ++gx) {
+      const size_t src_idx = src_row + static_cast<size_t>(gx);
       uint32_t pixel_bgra = 0xFFFFFFFFU;
       if (use_turbo_a2) {
         // 1-bit Bayer 2x2: bw_bayer_frame holds 0 (black) or 3 (white)
-        pixel_bgra = (bw_bayer_frame[src_row + gx] == 0U) ? 0xFF000000U : 0xFFFFFFFFU;
+        pixel_bgra = (bw_bayer_frame[src_idx] == 0U) ? 0xFF000000U : 0xFFFFFFFFU;
       } else if (use_color) {
         // Kobo Libra Colour Kaleido 3 CFA native RGB565 -> BGRA8888 with chroma boost
-        pixel_bgra = walnut_cgb_rgb565_to_kaleido3_bgra(rgb565_frame[src_row + gx], 1);
+        pixel_bgra = walnut_cgb_rgb565_to_kaleido3_bgra(rgb565_frame[src_idx], 1);
       } else {
         // Kobo Clara HD 4-level grayscale (WFM_DU4 / WFM_GC16)
-        pixel_bgra = kGray4Bgra[shade4_frame[src_row + gx] & 0x03U];
+        pixel_bgra = kGray4Bgra[shade4_frame[src_idx] & 0x03U];
       }
 
       const int dst_x = g_disp.info.game_x + gx * scale;
@@ -822,10 +848,10 @@ bool kobo_display_save_screenshot(const char* path) {
 
   const uint32_t w = g_disp.info.screen_width;
   const uint32_t h = g_disp.info.screen_height;
-  std::fprintf(fp, "P6\n%u %u\n255\n", w, h);
+  bool ok = (std::fprintf(fp, "P6\n%u %u\n255\n", w, h) > 0);
 
   std::vector<uint8_t> rgb_row(static_cast<size_t>(w) * 3);
-  for (uint32_t y = 0; y < h; ++y) {
+  for (uint32_t y = 0; y < h && ok; ++y) {
     const uint32_t* src = &g_disp.surface_bgra[static_cast<size_t>(y) * w];
     for (uint32_t x = 0; x < w; ++x) {
       const uint32_t bgra = src[x];
@@ -833,10 +859,13 @@ bool kobo_display_save_screenshot(const char* path) {
       rgb_row[x * 3 + 1] = static_cast<uint8_t>((bgra >> 8) & 0xFF);
       rgb_row[x * 3 + 2] = static_cast<uint8_t>(bgra & 0xFF);
     }
-    std::fwrite(rgb_row.data(), 1, rgb_row.size(), fp);
+    if (std::fwrite(rgb_row.data(), 1, rgb_row.size(), fp) != rgb_row.size()) {
+      ok = false;
+    }
   }
-  std::fclose(fp);
-  return true;
+  if (std::ferror(fp) != 0) ok = false;
+  if (std::fclose(fp) != 0) ok = false;
+  return ok;
 }
 
 }  // extern "C"

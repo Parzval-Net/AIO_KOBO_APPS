@@ -212,8 +212,10 @@ const CMDS = {
   },
 };
 
-self.onmessage = async ({ data }) => {
+let cmdQueue = Promise.resolve();
+async function handleMessage({ data }) {
   const { id, cmd, args } = data;
+  activeId = id;
   try {
     if (cmd !== "boot" && !web) throw new Error("El motor del navegador no está listo");
     const result = await CMDS[cmd](args || {});
@@ -224,5 +226,8 @@ self.onmessage = async ({ data }) => {
     const m = msg.match(/(?:AioError|SafetyError|RuntimeError): ([^\n]+)\s*$/m);   // Python traceback -> last line
     if (m) msg = m[1];
     send({ id, ok: false, error: msg });
+  } finally {
+    if (activeId === id) activeId = null;
   }
-};
+}
+self.onmessage = e => { cmdQueue = cmdQueue.then(() => handleMessage(e)); };

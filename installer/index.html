@@ -17,7 +17,7 @@
       --surface-sunk: #ece8de;
       --ink: #1b1a17;
       --ink-2: #45433d;
-      --ink-3: #6f6c64;
+      --ink-3: #65625a;
       --rule: #d8d3c6;
       --rule-strong: #b9b3a4;
       --accent: #1f4e79;
@@ -230,6 +230,22 @@
       padding: 5px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--rule);
     }
     .file .tag { font-family: var(--mono); font-size: 0.72rem; color: var(--ink-3); }
+    .file .rm {
+      appearance: none; border: 0; background: none; color: var(--ink-3); cursor: pointer;
+      font-size: 1rem; line-height: 1; padding: 0 2px; margin-left: 2px; border-radius: 4px;
+    }
+    .file .rm:hover { color: var(--err); }
+    .file .rm:focus-visible { outline: none; box-shadow: var(--focus); }
+    .skip-link {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+    .skip-link:focus {
+      position: fixed; left: 12px; top: 12px; width: auto; height: auto; clip: auto;
+      z-index: 99; background: var(--surface); color: var(--ink); padding: 10px 14px;
+      border-radius: 10px; border: 1px solid var(--rule-strong); box-shadow: var(--shadow);
+      font-weight: 600; text-decoration: none;
+    }
 
     /* Progress */
     .progress { height: 6px; border-radius: 99px; background: var(--surface-sunk); overflow: hidden; margin: 16px 0 6px; display: none; }
@@ -270,6 +286,7 @@
   </style>
 </head>
 <body>
+  <a class="skip-link" href="#main">Saltar al contenido</a>
   <div class="page">
     <header class="masthead">
       <div>
@@ -281,12 +298,12 @@
     </header>
 
     <ol class="stepper" aria-label="Progreso de la instalación">
-      <li id="st1" data-state="current"><span class="n">1</span><span class="t">Conectar</span></li>
+      <li id="st1" data-state="current" aria-current="step"><span class="n">1</span><span class="t">Conectar</span></li>
       <li id="st2"><span class="n">2</span><span class="t">Configurar</span></li>
       <li id="st3"><span class="n">3</span><span class="t">Instalar</span></li>
     </ol>
 
-    <main>
+    <main id="main" tabindex="-1">
       <!-- STEP 1 -->
       <section class="card" aria-labelledby="h-connect">
         <div class="card-head">
@@ -325,7 +342,7 @@
         <details class="advanced">
           <summary>Opciones avanzadas</summary>
           <div class="inner">
-            <p class="small muted">Si iniciaste el servidor con <code>make installer-web</code>, puedes instalar sin elegir la carpeta: el servidor escribe directamente en <code>/Volumes/KOBOeReader</code> con el instalador de línea de comandos.</p>
+            <p class="small muted">Si iniciaste el servidor con <code>make installer-web</code>, puedes instalar sin elegir la carpeta: el servidor detecta e instala directamente en la unidad <code>KOBOeReader</code> con el instalador de línea de comandos.</p>
             <button id="btnAutoBackend" class="btn">Instalar desde el servidor local</button>
           </div>
         </details>
@@ -396,7 +413,7 @@
           <button id="btnWriteKobo" class="btn accent" disabled>Instalar en mi Kobo</button>
         </div>
 
-        <div id="progress" class="progress" aria-hidden="true"><i id="progressBar"></i></div>
+        <div id="progress" class="progress" role="progressbar" aria-label="Progreso de instalación" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progressBar"></i></div>
         <p id="resultNotice" class="notice" role="status"></p>
         <ul id="checklist" class="checklist" aria-live="polite"></ul>
 
@@ -412,7 +429,7 @@
 
   <script>
     const KOBO_UUID_MAP = {
-      "390": { name: "Kobo Libra Colour", soc: "MediaTek MT8113T", panel: "Kaleido 3 color · 1264 × 1680", isColor: true, hasButtons: true, scale: "6", mode: "quality" },
+      "390": { name: "Kobo Libra Colour", soc: "MediaTek MT8113T", panel: "Kaleido 3 color · 1264 × 1680", isColor: true, hasButtons: true, allowX7: true, scale: "6", mode: "quality" },
       "393": { name: "Kobo Clara Colour", soc: "MediaTek MT8113T", panel: "Kaleido 3 color · 1072 × 1448", isColor: true, hasButtons: false, scale: "6", mode: "quality" },
       "376": { name: "Kobo Clara HD", soc: "NXP i.MX6ULL", panel: "Carta 16 grises · 1072 × 1448", isColor: false, hasButtons: false, scale: "6", mode: "quality" }
     };
@@ -443,11 +460,16 @@
     function hideNotice(el) { el.className = "notice"; }
     function setStep(n) {
       ["st1", "st2", "st3"].forEach((id, i) => {
-        $(id).dataset.state = i + 1 < n ? "done" : (i + 1 === n ? "current" : "");
+        const el = $(id);
+        el.dataset.state = i + 1 < n ? "done" : (i + 1 === n ? "current" : "");
+        if (i + 1 === n) el.setAttribute("aria-current", "step");
+        else el.removeAttribute("aria-current");
       });
     }
     function setProgress(pct) {
-      $("progress").classList.toggle("visible", pct > 0 && pct < 100);
+      const p = $("progress");
+      p.classList.toggle("visible", pct > 0 && pct < 100);
+      p.setAttribute("aria-valuenow", String(Math.round(pct)));
       $("progressBar").style.width = `${pct}%`;
     }
     function addCheck(text, skipped) {
@@ -477,7 +499,10 @@
       dropzone.classList.remove("dragover");
       handleSelectedFiles(e.dataTransfer.files);
     });
-    romInput.addEventListener("change", (e) => handleSelectedFiles(e.target.files));
+    romInput.addEventListener("change", (e) => {
+      handleSelectedFiles(e.target.files);
+      romInput.value = "";
+    });
 
     function handleSelectedFiles(fileList) {
       for (const f of fileList) {
@@ -489,7 +514,19 @@
         const tag = document.createElement("span");
         tag.className = "tag";
         tag.textContent = /\.sav$/i.test(f.name) ? "SAV" : `${Math.max(1, Math.round(f.size / 1024))} KB`;
-        chip.append(tag, " " + f.name);
+        const rm = document.createElement("button");
+        rm.type = "button";
+        rm.className = "rm";
+        rm.textContent = "×";
+        rm.setAttribute("aria-label", `Quitar ${f.name}`);
+        rm.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const idx = extraRomFiles.indexOf(f);
+          if (idx !== -1) extraRomFiles.splice(idx, 1);
+          chip.remove();
+          appendLog(`Quitado de la lista: ${f.name}`);
+        });
+        chip.append(tag, " " + f.name, rm);
         $("romChipList").appendChild(chip);
         appendLog(`Agregado para transferir: ${f.name}`);
       }
@@ -538,6 +575,12 @@
         setChip($("detColorChip"), detectedProfile.isColor ? "Color" : "Escala de grises", "");
         $("selMode").value = detectedProfile.mode;
         $("selScale").value = detectedProfile.scale;
+        $("selButtons").disabled = !detectedProfile.hasButtons;
+        const x7Opt = $("selScale").querySelector('option[value="7"]');
+        if (x7Opt) {
+          x7Opt.disabled = !detectedProfile.allowX7;
+          if (x7Opt.disabled && $("selScale").value === "7") $("selScale").value = "6";
+        }
 
         const hasNickelMenu = await pathExists(koboDirHandle, [".adds", "nm", "doc"]);
         if (hasNickelMenu) {
@@ -657,8 +700,8 @@
 
         if (/^ExcludeSyncFolders=.*$/m.test(confText)) {
           confText = confText.replace(/^ExcludeSyncFolders=.*$/m, () => EXCLUDE_SYNC_LINE);
-        } else if (confText.includes("[FeatureSettings]")) {
-          confText = confText.replace("[FeatureSettings]", () => `[FeatureSettings]\n${EXCLUDE_SYNC_LINE}`);
+        } else if (/^\[FeatureSettings\]\s*$/m.test(confText)) {
+          confText = confText.replace(/^\[FeatureSettings\]\s*$/m, () => `[FeatureSettings]\n${EXCLUDE_SYNC_LINE}`);
         } else {
           if (confText && !confText.endsWith("\n")) confText += "\n";
           confText += `\n[FeatureSettings]\n${EXCLUDE_SYNC_LINE}\n`;
@@ -746,13 +789,22 @@
       }
     });
 
-    // Server-side install (tools/kobo_auto_installer.py) writes straight to /Volumes/KOBOeReader
+    // Server-side install (tools/kobo_auto_installer.py) writes straight to KOBOeReader
     $("btnAutoBackend").addEventListener("click", async () => {
-      if (!confirm("El servidor local instalará Ink-boy directamente en /Volumes/KOBOeReader. ¿Continuar?")) return;
+      if (!confirm("El servidor local instalará Ink-boy directamente en la unidad KOBOeReader. ¿Continuar?")) return;
+      const btn = $("btnAutoBackend");
+      const prevText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Instalando…";
+      btn.setAttribute("aria-busy", "true");
       appendLog("Solicitando instalación al servidor local...");
       setChip($("writeStatus"), "Instalando", "");
       try {
         const resp = await fetch("/api/auto-install", { method: "POST" });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => "");
+          throw new Error(`HTTP ${resp.status}${text ? `: ${text.slice(0, 120)}` : ""}`);
+        }
         const data = await resp.json();
         appendLog(data.log || JSON.stringify(data, null, 2));
         if (data.ok) {
@@ -762,9 +814,19 @@
           setChip($("writeStatus"), "Error", "err");
           showNotice($("resultNotice"), "El servidor no pudo instalar. Revisa el registro técnico.", "err");
         }
-      } catch (_) {
-        setChip($("writeStatus"), "Sin servidor", "warn");
-        showNotice($("resultNotice"), "No hay servidor local. Inicia `make installer-web` o usa `make auto-install` en la terminal.", "warn");
+      } catch (err) {
+        if (err instanceof TypeError) {
+          setChip($("writeStatus"), "Sin servidor", "warn");
+          showNotice($("resultNotice"), "No hay servidor local. Inicia `make installer-web` o usa `make auto-install` en la terminal.", "warn");
+        } else {
+          setChip($("writeStatus"), "Error", "err");
+          showNotice($("resultNotice"), `Error del servidor local: ${err.message}`, "err");
+          appendLog(`Error del servidor local: ${err.message}`);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = prevText;
+        btn.removeAttribute("aria-busy");
       }
       $("installCard").querySelector("details.log").open = true;
     });

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -18,6 +19,7 @@ namespace inkboy {
 namespace {
 
 constexpr size_t kRomHeaderSize = 0x150;
+constexpr size_t kMaxRomBytes = 8U * 1024U * 1024U;
 constexpr size_t kPeanutRomBankBytes = 0x4000;
 
 size_t romBankCountFromCode(const uint8_t code) {
@@ -108,6 +110,11 @@ void EmulatorSession::shutdown() {
   rom_size_ = 0;
   cart_ram_size_ = 0;
   save_dirty_ = false;
+  std::memset(title_, 0, sizeof(title_));
+  rom_path_.clear();
+  save_path_.clear();
+  temp_save_path_.clear();
+  backup_save_path_.clear();
   write_idx_ = 0;
   middle_idx_.store(1, std::memory_order_release);
   read_idx_ = 2;
@@ -125,13 +132,21 @@ bool EmulatorSession::loadRomFile(const std::string& path, std::string* out_erro
     return false;
   }
 
-  std::fseek(fp, 0, SEEK_END);
+  if (std::fseek(fp, 0, SEEK_END) != 0) {
+    std::fclose(fp);
+    if (out_error) *out_error = "Unable to seek Game Boy ROM";
+    return false;
+  }
   const long file_len = std::ftell(fp);
-  std::fseek(fp, 0, SEEK_SET);
-
-  if (file_len < static_cast<long>(kRomHeaderSize)) {
+  if (file_len < static_cast<long>(kRomHeaderSize) ||
+      static_cast<unsigned long>(file_len) > kMaxRomBytes) {
     std::fclose(fp);
     if (out_error) *out_error = "ROM size is invalid";
+    return false;
+  }
+  if (std::fseek(fp, 0, SEEK_SET) != 0) {
+    std::fclose(fp);
+    if (out_error) *out_error = "Unable to rewind Game Boy ROM";
     return false;
   }
 
@@ -283,25 +298,23 @@ bool EmulatorSession::initCore(std::string* out_error) {
 }
 
 void EmulatorSession::setJoypadMask(const uint8_t mask) {
-  joypad_mask_ = mask;
-  const uint8_t active_low = static_cast<uint8_t>(~mask);
-  if (use_walnut_cgb_ && walnut_cgb_) {
-    walnut_cgb_set_joypad(walnut_cgb_, active_low);
-  } else if (peanut_gb_) {
-    peanut_gb_->direct.joypad = active_low;
-  }
+  joypad_mask_.store(mask, std::memory_order_release);
 }
 
 void EmulatorSession::cycleDmgPalette() {
-  const uint8_t next = (static_cast<uint8_t>(dmg_palette_) + 1U) & 0x03U;
-  dmg_palette_ = static_cast<DmgColorPalette>(next);
+  const uint8_t cur = static_cast<uint8_t>(dmg_palette_.load(std::memory_order_acquire));
+  const uint8_t next = (cur + 1U) & 0x03U;
+  dmg_palette_.store(static_cast<DmgColorPalette>(next), std::memory_order_release);
 }
 
 void EmulatorSession::stepFrame() {
   if (!loaded_) return;
+  const uint8_t active_low = static_cast<uint8_t>(~joypad_mask_.load(std::memory_order_acquire));
   if (use_walnut_cgb_ && walnut_cgb_) {
+    walnut_cgb_set_joypad(walnut_cgb_, active_low);
     walnut_cgb_run_frame(walnut_cgb_);
   } else if (peanut_gb_) {
+    peanut_gb_->direct.joypad = active_low;
     gb_run_frame(peanut_gb_);
   }
   ++total_frames_;
@@ -362,11 +375,19 @@ bool EmulatorSession::loadSaveFile() {
   if (!dst) return false;
   std::memset(dst, 0, cart_ram_size_);
 
+  errno = 0;
   FILE* fp = std::fopen(save_path_.c_str(), "rb");
-  if (!fp) return true;  // No existing save yet
+  if (!fp) {
+    return (errno == ENOENT);  // Missing save is normal; other errors are real I/O failures
+  }
   const size_t got = std::fread(dst, 1, cart_ram_size_, fp);
+  const bool read_err = (std::ferror(fp) != 0);
   std::fclose(fp);
   (void)got;
+  if (read_err) {
+    std::memset(dst, 0, cart_ram_size_);
+    return false;
+  }
   if (use_walnut_cgb_) walnut_cgb_clear_ram_dirty(walnut_cgb_);
   save_dirty_ = false;
   return true;
@@ -386,7 +407,13 @@ bool EmulatorSession::saveCartRamAtomically() {
   size_t total_written = 0;
   while (total_written < cart_ram_size_) {
     const ssize_t w = ::write(fd, src + total_written, cart_ram_size_ - total_written);
-    if (w <= 0) {
+    if (w < 0) {
+      if (errno == EINTR) continue;
+      ::close(fd);
+      ::unlink(temp_save_path_.c_str());
+      return false;
+    }
+    if (w == 0) {
       ::close(fd);
       ::unlink(temp_save_path_.c_str());
       return false;
@@ -394,7 +421,8 @@ bool EmulatorSession::saveCartRamAtomically() {
     total_written += static_cast<size_t>(w);
   }
 
-  if (::fsync(fd) != 0) {
+  while (::fsync(fd) != 0) {
+    if (errno == EINTR) continue;
     ::close(fd);
     ::unlink(temp_save_path_.c_str());
     return false;
@@ -418,6 +446,16 @@ bool EmulatorSession::saveCartRamAtomically() {
   }
 
   if (had_existing) ::unlink(backup_save_path_.c_str());
+
+  const size_t slash = save_path_.find_last_of('/');
+  const std::string parent_dir =
+      (slash == std::string::npos) ? "." : (slash == 0 ? "/" : save_path_.substr(0, slash));
+  const int dir_fd = ::open(parent_dir.c_str(), O_RDONLY | O_DIRECTORY);
+  if (dir_fd >= 0) {
+    while (::fsync(dir_fd) != 0 && errno == EINTR) {}
+    ::close(dir_fd);
+  }
+
   if (use_walnut_cgb_) walnut_cgb_clear_ram_dirty(walnut_cgb_);
   save_dirty_ = false;
   return true;
@@ -427,7 +465,8 @@ void EmulatorSession::writeDmgLine(const uint8_t* pixels, const uint_fast8_t lin
   if (!pixels || line >= kGameBoyHeight) return;
   EmulatorFrame& dst = frames_[write_idx_];
   const size_t row_offset = static_cast<size_t>(line) * kGameBoyWidth;
-  const uint16_t* pal = kDmgPalettes[static_cast<uint8_t>(dmg_palette_) & 0x03U];
+  const uint8_t pal_idx = static_cast<uint8_t>(dmg_palette_.load(std::memory_order_acquire)) & 0x03U;
+  const uint16_t* pal = kDmgPalettes[pal_idx];
 
   for (uint_fast8_t x = 0; x < kGameBoyWidth; ++x) {
     const uint8_t shade = static_cast<uint8_t>(pixels[x] & 0x03U);
@@ -439,7 +478,7 @@ void EmulatorSession::writeDmgLine(const uint8_t* pixels, const uint_fast8_t lin
 
 void EmulatorSession::writeCgbLine(const uint16_t* rgb565_pixels, const uint8_t* shade4_pixels,
                                    const uint8_t* bw_pixels, const uint_fast8_t line) {
-  if (line >= kGameBoyHeight) return;
+  if (!rgb565_pixels || !shade4_pixels || !bw_pixels || line >= kGameBoyHeight) return;
   EmulatorFrame& dst = frames_[write_idx_];
   const size_t row_offset = static_cast<size_t>(line) * kGameBoyWidth;
   std::memcpy(dst.rgb565 + row_offset, rgb565_pixels, kGameBoyWidth * sizeof(uint16_t));

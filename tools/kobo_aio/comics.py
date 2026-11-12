@@ -26,7 +26,7 @@ from pathlib import Path
 
 from PIL import Image, ImageEnhance, ImageOps
 
-from .core import host_os, install_hint
+from .core import AioError, host_os, install_hint
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 ARCHIVE_EXTS = {".cbz", ".zip", ".cbr", ".rar", ".cb7", ".7z", ".cbt", ".tar", ".pdf", ".epub"}
@@ -147,22 +147,22 @@ def read_pages(src: Path) -> list[tuple[str, bytes]]:
         try:
             import fitz  # PyMuPDF
         except ImportError as exc:
-            raise RuntimeError(f"Para PDF hace falta PyMuPDF (ya viene en la app de escritorio): {install_hint('pymupdf')}") from exc
-        doc = fitz.open(src)
-        pages = []
-        for i, page in enumerate(doc):
-            pix = page.get_pixmap(dpi=200)
-            pages.append((f"{i:04d}.png", pix.tobytes("png")))
-        return pages
+            raise AioError(f"Para PDF hace falta PyMuPDF (ya viene en la app de escritorio): {install_hint('pymupdf')}") from exc
+        with fitz.open(src) as doc:
+            pages = []
+            for i, page in enumerate(doc):
+                pix = page.get_pixmap(dpi=200)
+                pages.append((f"{i:04d}.png", pix.tobytes("png")))
+            return pages
     if ext in (".cbr", ".rar", ".cb7", ".7z"):
         tool = archive_tool()
         if not tool:
-            raise RuntimeError(f"Para abrir CBR, RAR, CB7 o 7Z hace falta un descompresor: {install_hint('unar')}")
+            raise AioError(f"Para abrir CBR, RAR, CB7 o 7Z hace falta un descompresor: {install_hint('unar')}")
         with tempfile.TemporaryDirectory() as tmp:
             cmd = [tool, "-q", "-o", tmp, str(src)] if Path(tool).stem == "unar" else [tool, "x", "-y", f"-o{tmp}", str(src)]
             subprocess.run(cmd, check=True, capture_output=True)
             return read_pages(Path(tmp))
-    raise RuntimeError(f"Formato no soportado: {src.name}. Acepta {SUPPORTED_HELP}.")
+    raise AioError(f"Formato no soportado: {src.name}. Acepta {SUPPORTED_HELP}.")
 
 
 def expand_inputs(paths: list[Path]) -> list[Path]:
@@ -338,7 +338,7 @@ def convert(src: Path, model_id: str, opts: ComicOptions, progress=lambda m: Non
         return _convert_kcc(Path(src), kcc_profile, color_panel, opts, title)
     pages = read_pages(Path(src))
     if not pages:
-        raise RuntimeError(f"No se encontraron imágenes en {Path(src).name}")
+        raise AioError(f"No se encontraron imágenes en {Path(src).name}")
     progress(f"{title}: {len(pages)} páginas, panel {W}x{H}{' color' if color_panel else ''}")
     images = process_pages(pages, W, H, color_panel, opts, progress)
     if opts.output == "cbz":
@@ -362,6 +362,6 @@ def _convert_kcc(src: Path, profile: str, color_panel: bool, opts: ComicOptions,
         subprocess.run(cmd, check=True, capture_output=True)
         produced = sorted(Path(out).iterdir(), key=lambda p: p.stat().st_size, reverse=True)
         if not produced:
-            raise RuntimeError("KCC no generó salida")
+            raise AioError("KCC no generó salida")
         ext = ".cbz" if opts.output == "cbz" else ".kepub.epub"
         return f"{title}{ext}", produced[0].read_bytes()

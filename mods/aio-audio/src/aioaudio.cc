@@ -2058,7 +2058,8 @@ int AioAudio::stockTrackCount() const {
     if (!reader || !layoutOk)
         return 0;
     const int *d = *reinterpret_cast<const int *const *>(reinterpret_cast<const char *>(reader.data()) + 0x2c);
-    if (!d)
+    if (!d || (reinterpret_cast<uintptr_t>(d) & (alignof(int) - 1)) != 0 ||
+        reinterpret_cast<uintptr_t>(d) < 0x10000u)
         return 0;
     const int n = d[1];
     return n > 0 && n <= MAX_TRACKS ? n : 0;

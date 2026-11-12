@@ -21,7 +21,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-from .core import install_hint
+from .core import AioError, install_hint
 
 AUDIO_EXTS = {".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".flac", ".wav"}
 COVER_NAMES = ("cover", "folder", "front", "portada")
@@ -41,16 +41,22 @@ _SR = {1: [44100, 48000, 32000], 2: [22050, 24000, 16000], 25: [11025, 12000, 80
 def strip_tags(data: bytes) -> bytes:
     """Remove leading ID3v2 and trailing ID3v1/APE tags, leaving raw MPEG frames."""
     start = 0
-    while data[start:start + 3] == b"ID3" and len(data) >= start + 10:
+    while len(data) >= start + 10 and data[start:start + 3] == b"ID3":
         size = (data[start + 6] << 21) | (data[start + 7] << 14) | (data[start + 8] << 7) | data[start + 9]
         footer = 10 if data[start + 5] & 0x10 else 0
         start += 10 + size + footer
+    start = min(start, len(data))
     end = len(data)
     if end - start >= 128 and data[end - 128:end - 125] == b"TAG":
         end -= 128
-    if data[end - 32:end - 24] == b"APETAGEX":
+    if end - start >= 32 and data[end - 32:end - 24] == b"APETAGEX":
         ape_size = struct.unpack("<I", data[end - 20:end - 16])[0]
-        end -= ape_size + (32 if data[end - ape_size - 32:end - ape_size - 24] == b"APETAGEX" else 0)
+        if 32 <= ape_size <= end - start:
+            has_header = (
+                end - start >= ape_size + 32
+                and data[end - ape_size - 32:end - ape_size - 24] == b"APETAGEX"
+            )
+            end -= ape_size + (32 if has_header else 0)
     return data[start:end]
 
 
@@ -142,7 +148,8 @@ def build_id3(title: str, author: str, chapters: list[tuple[str, int, int]], cov
         frames.append(_frame("APIC", b"\x00" + b"image/jpeg\x00" + b"\x03" + b"Cover\x00" + cover_jpeg))
     if chapters:
         ids = [f"ch{i:03d}".encode() for i in range(len(chapters))]
-        frames.append(_frame("CTOC", b"toc\x00" + b"\x03" + bytes([len(ids)]) + b"".join(c + b"\x00" for c in ids)))
+        toc_ids = ids[:255]
+        frames.append(_frame("CTOC", b"toc\x00" + b"\x03" + bytes([len(toc_ids)]) + b"".join(c + b"\x00" for c in toc_ids)))
         for cid, (name, start, end) in zip(ids, chapters):
             sub = _text("TIT2", name)
             frames.append(_frame("CHAP", cid + b"\x00" + struct.pack(">IIII", start, end, 0xFFFFFFFF, 0xFFFFFFFF) + sub))
@@ -162,7 +169,7 @@ def prepare_cover(path_or_bytes, max_side: int = 1000) -> bytes:
 
 def embedded_cover(mp3: bytes) -> bytes | None:
     """Extract an APIC picture from an ID3v2.3/2.4 tag, if any."""
-    if mp3[:3] != b"ID3":
+    if mp3[:3] != b"ID3" or len(mp3) < 10 or mp3[3] not in (3, 4):
         return None
     ver = mp3[3]
     size = (mp3[6] << 21) | (mp3[7] << 14) | (mp3[8] << 7) | mp3[9]
@@ -171,20 +178,29 @@ def embedded_cover(mp3: bytes) -> bytes | None:
         fid = tag[i:i + 4]
         fsz = (int.from_bytes(tag[i + 4:i + 8], "big") if ver == 3 else
                (tag[i + 4] << 21) | (tag[i + 5] << 14) | (tag[i + 6] << 7) | tag[i + 7])
-        if not fid.strip(b"\x00") or fsz <= 0:
+        if not fid.strip(b"\x00") or fsz <= 0 or i + 10 + fsz > len(tag):
             break
         if fid == b"APIC":
             p = tag[i + 10:i + 10 + fsz]
-            mime_end = p.index(b"\x00", 1)
+            if len(p) < 4:
+                return None
+            mime_end = p.find(b"\x00", 1)
+            if mime_end < 0 or mime_end + 2 >= len(p):
+                return None
             j = mime_end + 2
             enc = p[0]
             if enc in (1, 2):
                 while j + 1 < len(p) and p[j:j + 2] != b"\x00\x00":
                     j += 2
+                if j + 1 >= len(p):
+                    return None
                 j += 2
             else:
-                j = p.index(b"\x00", j) + 1
-            return p[j:]
+                desc_end = p.find(b"\x00", j)
+                if desc_end < 0:
+                    return None
+                j = desc_end + 1
+            return p[j:] or None
         i += 10 + fsz
     return None
 
@@ -249,7 +265,7 @@ def collect(src: Path, title: str = "", author: str = "", cover: Path | None = N
     else:
         tracks, guess = [src], src.stem
     if not tracks:
-        raise RuntimeError(f"No hay archivos de audio en {src.name}")
+        raise AioError(f"No hay archivos de audio en {src.name}")
     # Nickel shows the .mp3z file name as the book title, so prefer the album/artist the tracks carry.
     tags: dict[str, str] = {}
     if tracks[0].suffix.lower() == ".mp3":
@@ -330,7 +346,7 @@ def build_mp3z(book: AudiobookInput, progress=lambda m: None, part_minutes: int 
     """
     exts = {t.suffix.lower() for t in book.tracks}
     if exts != {".mp3"}:
-        raise RuntimeError("El formato stock de Nickel (.mp3z) solo admite pistas MP3")
+        raise AioError("El formato stock de Nickel (.mp3z) solo admite pistas MP3")
     cover = prepare_cover(book.cover, 600) if book.cover else None
     if cover is None:
         for t in book.tracks:
@@ -367,14 +383,14 @@ def build_mp3z(book: AudiobookInput, progress=lambda m: None, part_minutes: int 
                 zf.writestr(info, b"ID3\x03\x00\x00" + _syncsafe(len(body)) + body + frames)
     data = buf.getvalue()
     if len(data) > FAT32_MAX:
-        raise RuntimeError("El audiolibro supera 4 GB (límite de archivo del Kobo). Divídelo en dos libros.")
+        raise AioError("El audiolibro supera 4 GB (límite de archivo del Kobo). Divídelo en dos libros.")
     return f"{safe}.mp3z", data, "mp3z"
 
 
 def _build_ffmpeg(book: AudiobookInput, safe: str, cover: bytes | None, progress) -> tuple[str, bytes, str]:
     ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
     if not ffmpeg or not ffprobe:
-        raise RuntimeError(f"Para formatos distintos de MP3 hace falta ffmpeg: {install_hint('ffmpeg')}")
+        raise AioError(f"Para formatos distintos de MP3 hace falta ffmpeg: {install_hint('ffmpeg')}")
     with tempfile.TemporaryDirectory() as tmp:
         tmpd = Path(tmp)
         lst = tmpd / "list.txt"
@@ -385,7 +401,10 @@ def _build_ffmpeg(book: AudiobookInput, safe: str, cover: bytes | None, progress
         for idx, t in enumerate(book.tracks, 1):
             out = subprocess.run([ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(t)],
                                  capture_output=True, text=True, check=True).stdout.strip()
-            dur = int(float(out) * 1000)
+            try:
+                dur = int(float(out) * 1000)
+            except ValueError:
+                dur = 0
             meta += ["[CHAPTER]", "TIMEBASE=1/1000", f"START={pos}", f"END={pos + dur}", f"title={_chapter_name(t, idx)}"]
             pos += dur
         (tmpd / "meta.txt").write_text("\n".join(meta) + "\n", encoding="utf-8")

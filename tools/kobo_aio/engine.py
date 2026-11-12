@@ -152,7 +152,7 @@ def _run_txn(dev, selection, uninstall, dry_run, progress, txn: Transaction, ctx
         "changes": [c.to_dict() for c in txn.changes],
         "log": txn.log,
         "manifest": str(manifest) if manifest else None,
-        "needs_reboot": any(REGISTRY[r["id"]].reboot for r in results if r["action"] == "apply" and r["ok"])
+        "needs_reboot": any(REGISTRY[r["id"]].reboot for r in results if r["action"] in ("apply", "uninstall") and r["ok"])
                         or bool(ctx.koboroot_parts) or bool(ctx.firmware_parts),
     }
 

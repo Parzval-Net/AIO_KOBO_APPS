@@ -195,7 +195,10 @@ class Transaction:
         return None if data is None else data.decode("utf-8", errors="surrogateescape")
 
     def exists(self, rel: str) -> bool:
-        return self.read_bytes(rel) is not None
+        rel = _norm(rel)
+        if rel in self.staged:
+            return self.staged[rel] is not None
+        return self._abs(rel).is_file()
 
     def note(self, msg: str) -> None:
         self.log.append(msg)
@@ -222,11 +225,15 @@ class Transaction:
     def _atomic_write(self, dst: Path, data: bytes) -> None:
         dst.parent.mkdir(parents=True, exist_ok=True)
         tmp = dst.with_name(dst.name + ".aio-tmp")
-        with open(tmp, "wb") as fh:
-            fh.write(data)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, dst)
+        try:
+            with open(tmp, "wb") as fh:
+                fh.write(data)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, dst)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
 
     # -- operations ------------------------------------------------------
     def write_bytes(self, rel: str, data: bytes, note: str = "", mode: int | None = None) -> bool:
@@ -311,6 +318,7 @@ class Transaction:
             raise SafetyError(f"No es basura de macOS validada: {path}")
         rel = _norm(str(path.relative_to(self.root)))
         self._record(Change("delete", rel, True, "", "", path.stat().st_size, "macOS junk"))
+        self.staged[rel] = None
         if not self.dry_run:
             path.unlink()
         return True
@@ -334,8 +342,15 @@ class Transaction:
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         path = self.backup_dir / "manifest.json"
         tmp = path.with_name("manifest.json.tmp")
-        tmp.write_text(json.dumps(self.manifest(), ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(tmp, path)
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(self.manifest(), ensure_ascii=False, indent=2))
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
         if hasattr(os, "sync"):
             os.sync()
         return path
@@ -392,7 +407,12 @@ def rollback(manifest_path: Path, root: Path, dry_run: bool = False, expected_se
     if expected_serial and data.get("device_serial") and data["device_serial"] != expected_serial:
         raise SafetyError("Este respaldo es de otro Kobo (número de serie distinto)")
     files_dir = manifest_path.parent / "files"
-    safety_dir = manifest_path.parent / f"rollback-{time.strftime('%Y%m%d-%H%M%S')}"
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    safety_dir = manifest_path.parent / f"rollback-{stamp}-{os.getpid()}"
+    n = 2
+    while safety_dir.exists():
+        safety_dir = manifest_path.parent / f"rollback-{stamp}-{os.getpid()}-{n}"
+        n += 1
     actions: list[str] = []
     for ch in reversed(data["changes"]):
         rel = check_rollback_path(ch["rel"])

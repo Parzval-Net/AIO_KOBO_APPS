@@ -11,7 +11,8 @@ Serves:
 import json
 import subprocess
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+import urllib.parse
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -37,10 +38,10 @@ class InstallerHandler(BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store")
             self.end_headers()
             self.wfile.write(data)
-        elif self.path.startswith("/dist/roms/"):
-            rom_name = Path(self.path).name
+        elif clean_path.startswith("/dist/roms/"):
+            rom_name = Path(urllib.parse.unquote(clean_path)).name
             rom_path = DIST_DIR / "roms" / rom_name
-            if rom_path.is_file():
+            if rom_name not in ("", ".", "..") and rom_path.is_file():
                 data = rom_path.read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
@@ -59,16 +60,26 @@ class InstallerHandler(BaseHTTPRequestHandler):
             self.send_error(403, "Cross-origin request rejected")
             return
         if self.path == "/api/auto-install":
-            proc = subprocess.run(
-                [sys.executable, str(PROJECT_ROOT / "tools" / "kobo_auto_installer.py")],
-                capture_output=True,
-                text=True,
-            )
-            payload = {
-                "ok": proc.returncode == 0,
-                "returncode": proc.returncode,
-                "log": (proc.stdout + "\n" + proc.stderr).strip(),
-            }
+            try:
+                proc = subprocess.run(
+                    [sys.executable, str(PROJECT_ROOT / "tools" / "kobo_auto_installer.py")],
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+                payload = {
+                    "ok": proc.returncode == 0,
+                    "returncode": proc.returncode,
+                    "log": (proc.stdout + "\n" + proc.stderr).strip(),
+                }
+            except subprocess.TimeoutExpired as exc:
+                stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+                stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+                payload = {
+                    "ok": False,
+                    "returncode": -1,
+                    "log": ((stdout + "\n" + stderr).strip() + "\n[ERROR] Instalación cancelada por tiempo de espera agotado (180s).").strip(),
+                }
             body = json.dumps(payload).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -83,7 +94,7 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
     url = f"http://127.0.0.1:{port}/"
     print(f"=== Ink-boy Kobo Web Installer running at {url} ===", flush=True)
-    server = HTTPServer(("127.0.0.1", port), InstallerHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", port), InstallerHandler)
     try:
         webbrowser.open(url)
     except Exception:

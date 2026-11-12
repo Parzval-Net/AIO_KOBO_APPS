@@ -10,6 +10,7 @@ The same UI is published on GitHub Pages; from there it talks to this helper thr
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -34,14 +35,29 @@ WEB_DIR = (Path(getattr(sys, "_MEIPASS", "")) / "web") if getattr(sys, "frozen",
     Path(__file__).resolve().parents[2] / "web"
 INBOX = Path.home() / "Kobo-AIO" / "inbox"
 MAX_UPLOAD = 4 * 1024 ** 3
+MAX_JSON_BODY = 16 * 1024 * 1024
+MAX_JOBS = 100
 ALLOWED_ORIGINS = {"https://parzval-net.github.io"} | {
-    o.strip() for o in __import__("os").environ.get("KOBO_AIO_EXTRA_ORIGINS", "").split(",") if o.strip()}
+    o.strip() for o in os.environ.get("KOBO_AIO_EXTRA_ORIGINS", "").split(",") if o.strip()}
 JOBS: dict[str, dict] = {}
+JOBS_LOCK = threading.Lock()
 LOCK = threading.Lock()   # one write job at a time
 
 
+def _validated_root(root: str | None) -> Path | None:
+    if not root:
+        return None
+    rp = Path(root).resolve()
+    if not os.environ.get("KOBO_AIO_ROOT"):
+        allowed = {m.resolve() for m in candidate_mounts()}
+        if rp not in allowed:
+            raise AioError("Ruta de Kobo no permitida.")
+    return rp
+
+
 def _device(root: str | None):
-    dev = find_device(Path(root)) if root else find_device()
+    validated = _validated_root(root)
+    dev = find_device(validated) if validated else find_device()
     if dev is None:
         raise AioError("No hay un Kobo conectado. Conéctalo por USB y toca «Conectar».")
     return dev
@@ -93,27 +109,46 @@ def _check_file_options(selection: dict) -> None:
                     raise AioError(f"Ruta no permitida desde la web: {v}. Usa archivos de tu carpeta de usuario.")
 
 
+def _evict_old_jobs_locked() -> None:
+    if len(JOBS) < MAX_JOBS:
+        return
+    done_ids = sorted(
+        (k for k, v in JOBS.items() if v.get("state") in ("done", "error")),
+        key=lambda k: JOBS[k].get("started", 0),
+    )
+    for k in done_ids[: len(JOBS) - MAX_JOBS + 1]:
+        JOBS.pop(k, None)
+
+
 def _run_job(kind: str, fn) -> str:
     jid = uuid.uuid4().hex[:12]
     job = {"id": jid, "kind": kind, "state": "running", "log": [], "result": None, "error": None,
            "started": time.time()}
-    JOBS[jid] = job
+    with JOBS_LOCK:
+        _evict_old_jobs_locked()
+        JOBS[jid] = job
 
     def progress(msg: str):
-        job["log"].append(msg)
+        with JOBS_LOCK:
+            job["log"].append(msg)
 
     def worker():
         if not LOCK.acquire(blocking=False):
-            job.update(state="error", error="Ya hay una operación en curso. Espera a que termine.")
+            with JOBS_LOCK:
+                job.update(state="error", error="Ya hay una operación en curso. Espera a que termine.")
             return
         try:
-            job["result"] = fn(progress)
-            job["state"] = "done"
+            res = fn(progress)
+            with JOBS_LOCK:
+                job["result"] = res
+                job["state"] = "done"
         except AioError as exc:
-            job.update(state="error", error=str(exc))
+            with JOBS_LOCK:
+                job.update(state="error", error=str(exc))
         except Exception as exc:  # noqa: BLE001
-            job.update(state="error", error=f"{type(exc).__name__}: {exc}")
-            job["log"].append(traceback.format_exc(limit=3))
+            with JOBS_LOCK:
+                job.update(state="error", error=f"{type(exc).__name__}: {exc}")
+                job["log"].append(traceback.format_exc(limit=3))
         finally:
             LOCK.release()
 
@@ -183,7 +218,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/devices":
                 return self._json(200, [parse_version_file(m).to_dict() for m in candidate_mounts()])
             if url.path == "/api/catalog":
-                dev = find_device(Path(q["root"])) if q.get("root") else find_device()
+                validated = _validated_root(q.get("root"))
+                dev = find_device(validated) if validated else find_device()
                 return self._json(200, {"device": dev.to_dict() if dev else None, "modules": engine.catalog(dev),
                                         "installed": engine.installed_modules(dev.root) if dev else {}})
             if url.path == "/api/doctor":
@@ -203,7 +239,10 @@ class Handler(BaseHTTPRequestHandler):
                                 "complete": data.get("complete", True), "changes": len(data.get("changes", []))})
                 return self._json(200, out)
             if url.path.startswith("/api/jobs/"):
-                job = JOBS.get(url.path.rsplit("/", 1)[1])
+                jid = url.path.rsplit("/", 1)[1]
+                with JOBS_LOCK:
+                    raw_job = JOBS.get(jid)
+                    job = {**raw_job, "log": list(raw_job["log"])} if raw_job else None
                 return self._json(200 if job else 404, job or {"error": "no existe"})
             self.send_error(404)
         except AioError as exc:
@@ -218,7 +257,11 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/upload":
                 return self._upload()
             length = int(self.headers.get("Content-Length") or 0)
+            if length < 0 or length > MAX_JSON_BODY:
+                return self._json(413, {"error": "Cuerpo JSON demasiado grande (máx. 16 MB)"})
             body = json.loads(self.rfile.read(length) or b"{}") if length else {}
+            if not isinstance(body, dict):
+                return self._json(400, {"error": "El cuerpo JSON debe ser un objeto"})
             root = body.get("root")
             if url.path in ("/api/plan", "/api/apply"):
                 dev = _device(root)
@@ -244,7 +287,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
         except AioError as exc:
             self._json(409, {"error": str(exc)})
-        except (ValueError, KeyError) as exc:
+        except (ValueError, KeyError, OSError) as exc:
             self._json(400, {"error": f"Solicitud inválida: {exc}"})
 
     def _upload(self):
@@ -262,11 +305,15 @@ class Handler(BaseHTTPRequestHandler):
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest = dest_dir / name
         n = 2
-        while dest.exists():
-            dest = dest_dir / f"{Path(name).stem} ({n}){Path(name).suffix}"
-            n += 1
+        while True:
+            try:
+                fh = open(dest, "xb")
+                break
+            except FileExistsError:
+                dest = dest_dir / f"{Path(name).stem} ({n}){Path(name).suffix}"
+                n += 1
         remaining = length
-        with open(dest, "wb") as fh:
+        with fh:
             while remaining > 0:
                 chunk = self.rfile.read(min(1 << 20, remaining))
                 if not chunk:

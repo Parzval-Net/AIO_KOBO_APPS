@@ -62,6 +62,20 @@ constexpr uint16_t kBtnDpadDown = 0x221;
 constexpr uint16_t kBtnDpadLeft = 0x222;
 constexpr uint16_t kBtnDpadRight = 0x223;
 
+struct DeviceInputState {
+  int current_slot = 0;
+  bool protocol_type_a_pending = false;
+  int type_a_slot_cursor = 0;
+  int device_kind = 0;
+};
+
+#if defined(__linux__)
+struct InputDeviceEntry {
+  int fd = -1;
+  DeviceInputState state = {};
+};
+#endif
+
 struct InputContext {
   bool initialized = false;
   kobo_display_info_t disp_info = {};
@@ -69,12 +83,9 @@ struct InputContext {
 
   std::vector<kobo_hud_button_t> hud_buttons;
 
-  // Multitouch Type A & Type B state
-  int current_slot = 0;
-  bool protocol_type_a_pending = false;
-  int type_a_slot_cursor = 0;
-  int last_device_kind = 0;
   kobo_touch_slot_t slots[KOBO_MAX_TOUCH_SLOTS] = {};
+  int slot_device_kind[KOBO_MAX_TOUCH_SLOTS] = {};
+  DeviceInputState raw_states[4] = {};  // Per-device_kind state for kobo_input_feed_raw_event()
 
   std::bitset<0x300> held_keys;  // Every EV_KEY currently held, including power and BTN_TOUCH
   uint8_t physical_mask = 0;
@@ -84,7 +95,7 @@ struct InputContext {
 
 #if defined(__linux__)
   int epoll_fd = -1;
-  std::vector<int> device_fds;
+  std::vector<InputDeviceEntry> device_fds;
 #endif
 };
 
@@ -150,7 +161,7 @@ void evaluateTouchSlots() {
   for (int s = 0; s < KOBO_MAX_TOUCH_SLOTS; ++s) {
     if (!g_input.slots[s].active) continue;
     transformTouchCoords(g_input.slots[s].raw_x, g_input.slots[s].raw_y,
-                         g_input.last_device_kind,
+                         g_input.slot_device_kind[s],
                          &g_input.slots[s].screen_x, &g_input.slots[s].screen_y);
     const int sx = g_input.slots[s].screen_x;
     const int sy = g_input.slots[s].screen_y;
@@ -247,6 +258,9 @@ bool kobo_input_init(const kobo_display_info_t* display_info, libra_button_map_t
 
 #if defined(__linux__)
   g_input.epoll_fd = ::epoll_create1(EPOLL_CLOEXEC);
+  if (g_input.epoll_fd < 0) {
+    return false;
+  }
   kobo_input_rescan_devices();
 #endif
 
@@ -256,10 +270,13 @@ bool kobo_input_init(const kobo_display_info_t* display_info, libra_button_map_t
 
 void kobo_input_shutdown(void) {
 #if defined(__linux__)
-  for (int fd : g_input.device_fds) {
-    if (fd >= 0) {
-      ::ioctl(fd, EVIOCGRAB, 0);
-      ::close(fd);
+  for (const auto& dev : g_input.device_fds) {
+    if (dev.fd >= 0) {
+      if (g_input.epoll_fd >= 0) {
+        ::epoll_ctl(g_input.epoll_fd, EPOLL_CTL_DEL, dev.fd, nullptr);
+      }
+      ::ioctl(dev.fd, EVIOCGRAB, 0);
+      ::close(dev.fd);
     }
   }
   g_input.device_fds.clear();
@@ -278,6 +295,66 @@ size_t kobo_input_build_default_hud(const kobo_display_info_t* display_info,
 
   const int sw = static_cast<int>(display_info->screen_width);
   const int sh = static_cast<int>(display_info->screen_height);
+  size_t n = 0;
+
+  if (!display_info->portrait) {
+    // Landscape sidebar layout: D-Pad on left sidebar, A/B on right sidebar, utility bar at bottom
+    const int left_w = std::max(0, display_info->game_x);
+    const int right_x = display_info->game_x + display_info->game_w;
+    const int right_w = std::max(0, sw - right_x);
+    const int deck_top = display_info->game_y + display_info->game_h + 24;
+    const int deck_h = sh - deck_top - 20;
+
+    const int dpad_size = std::max(24, std::min(112, (left_w - 16) / 3));
+    const int dpad_cx = std::max(dpad_size, left_w / 2 - dpad_size / 2);
+    const int dpad_cy = display_info->game_y + display_info->game_h / 2 - dpad_size / 2;
+
+    out_buttons[n++] = {dpad_cx, dpad_cy - dpad_size, dpad_size, dpad_size, "UP", HUD_CTRL_UP, false};
+    out_buttons[n++] = {dpad_cx, dpad_cy + dpad_size, dpad_size, dpad_size, "DN", HUD_CTRL_DOWN, false};
+    out_buttons[n++] = {dpad_cx - dpad_size, dpad_cy, dpad_size, dpad_size, "LT", HUD_CTRL_LEFT, false};
+    out_buttons[n++] = {dpad_cx + dpad_size, dpad_cy, dpad_size, dpad_size, "RT", HUD_CTRL_RIGHT, false};
+
+    const int ab_w = std::max(28, std::min(136, (right_w - 20) / 2));
+    const int ab_h = ab_w;
+    const int b_x = right_x + 8;
+    const int a_x = std::max(b_x + ab_w + 4, sw - 8 - ab_w);
+    const int ab_cy = display_info->game_y + display_info->game_h / 2 - ab_h / 2;
+    const int b_y = ab_cy + ab_h / 3;
+    const int a_y = ab_cy - ab_h / 3;
+
+    out_buttons[n++] = {b_x, b_y, ab_w, ab_h, "B", HUD_CTRL_B, false};
+    out_buttons[n++] = {a_x, a_y, ab_w, ab_h, "A", HUD_CTRL_A, false};
+
+    if (deck_h >= 160) {
+      const int sel_w = 136;
+      const int sel_h = 64;
+      const int sel_y = sh - 168;
+      const int center_x = sw / 2;
+      out_buttons[n++] = {center_x - sel_w - 16, sel_y, sel_w, sel_h, "SELECT", HUD_CTRL_SELECT, false};
+      out_buttons[n++] = {center_x + 16, sel_y, sel_w, sel_h, "START", HUD_CTRL_START, false};
+    } else {
+      const int sel_w = std::max(48, std::min(120, left_w - 16));
+      const int sel_h = 52;
+      const int sel_y = std::min(sh - 140, dpad_cy + 2 * dpad_size + 16);
+      out_buttons[n++] = {std::max(8, (left_w - sel_w) / 2), sel_y, sel_w, sel_h, "SELECT", HUD_CTRL_SELECT, false};
+      out_buttons[n++] = {right_x + std::max(8, (right_w - sel_w) / 2), sel_y, sel_w, sel_h, "START", HUD_CTRL_START, false};
+    }
+
+    const int util_count = 5;
+    const int margin = 36;
+    const int gap = 14;
+    const int util_w = (sw - margin * 2 - gap * (util_count - 1)) / util_count;
+    const int util_h = 68;
+    const int util_y = sh - util_h - 20;
+
+    out_buttons[n++] = {margin + 0 * (util_w + gap), util_y, util_w, util_h, "MODE", HUD_CTRL_MODE, false};
+    out_buttons[n++] = {margin + 1 * (util_w + gap), util_y, util_w, util_h, "PALETTE", HUD_CTRL_PALETTE, false};
+    out_buttons[n++] = {margin + 2 * (util_w + gap), util_y, util_w, util_h, "CLEAN", HUD_CTRL_CLEAN, false};
+    out_buttons[n++] = {margin + 3 * (util_w + gap), util_y, util_w, util_h, "ROMS", HUD_CTRL_ROMS, false};
+    out_buttons[n++] = {margin + 4 * (util_w + gap), util_y, util_w, util_h, "EXIT", HUD_CTRL_EXIT, false};
+    return n;
+  }
+
   const int deck_top = display_info->game_y + display_info->game_h + 24;
   const int deck_h = sh - deck_top - 20;
 
@@ -286,7 +363,6 @@ size_t kobo_input_build_default_hud(const kobo_display_info_t* display_info,
   const int dpad_cx = 44 + dpad_size;
   const int dpad_cy = deck_top + dpad_size + 12;
 
-  size_t n = 0;
   out_buttons[n++] = {dpad_cx, dpad_cy - dpad_size, dpad_size, dpad_size, "UP", HUD_CTRL_UP, false};
   out_buttons[n++] = {dpad_cx, dpad_cy + dpad_size, dpad_size, dpad_size, "DN", HUD_CTRL_DOWN, false};
   out_buttons[n++] = {dpad_cx - dpad_size, dpad_cy, dpad_size, dpad_size, "LT", HUD_CTRL_LEFT, false};
@@ -335,9 +411,10 @@ void kobo_input_set_touch_layout(const kobo_display_info_t* display_info,
   g_input.hud_buttons.assign(buttons, buttons + button_count);
 }
 
-void kobo_input_feed_raw_event(uint16_t type, uint16_t code, int32_t value,
-                               int device_kind, kobo_input_state_t* out_state) {
-  g_input.last_device_kind = device_kind;
+namespace {
+
+void feedRawEventForDevice(DeviceInputState& dev, uint16_t type, uint16_t code, int32_t value,
+                           kobo_input_state_t* out_state) {
   if (type == kEvKey && code < g_input.held_keys.size() && value != 2) {
     g_input.held_keys.set(code, value != 0);
   }
@@ -346,7 +423,7 @@ void kobo_input_feed_raw_event(uint16_t type, uint16_t code, int32_t value,
       g_input.pending_ui_action = INKBOY_ACTION_EXIT;
     } else if (code == kBtnTouch && value == 0) {
       // Single-touch or Type-A full release fallback
-      if (!g_input.protocol_type_a_pending) {
+      if (!dev.protocol_type_a_pending) {
         for (int s = 0; s < KOBO_MAX_TOUCH_SLOTS; ++s) {
           g_input.slots[s].active = false;
           g_input.slots[s].tracking_id = -1;
@@ -364,21 +441,28 @@ void kobo_input_feed_raw_event(uint16_t type, uint16_t code, int32_t value,
     }
   } else if (type == kEvAbs) {
     if (code == kAbsMtSlot) {
-      if (value >= 0 && value < KOBO_MAX_TOUCH_SLOTS) {
-        g_input.current_slot = value;
-      }
+      dev.current_slot = value;
     } else if (code == kAbsMtTrackingId) {
-      kobo_touch_slot_t& slot = g_input.slots[g_input.current_slot];
-      slot.tracking_id = value;
-      slot.active = (value >= 0);
+      if (dev.current_slot >= 0 && dev.current_slot < KOBO_MAX_TOUCH_SLOTS) {
+        kobo_touch_slot_t& slot = g_input.slots[dev.current_slot];
+        slot.tracking_id = value;
+        slot.active = (value >= 0);
+        g_input.slot_device_kind[dev.current_slot] = dev.device_kind;
+      }
     } else if (code == kAbsMtPositionX || code == kAbsX) {
-      kobo_touch_slot_t& slot = g_input.slots[g_input.current_slot];
-      slot.raw_x = value;
-      if (code == kAbsX) slot.active = true;
+      if (dev.current_slot >= 0 && dev.current_slot < KOBO_MAX_TOUCH_SLOTS) {
+        kobo_touch_slot_t& slot = g_input.slots[dev.current_slot];
+        slot.raw_x = value;
+        g_input.slot_device_kind[dev.current_slot] = dev.device_kind;
+        if (code == kAbsX) slot.active = true;
+      }
     } else if (code == kAbsMtPositionY || code == kAbsY) {
-      kobo_touch_slot_t& slot = g_input.slots[g_input.current_slot];
-      slot.raw_y = value;
-      if (code == kAbsY) slot.active = true;
+      if (dev.current_slot >= 0 && dev.current_slot < KOBO_MAX_TOUCH_SLOTS) {
+        kobo_touch_slot_t& slot = g_input.slots[dev.current_slot];
+        slot.raw_y = value;
+        g_input.slot_device_kind[dev.current_slot] = dev.device_kind;
+        if (code == kAbsY) slot.active = true;
+      }
     } else if (code == kAbsHat0X) {
       g_input.physical_mask &= static_cast<uint8_t>(~(INKBOY_PAD_LEFT | INKBOY_PAD_RIGHT));
       if (value < 0) g_input.physical_mask |= INKBOY_PAD_LEFT;
@@ -391,27 +475,28 @@ void kobo_input_feed_raw_event(uint16_t type, uint16_t code, int32_t value,
   } else if (type == kEvSyn) {
     if (code == kSynMtReport) {
       // Multitouch Type A protocol: current slot finger point is complete, advance cursor
-      g_input.protocol_type_a_pending = true;
-      g_input.slots[g_input.current_slot].active = true;
-      if (g_input.current_slot + 1 < KOBO_MAX_TOUCH_SLOTS) {
-        g_input.current_slot++;
+      dev.protocol_type_a_pending = true;
+      if (dev.current_slot >= 0 && dev.current_slot < KOBO_MAX_TOUCH_SLOTS) {
+        g_input.slots[dev.current_slot].active = true;
+        g_input.slot_device_kind[dev.current_slot] = dev.device_kind;
+        dev.current_slot++;
       }
-      g_input.type_a_slot_cursor = g_input.current_slot;
+      dev.type_a_slot_cursor = std::min(dev.current_slot, KOBO_MAX_TOUCH_SLOTS);
     } else if (code == kSynReport) {
-      if (g_input.protocol_type_a_pending) {
+      if (dev.protocol_type_a_pending) {
         // If Type A emitted 0 points before SYN_REPORT, all fingers were lifted
-        if (g_input.type_a_slot_cursor == 0) {
+        if (dev.type_a_slot_cursor == 0) {
           for (int s = 0; s < KOBO_MAX_TOUCH_SLOTS; ++s) {
             g_input.slots[s].active = false;
           }
         } else {
-          for (int s = g_input.type_a_slot_cursor; s < KOBO_MAX_TOUCH_SLOTS; ++s) {
+          for (int s = dev.type_a_slot_cursor; s < KOBO_MAX_TOUCH_SLOTS; ++s) {
             g_input.slots[s].active = false;
           }
         }
-        g_input.current_slot = 0;
-        g_input.type_a_slot_cursor = 0;
-        g_input.protocol_type_a_pending = false;
+        dev.current_slot = 0;
+        dev.type_a_slot_cursor = 0;
+        dev.protocol_type_a_pending = false;
       }
       evaluateTouchSlots();
       syncStateOutput(out_state);
@@ -419,9 +504,28 @@ void kobo_input_feed_raw_event(uint16_t type, uint16_t code, int32_t value,
   }
 }
 
+}  // namespace
+
+void kobo_input_feed_raw_event(uint16_t type, uint16_t code, int32_t value,
+                               int device_kind, kobo_input_state_t* out_state) {
+  const size_t idx = (device_kind >= 0 && device_kind < 4) ? static_cast<size_t>(device_kind) : 0U;
+  g_input.raw_states[idx].device_kind = device_kind;
+  feedRawEventForDevice(g_input.raw_states[idx], type, code, value, out_state);
+}
+
 void kobo_input_rescan_devices(void) {
 #if defined(__linux__)
   if (g_input.epoll_fd < 0) return;
+
+  for (const auto& dev : g_input.device_fds) {
+    if (dev.fd >= 0) {
+      ::epoll_ctl(g_input.epoll_fd, EPOLL_CTL_DEL, dev.fd, nullptr);
+      ::ioctl(dev.fd, EVIOCGRAB, 0);
+      ::close(dev.fd);
+    }
+  }
+  g_input.device_fds.clear();
+
   for (int i = 0; i < 8; ++i) {
     char path[64];
     std::snprintf(path, sizeof(path), "/dev/input/event%d", i);
@@ -435,7 +539,10 @@ void kobo_input_rescan_devices(void) {
     ev.events = EPOLLIN;
     ev.data.fd = fd;
     if (::epoll_ctl(g_input.epoll_fd, EPOLL_CTL_ADD, fd, &ev) == 0) {
-      g_input.device_fds.push_back(fd);
+      InputDeviceEntry entry {};
+      entry.fd = fd;
+      entry.state.device_kind = 1;
+      g_input.device_fds.push_back(entry);
     } else {
       ::ioctl(fd, EVIOCGRAB, 0);
       ::close(fd);
@@ -466,13 +573,46 @@ void kobo_input_poll(kobo_input_state_t* out_state, int timeout_ms) {
     const int nfds = ::epoll_wait(g_input.epoll_fd, events, 16, timeout_ms);
     for (int i = 0; i < nfds; ++i) {
       const int fd = events[i].data.fd;
-      struct input_event ie[32];
-      ssize_t n = 0;
-      while ((n = ::read(fd, ie, sizeof(ie))) > 0) {
-        const size_t count = static_cast<size_t>(n) / sizeof(struct input_event);
-        for (size_t k = 0; k < count; ++k) {
-          kobo_input_feed_raw_event(ie[k].type, ie[k].code, ie[k].value, /*device_kind=*/1, nullptr);
+      bool remove_fd = (events[i].events & (EPOLLERR | EPOLLHUP)) != 0;
+
+      auto it = std::find_if(g_input.device_fds.begin(), g_input.device_fds.end(),
+                             [fd](const InputDeviceEntry& e) { return e.fd == fd; });
+
+      if (!remove_fd && (events[i].events & EPOLLIN) && it != g_input.device_fds.end()) {
+        struct input_event ie[32];
+        for (;;) {
+          const ssize_t n = ::read(fd, ie, sizeof(ie));
+          if (n > 0) {
+            const size_t count = static_cast<size_t>(n) / sizeof(struct input_event);
+            for (size_t k = 0; k < count; ++k) {
+              feedRawEventForDevice(it->state, ie[k].type, ie[k].code, ie[k].value, nullptr);
+            }
+          } else if (n == 0) {
+            remove_fd = true;
+            break;
+          } else {
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            if (errno == ENODEV) remove_fd = true;
+            break;
+          }
         }
+      }
+
+      if (remove_fd) {
+        ::epoll_ctl(g_input.epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+        ::ioctl(fd, EVIOCGRAB, 0);
+        ::close(fd);
+        if (it != g_input.device_fds.end()) {
+          g_input.device_fds.erase(it);
+        }
+        g_input.held_keys.reset();
+        g_input.physical_mask = 0;
+        for (int s = 0; s < KOBO_MAX_TOUCH_SLOTS; ++s) {
+          g_input.slots[s].active = false;
+          g_input.slots[s].tracking_id = -1;
+        }
+        evaluateTouchSlots();
       }
     }
   }

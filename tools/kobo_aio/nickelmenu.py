@@ -197,7 +197,7 @@ def _lint_action(action: str, arg: str) -> str | None:
         p = norm.split(":")
         if len(p) != 2 or p[0] not in SETTING_ACTIONS or p[1] not in SETTINGS:
             return f"nickel_setting inválido '{arg}' (usa toggle|enable|disable : {'|'.join(sorted(SETTINGS))})"
-    elif action in ENUM_ARGS and norm not in ENUM_ARGS[action] and action != "nickel_extras":
+    elif action in ENUM_ARGS and norm not in ENUM_ARGS[action]:
         return f"argumento inválido para {action}: '{arg}'"
     elif action == "cmd_output":
         m = re.match(r"^(\d+):", norm)

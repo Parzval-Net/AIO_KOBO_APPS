@@ -4,6 +4,9 @@
 #include "platform/kobo_input.h"
 #include "platform/kobo_system.h"
 
+#include <sys/stat.h>
+#include <unistd.h>
+
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
@@ -97,7 +100,7 @@ void testColorAndBayerMath() {
 void testCoresAndAtomicSave() {
   std::printf("[TEST 2/5] Verifying Peanut-GB (.gb) & Walnut-CGB (.gbc) cores + atomic .sav persistence...\n");
 
-  // 1. Test DMG on Peanut-GB
+  // 1. Test DMG on Peanut-GB + runUntil catch-up capping
   {
     std::vector<uint8_t> dmg_rom = buildSyntheticRom(/*is_cgb=*/false, "PKMN RED");
     inkboy::EmulatorSession session;
@@ -110,9 +113,16 @@ void testCoresAndAtomicSave() {
     assert(session.saveCartRamAtomically());
     assert(!session.isSaveDirty());
 
+    // Verify runUntil caps catch-up frames at kMaxCatchUpFrames (4)
+    const uint64_t t0 = 1000000ULL;
+    assert(session.runUntil(t0) == 1);
+    const uint32_t capped = session.runUntil(t0 + inkboy::kEmulationFramePeriodUs * 12ULL);
+    assert(capped == inkboy::kMaxCatchUpFrames);
+    assert(session.totalFramesRun() == 10 + 1 + inkboy::kMaxCatchUpFrames);
+
     const inkboy::EmulatorFrame* frame = session.acquireLatestFrame();
     assert(frame != nullptr);
-    assert(frame->frame_number == 10);
+    assert(frame->frame_number == 10 + 1 + inkboy::kMaxCatchUpFrames);
     session.releaseAcquiredFrame();
   }
 
@@ -128,11 +138,22 @@ void testCoresAndAtomicSave() {
     assert(session.isSaveDirty());
     assert(session.saveCartRamAtomically());
 
-    // Reload save into a fresh session and confirm 0x42 persisted at offset 0 of SRAM
+    // Verify byte 0 == 0x42 actually persisted in the .sav file on disk
+    FILE* sav_fp = std::fopen("/tmp/test_pkmn_crystal.sav", "rb");
+    assert(sav_fp != nullptr);
+    uint8_t byte0 = 0;
+    assert(std::fread(&byte0, 1, 1, sav_fp) == 1);
+    std::fclose(sav_fp);
+    assert(byte0 == 0x42);
+
+    // Reload save into a fresh session and confirm loadSaveFile succeeds
     inkboy::EmulatorSession session2;
     assert(session2.loadRomMemory(cgb_rom.data(), cgb_rom.size(), "/tmp/test_pkmn_crystal.gbc", &err));
     assert(session2.loadSaveFile());
   }
+
+  std::remove("/tmp/test_pkmn_red.sav");
+  std::remove("/tmp/test_pkmn_crystal.sav");
 }
 
 void testDisplayDirtyRectsAndProfiles() {
@@ -250,6 +271,67 @@ void testMultitouchAndLibraButtons() {
   assert(state.active_touch_count == 0);
   assert(state.joypad_mask == 0);
 
+  // Simulate Type-A Multitouch (SYN_MT_REPORT): 2 simultaneous touches on RIGHT and A
+  kobo_input_feed_raw_event(0x03, 0x35, right_cx, 0, nullptr);  // ABS_MT_POSITION_X
+  kobo_input_feed_raw_event(0x03, 0x36, right_cy, 0, nullptr);  // ABS_MT_POSITION_Y
+  kobo_input_feed_raw_event(0x00, 0x02, 0, 0, nullptr);         // SYN_MT_REPORT
+  kobo_input_feed_raw_event(0x03, 0x35, a_cx, 0, nullptr);      // ABS_MT_POSITION_X
+  kobo_input_feed_raw_event(0x03, 0x36, a_cy, 0, nullptr);      // ABS_MT_POSITION_Y
+  kobo_input_feed_raw_event(0x00, 0x02, 0, 0, nullptr);         // SYN_MT_REPORT
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 0, &state);          // SYN_REPORT
+  assert(state.active_touch_count == 2);
+  assert((state.joypad_mask & INKBOY_PAD_RIGHT) != 0);
+  assert((state.joypad_mask & INKBOY_PAD_A) != 0);
+
+  // Lift Type-A touches via BTN_TOUCH = 0
+  kobo_input_feed_raw_event(0x01, 0x14A, 0, 0, nullptr);
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 0, &state);
+  assert(state.active_touch_count == 0);
+  assert(state.joypad_mask == 0);
+
+  // Verify slot >= 4 bounds check does not corrupt slots 0..3
+  kobo_input_feed_raw_event(0x03, 0x2F, 0, 0, nullptr);        // Slot 0
+  kobo_input_feed_raw_event(0x03, 0x39, 200, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x35, right_cx, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x36, right_cy, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x2F, 4, 0, nullptr);        // Out-of-bounds Slot 4
+  kobo_input_feed_raw_event(0x03, 0x39, 201, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x35, 10, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x36, 10, 0, nullptr);
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 0, &state);
+  assert(state.active_touch_count == 1);
+  assert(state.slots[0].screen_x == right_cx && state.slots[0].screen_y == right_cy);
+  kobo_input_feed_raw_event(0x03, 0x2F, 0, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x39, -1, 0, nullptr);
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 0, &state);
+  assert(state.active_touch_count == 0);
+
+  // Verify device_kind=1 axis swap & mirror (Clara HD: swap_axes=true, mirror_x=true, mirror_y=false)
+  const int sw = static_cast<int>(clara_info.screen_width);
+  const int raw_x_for_a = a_cy;
+  const int raw_y_for_a = (sw - 1) - a_cx;
+  kobo_input_feed_raw_event(0x03, 0x2F, 0, 1, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x39, 300, 1, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x35, raw_x_for_a, 1, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x36, raw_y_for_a, 1, nullptr);
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 1, &state);
+  assert(state.slots[0].screen_x == a_cx && state.slots[0].screen_y == a_cy);
+  assert((state.joypad_mask & INKBOY_PAD_A) != 0);
+  kobo_input_feed_raw_event(0x03, 0x2F, 0, 1, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x39, -1, 1, nullptr);
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 1, &state);
+  assert(state.joypad_mask == 0);
+
+  // Verify ABS_HAT0X / ABS_HAT0Y D-Pad hat events
+  kobo_input_feed_raw_event(0x03, 0x10, -1, 0, nullptr);       // ABS_HAT0X = -1 (LEFT)
+  kobo_input_feed_raw_event(0x03, 0x11, 1, 0, nullptr);        // ABS_HAT0Y = +1 (DOWN)
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 0, &state);
+  assert(state.physical_mask == (INKBOY_PAD_LEFT | INKBOY_PAD_DOWN));
+  kobo_input_feed_raw_event(0x03, 0x10, 0, 0, nullptr);
+  kobo_input_feed_raw_event(0x03, 0x11, 0, 0, nullptr);
+  kobo_input_feed_raw_event(0x00, 0x00, 0, 0, &state);
+  assert(state.physical_mask == 0);
+
   // Simulate Kobo Libra Colour physical page-turn buttons (KEY_PAGEUP=104 -> A, KEY_PAGEDOWN=109 -> B)
   kobo_input_feed_raw_event(0x01, 104, 1, 0, nullptr);
   kobo_input_feed_raw_event(0x01, 109, 1, 0, nullptr);
@@ -265,8 +347,35 @@ void testMultitouchAndLibraButtons() {
   kobo_display_shutdown();
 }
 
+void testRomScanFiltering() {
+  std::printf("[TEST 5/6] Verifying kobo_system_scan_roms ignores directories ending in .gb...\n");
+  const char* base_dir = "/tmp/inkboy_scan_test";
+  const char* fake_dir = "/tmp/inkboy_scan_test/dir.gb";
+  const char* real_rom = "/tmp/inkboy_scan_test/game.gb";
+
+  ::rmdir(fake_dir);
+  std::remove(real_rom);
+  ::rmdir(base_dir);
+
+  assert(::mkdir(base_dir, 0755) == 0);
+  assert(::mkdir(fake_dir, 0755) == 0);
+  FILE* fp = std::fopen(real_rom, "wb");
+  assert(fp != nullptr);
+  std::fclose(fp);
+
+  char paths[8][512] = {};
+  char names[8][128] = {};
+  const size_t found = kobo_system_scan_roms(base_dir, paths, names, 8);
+  assert(found == 1);
+  assert(std::strcmp(names[0], "game.gb") == 0);
+
+  ::rmdir(fake_dir);
+  std::remove(real_rom);
+  ::rmdir(base_dir);
+}
+
 void testHudScreenshots() {
-  std::printf("[TEST 5/5] Rendering full Kobo Libra Colour & Clara HD HUD screenshots...\n");
+  std::printf("[TEST 6/6] Rendering full Kobo Libra Colour & Clara HD HUD screenshots...\n");
 
   for (kobo_device_type_t dev : {KOBO_DEVICE_LIBRA_COLOUR, KOBO_DEVICE_CLARA_HD}) {
     kobo_display_info_t info {};
@@ -286,10 +395,11 @@ void testHudScreenshots() {
     std::vector<uint8_t> bw(GB_LCD_WIDTH * GB_LCD_HEIGHT);
     for (int y = 0; y < GB_LCD_HEIGHT; ++y) {
       for (int x = 0; x < GB_LCD_WIDTH; ++x) {
+        const size_t idx = static_cast<size_t>(y) * GB_LCD_WIDTH + static_cast<size_t>(x);
         const uint16_t c = static_cast<uint16_t>(((x / 5) << 11) | ((y / 3) << 5) | ((x + y) & 0x1F));
-        rgb[y * GB_LCD_WIDTH + x] = c;
-        shade[y * GB_LCD_WIDTH + x] = static_cast<uint8_t>(((x / 16) + (y / 16)) & 3);
-        bw[y * GB_LCD_WIDTH + x] = walnut_cgb_rgb565_to_bw(c, x, y);
+        rgb[idx] = c;
+        shade[idx] = static_cast<uint8_t>(((x / 16) + (y / 16)) & 3);
+        bw[idx] = walnut_cgb_rgb565_to_bw(c, static_cast<uint_fast8_t>(x), static_cast<uint_fast8_t>(y));
       }
     }
     kobo_display_present_frame(rgb.data(), shade.data(), bw.data(), true, false);
@@ -297,6 +407,7 @@ void testHudScreenshots() {
                                ? "/tmp/kobo_libra_colour_preview.ppm"
                                : "/tmp/kobo_clara_hd_preview.ppm";
     assert(kobo_display_save_screenshot(out_path));
+    std::remove(out_path);
     kobo_display_shutdown();
   }
 }
@@ -308,7 +419,8 @@ int main() {
   testCoresAndAtomicSave();
   testDisplayDirtyRectsAndProfiles();
   testMultitouchAndLibraButtons();
+  testRomScanFiltering();
   testHudScreenshots();
-  std::printf("\nAll 5 Kobo Ink-boy test suites PASSED successfully!\n");
+  std::printf("\nAll 6 Kobo Ink-boy test suites PASSED successfully!\n");
   return 0;
 }

@@ -4,6 +4,8 @@
 #include "platform/kobo_system.h"
 
 #include <atomic>
+#include <cerrno>
+#include <climits>
 #include <cstdio>
 #include <cstdlib>
 #include <cctype>
@@ -51,11 +53,24 @@ void printUsage(const char* prog) {
       prog);
 }
 
-bool parseArgs(int argc, char** argv, AppOptions* opts) {
+bool parseIntStrict(const char* s, long min_val, long max_val, long* out_val) {
+  if (!s || *s == '\0') return false;
+  errno = 0;
+  char* end = nullptr;
+  const long val = std::strtol(s, &end, 10);
+  if (errno == ERANGE || end == s || *end != '\0') return false;
+  if (val < min_val || val > max_val) return false;
+  *out_val = val;
+  return true;
+}
+
+bool parseArgs(int argc, char** argv, AppOptions* opts, bool* out_help) {
+  *out_help = false;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "--help" || arg == "-h") {
       printUsage(argv[0]);
+      *out_help = true;
       return false;
     } else if (arg == "--device" && i + 1 < argc) {
       const std::string dev = argv[++i];
@@ -68,11 +83,21 @@ bool parseArgs(int argc, char** argv, AppOptions* opts) {
       const std::string m = argv[++i];
       opts->initial_mode = (m == "turbo" || m == "a2") ? KOBO_RENDER_TURBO_A2 : KOBO_RENDER_QUALITY;
     } else if (arg == "--scale" && i + 1 < argc) {
-      opts->scale = std::atoi(argv[++i]);
+      long v = 0;
+      if (!parseIntStrict(argv[++i], 1, 10, &v)) {
+        std::fprintf(stderr, "[Ink-boy] Invalid --scale (expected 1..10)\n");
+        return false;
+      }
+      opts->scale = static_cast<int>(v);
     } else if (arg == "--roms-dir" && i + 1 < argc) {
       opts->roms_dir = argv[++i];
     } else if (arg == "--frames" && i + 1 < argc) {
-      opts->max_frames = static_cast<uint32_t>(std::strtoul(argv[++i], nullptr, 10));
+      long v = 0;
+      if (!parseIntStrict(argv[++i], 0, static_cast<long>(UINT32_MAX), &v)) {
+        std::fprintf(stderr, "[Ink-boy] Invalid --frames (expected non-negative integer)\n");
+        return false;
+      }
+      opts->max_frames = static_cast<uint32_t>(v);
     } else if (arg == "--screenshot" && i + 1 < argc) {
       opts->screenshot_path = argv[++i];
     } else if (arg == "--config" && i + 1 < argc) {
@@ -263,22 +288,35 @@ int main(int argc, char** argv) {
     if (std::string(argv[i]) == "--config") opts.config_path = argv[i + 1];
   }
   loadConfigIni(opts.config_path, &opts);
-  if (!parseArgs(argc, argv, &opts)) {
-    return 0;
+  bool show_help = false;
+  if (!parseArgs(argc, argv, &opts, &show_help)) {
+    return show_help ? 0 : 1;
   }
 
   kobo_system_config_t sys_cfg {};
   sys_cfg.suspend_nickel = opts.suspend_nickel;
   sys_cfg.base_dir = "/mnt/onboard/.adds/inkboy";
   sys_cfg.roms_dir = opts.roms_dir.c_str();
-  kobo_system_init(&sys_cfg);
+  if (!kobo_system_init(&sys_cfg)) {
+    std::fprintf(stderr, "[Ink-boy] Failed to initialize system subsystem\n");
+    return 1;
+  }
 
   kobo_display_info_t disp_info {};
-  kobo_display_init(opts.device_override, &disp_info);
+  if (!kobo_display_init(opts.device_override, &disp_info)) {
+    std::fprintf(stderr, "[Ink-boy] Failed to initialize display subsystem\n");
+    kobo_system_shutdown();
+    return 1;
+  }
   kobo_display_set_render_mode(opts.initial_mode);
   kobo_display_set_layout(/*portrait=*/true, opts.scale, &disp_info);
 
-  kobo_input_init(&disp_info, opts.libra_buttons);
+  if (!kobo_input_init(&disp_info, opts.libra_buttons)) {
+    std::fprintf(stderr, "[Ink-boy] Failed to initialize input subsystem\n");
+    kobo_display_shutdown();
+    kobo_system_shutdown();
+    return 1;
+  }
 
   kobo_hud_button_t hud_buttons[16] = {};
   size_t hud_count = kobo_input_build_default_hud(&disp_info, hud_buttons, 16);

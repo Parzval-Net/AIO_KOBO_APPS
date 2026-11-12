@@ -19,6 +19,25 @@ import zipfile
 from pathlib import Path
 
 
+MAX_RECOVER_BYTES = 512 * 1024 * 1024  # 512 MiB cap to avoid OOM on corrupt directory entries
+MAX_FAT_BYTES = 512 * 1024 * 1024      # 512 MiB cap for FAT table
+
+
+def safe_dest_path(out_dir: Path, rel_path: str) -> Path:
+    base = out_dir.resolve()
+    dst = (base / rel_path).resolve()
+    if not dst.is_relative_to(base) or dst == base:
+        raise ValueError(f"Unsafe output path (path traversal): {rel_path}")
+    return dst
+
+
+def lfn_checksum(sfn_11: bytes) -> int:
+    s = 0
+    for b in sfn_11[:11]:
+        s = (((s & 1) << 7) + (s >> 1) + b) & 0xFF
+    return s
+
+
 def parse_lfn_chars(entry: bytes) -> str:
     raw = entry[1:11] + entry[14:26] + entry[28:32]
     chars = []
@@ -42,28 +61,49 @@ class Fat32Reader:
     def __init__(self, dev_path: str):
         self.dev_path = dev_path
         self.fd = os.open(dev_path, os.O_RDONLY)
-        bpb = os.pread(self.fd, 512, 0)
-        self.bytes_per_sector = struct.unpack_from("<H", bpb, 11)[0]
-        self.sectors_per_cluster = bpb[13]
-        self.reserved_sectors = struct.unpack_from("<H", bpb, 14)[0]
-        self.num_fats = bpb[16]
-        self.sectors_per_fat = struct.unpack_from("<I", bpb, 36)[0]
-        self.root_cluster = struct.unpack_from("<I", bpb, 44)[0]
+        try:
+            bpb = os.pread(self.fd, 512, 0)
+            if len(bpb) < 512:
+                raise ValueError(f"Short BPB read ({len(bpb)} bytes)")
+            self.bytes_per_sector = struct.unpack_from("<H", bpb, 11)[0]
+            self.sectors_per_cluster = bpb[13]
+            self.reserved_sectors = struct.unpack_from("<H", bpb, 14)[0]
+            self.num_fats = bpb[16]
+            self.sectors_per_fat = struct.unpack_from("<I", bpb, 36)[0]
+            self.root_cluster = struct.unpack_from("<I", bpb, 44)[0]
 
-        self.cluster_size = self.bytes_per_sector * self.sectors_per_cluster
-        self.fat_offset = self.reserved_sectors * self.bytes_per_sector
-        self.fat_size_bytes = self.sectors_per_fat * self.bytes_per_sector
-        self.data_offset = (
-            self.reserved_sectors + self.num_fats * self.sectors_per_fat
-        ) * self.bytes_per_sector
+            if self.bytes_per_sector not in (512, 1024, 2048, 4096):
+                raise ValueError(f"Invalid BPB bytes_per_sector: {self.bytes_per_sector}")
+            if (
+                self.sectors_per_cluster == 0
+                or self.sectors_per_cluster > 128
+                or (self.sectors_per_cluster & (self.sectors_per_cluster - 1)) != 0
+            ):
+                raise ValueError(f"Invalid BPB sectors_per_cluster: {self.sectors_per_cluster}")
+            if self.reserved_sectors == 0 or self.num_fats == 0:
+                raise ValueError(
+                    f"Invalid BPB reserved_sectors={self.reserved_sectors} num_fats={self.num_fats}"
+                )
 
-        print(
-            f"[FAT32] cluster_size={self.cluster_size} root_cluster={self.root_cluster} "
-            f"data_offset={self.data_offset}"
-        )
-        raw_fat = os.pread(self.fd, self.fat_size_bytes, self.fat_offset)
-        num_entries = len(raw_fat) // 4
-        self.fat = struct.unpack(f"<{num_entries}I", raw_fat)
+            self.cluster_size = self.bytes_per_sector * self.sectors_per_cluster
+            self.fat_offset = self.reserved_sectors * self.bytes_per_sector
+            self.fat_size_bytes = self.sectors_per_fat * self.bytes_per_sector
+            if self.sectors_per_fat == 0 or self.fat_size_bytes > MAX_FAT_BYTES:
+                raise ValueError(f"Invalid BPB sectors_per_fat: {self.sectors_per_fat}")
+            self.data_offset = (
+                self.reserved_sectors + self.num_fats * self.sectors_per_fat
+            ) * self.bytes_per_sector
+
+            print(
+                f"[FAT32] cluster_size={self.cluster_size} root_cluster={self.root_cluster} "
+                f"data_offset={self.data_offset}"
+            )
+            raw_fat = os.pread(self.fd, self.fat_size_bytes, self.fat_offset)
+            num_entries = len(raw_fat) // 4
+            self.fat = struct.unpack(f"<{num_entries}I", raw_fat[: num_entries * 4])
+        except BaseException:
+            self.close()
+            raise
 
     def close(self) -> None:
         if self.fd >= 0:
@@ -91,25 +131,75 @@ class Fat32Reader:
         active_dirs = []
         entries = []
         pending_lfn: list[str] = []
+        lfn_deleted = False
+        lfn_expected_seq = 0
+        lfn_checksum_val = -1
+
+        def _reset_lfn() -> None:
+            nonlocal pending_lfn, lfn_deleted, lfn_expected_seq, lfn_checksum_val
+            pending_lfn = []
+            lfn_deleted = False
+            lfn_expected_seq = 0
+            lfn_checksum_val = -1
 
         for offset in range(0, len(data), 32):
             ent = data[offset : offset + 32]
+            if len(ent) < 32:
+                break
             first = ent[0]
             if first == 0x00:
                 break
             attr = ent[11]
             if attr == 0x0F:
-                pending_lfn.append(parse_lfn_chars(ent))
+                csum = ent[13]
+                if first == 0xE5:
+                    # Deleted LFN entries lose their sequence number to 0xE5, but keep their SFN checksum
+                    if not pending_lfn or not lfn_deleted or csum != lfn_checksum_val:
+                        _reset_lfn()
+                        lfn_deleted = True
+                        lfn_checksum_val = csum
+                    pending_lfn.append(parse_lfn_chars(ent))
+                else:
+                    seq = first & 0x1F
+                    is_last = bool(first & 0x40)
+                    if is_last:
+                        _reset_lfn()
+                        if 1 <= seq <= 20:
+                            lfn_deleted = False
+                            lfn_expected_seq = seq - 1
+                            lfn_checksum_val = csum
+                            pending_lfn.append(parse_lfn_chars(ent))
+                    elif (
+                        pending_lfn
+                        and not lfn_deleted
+                        and seq == lfn_expected_seq
+                        and seq >= 1
+                        and csum == lfn_checksum_val
+                    ):
+                        lfn_expected_seq = seq - 1
+                        pending_lfn.append(parse_lfn_chars(ent))
+                    else:
+                        _reset_lfn()
                 continue
 
             # Regular SFN or Volume/Dir entry
-            lfn_name = "".join(reversed(pending_lfn)) if pending_lfn else ""
-            pending_lfn = []
+            is_deleted = (first == 0xE5)
+            lfn_name = ""
+            if pending_lfn:
+                if is_deleted and lfn_deleted:
+                    lfn_name = "".join(reversed(pending_lfn))
+                elif (
+                    not is_deleted
+                    and not lfn_deleted
+                    and lfn_expected_seq == 0
+                    and lfn_checksum_val == lfn_checksum(ent[:11])
+                ):
+                    lfn_name = "".join(reversed(pending_lfn))
+            _reset_lfn()
 
             if attr & 0x08:  # Volume label
                 continue
 
-            is_deleted = (first == 0xE5)
             is_dir = bool(attr & 0x10)
             clus_hi = struct.unpack_from("<H", ent, 20)[0]
             clus_lo = struct.unpack_from("<H", ent, 26)[0]
@@ -156,10 +246,11 @@ class Fat32Reader:
                 queue.append((d["first_cluster"], d["rel_path"]))
         return all_files
 
-    def read_contiguous_file(self, start_cluster: int, size: int) -> bytes:
-        if size == 0 or start_cluster < 2:
+    def read_contiguous_file(self, start_cluster: int, size: int, max_bytes: int = MAX_RECOVER_BYTES) -> bytes:
+        if size <= 0 or start_cluster < 2:
             return b""
-        num_clusters = math.ceil(size / self.cluster_size)
+        capped_size = min(size, max_bytes)
+        num_clusters = math.ceil(capped_size / self.cluster_size)
         total_bytes_to_read = num_clusters * self.cluster_size
         start_off = self.cluster_to_offset(start_cluster)
         # Read in 4 MB chunks for speed on /dev/rdisk4
@@ -175,19 +266,22 @@ class Fat32Reader:
             buf.extend(part)
             off += len(part)
             rem -= len(part)
-        return bytes(buf[:size])
+        return bytes(buf[:capped_size])
 
-    def read_skipping_allocated(self, start_cluster: int, size: int, reserved_starts: set[int]) -> bytes:
-        if size == 0 or start_cluster < 2:
+    def read_skipping_allocated(
+        self, start_cluster: int, size: int, reserved_starts: set[int], max_bytes: int = MAX_RECOVER_BYTES
+    ) -> bytes:
+        if size <= 0 or start_cluster < 2:
             return b""
-        needed = math.ceil(size / self.cluster_size)
+        capped_size = min(size, max_bytes)
+        needed = math.ceil(capped_size / self.cluster_size)
         chunks = []
         cur = start_cluster
         while len(chunks) < needed and cur < len(self.fat):
             if cur == start_cluster or ((self.fat[cur] & 0x0FFFFFFF) == 0 and cur not in reserved_starts):
                 chunks.append(os.pread(self.fd, self.cluster_size, self.cluster_to_offset(cur)))
             cur += 1
-        return b"".join(chunks)[:size]
+        return b"".join(chunks)[:capped_size]
 
 
 def verify_book_bytes(filename: str, data: bytes) -> tuple[bool, str]:
@@ -266,7 +360,11 @@ def main() -> int:
                     ok = True
                     msg = f"{msg_alt} (skipped allocated clusters)"
 
-            dst_file = out_dir / rel_path
+            try:
+                dst_file = safe_dest_path(out_dir, rel_path)
+            except ValueError as exc:
+                print(f"[{idx:02d}/{len(deleted_books):02d}] [SKIP] {exc}")
+                continue
             dst_file.parent.mkdir(parents=True, exist_ok=True)
             dst_file.write_bytes(data)
 

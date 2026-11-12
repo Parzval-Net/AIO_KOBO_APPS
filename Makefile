@@ -33,14 +33,14 @@ endif
 INCLUDES := -Iinclude -Ilib/PeanutGB/src -Ilib/WalnutCGB/src
 COMMON_WARN := -Wall -Wextra -Wno-unused-parameter
 
-HOST_CFLAGS   := -O3 $(COMMON_WARN) $(INCLUDES)
-HOST_CXXFLAGS := -O3 -std=c++17 $(COMMON_WARN) $(INCLUDES)
+HOST_CFLAGS   := -O3 -MMD -MP $(COMMON_WARN) $(INCLUDES)
+HOST_CXXFLAGS := -O3 -MMD -MP -std=c++17 $(COMMON_WARN) $(INCLUDES)
 HOST_LDFLAGS  := -lpthread -lm
 
 FBINK_INCLUDES := -Ilib/FBInk -Ilib/FBInk/i2c-tools/include
 FBINK_DEFS     := -D_GNU_SOURCE -DHAVE_FBINK -DFBINK_FOR_KOBO -DFBINK_MINIMAL -DFBINK_WITH_DRAW -DFBINK_WITH_BITMAP -DFBINK_WITH_IMAGE
 
-KOBO_CFLAGS   := -O3 $(KOBO_ARCH_FLAGS) -ffast-math -fdata-sections -ffunction-sections $(COMMON_WARN) -Wno-unknown-warning-option $(INCLUDES) $(FBINK_INCLUDES) $(FBINK_DEFS)
+KOBO_CFLAGS   := -O3 -MMD -MP $(KOBO_ARCH_FLAGS) -fdata-sections -ffunction-sections $(COMMON_WARN) -Wno-unknown-warning-option $(INCLUDES) $(FBINK_INCLUDES) $(FBINK_DEFS)
 KOBO_CXXFLAGS := $(KOBO_CFLAGS) -std=c++17 -fno-exceptions -fno-rtti
 KOBO_LDFLAGS  := -Wl,--gc-sections -lpthread -lm
 
@@ -137,6 +137,7 @@ ifdef KOBO_CC
 	@file $(DIST_DIR)/.adds/inkboy/inkboy
 else
 	@echo "[WARN] No ARMhf cross-compiler found. Install zig ('brew install zig') or arm-kobo-linux-gnueabihf-gcc."
+	@exit 1
 endif
 
 bundle: kobo
@@ -152,3 +153,5 @@ installer-web:
 
 clean:
 	rm -rf $(BUILD_DIR) dist/Ink-boy-Kobo-Bundle.zip
+
+-include $(wildcard $(BUILD_DIR)/*.d)

@@ -304,6 +304,8 @@ def export_koboroot(sync_json: str) -> bytes:
                 with tarfile.open(ROOT / rel, mode="r:gz") as pending:
                     for m in pending.getmembers():
                         core._member_name(m)   # same path-safety check as validate_koboroot
+                        if not (m.isfile() or m.isdir()):
+                            raise AioError(f"KoboRoot.tgz pendiente con entrada no permitida: {m.name}")
                         out.addfile(m, pending.extractfile(m) if m.isfile() else None)
                 continue
             try:

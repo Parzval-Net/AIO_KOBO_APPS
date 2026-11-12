@@ -107,15 +107,19 @@ def find_mounted_kobo() -> Path | None:
     for root in (Path("/Volumes"), Path("/media"), Path("/run/media"), Path("/mnt")):
         if root.is_dir():
             try:
-                for child in root.iterdir():
+                children = list(root.iterdir())
+            except OSError:
+                continue
+            for child in children:
+                try:
                     if child.is_dir():
                         if (child / ".kobo" / "version").is_file():
                             return child
                         for sub in child.iterdir():
                             if sub.is_dir() and (sub / ".kobo" / "version").is_file():
                                 return sub
-            except PermissionError:
-                pass
+                except OSError:
+                    continue
 
     for c in candidates:
         if (c / ".kobo" / "version").is_file():

@@ -1095,5 +1095,125 @@ class WebCatalogTests(unittest.TestCase):
                          "web/catalog.json desactualizado: ejecuta make catalog")
 
 
+class RecoverFat32Tests(unittest.TestCase):
+    def test_safe_dest_path_rejects_traversal(self):
+        import recover_kobo_fat32 as rec
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "out"
+            out_dir.mkdir()
+            ok = rec.safe_dest_path(out_dir, "Author/Book.epub")
+            self.assertTrue(ok.is_relative_to(out_dir.resolve()))
+            with self.assertRaises(ValueError):
+                rec.safe_dest_path(out_dir, "../escape.epub")
+            with self.assertRaises(ValueError):
+                rec.safe_dest_path(out_dir, "/etc/passwd")
+
+    def test_bpb_validation_and_read_cap(self):
+        import struct
+        import recover_kobo_fat32 as rec
+        with tempfile.TemporaryDirectory() as tmp:
+            img = Path(tmp) / "disk.img"
+            bpb = bytearray(512)
+            struct.pack_into("<H", bpb, 11, 300)  # invalid bytes_per_sector
+            img.write_bytes(bpb)
+            with self.assertRaises(ValueError):
+                rec.Fat32Reader(str(img))
+
+            bpb = bytearray(4096)
+            struct.pack_into("<H", bpb, 11, 512)
+            bpb[13] = 1
+            struct.pack_into("<H", bpb, 14, 1)
+            bpb[16] = 1
+            struct.pack_into("<I", bpb, 36, 1)
+            struct.pack_into("<I", bpb, 44, 2)
+            img.write_bytes(bpb)
+            reader = rec.Fat32Reader(str(img))
+            try:
+                data = reader.read_contiguous_file(2, 10**10, max_bytes=128)
+                self.assertLessEqual(len(data), 128)
+            finally:
+                reader.close()
+
+
+class ServerAuditTests(TempKobo):
+    def test_non_dict_json_and_root_validation(self):
+        import os
+        import threading
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from kobo_aio import server
+
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+        port = httpd.server_address[1]
+        t = threading.Thread(target=httpd.serve_forever, daemon=True)
+        t.start()
+        old_env = os.environ.pop("KOBO_AIO_ROOT", None)
+        try:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/plan",
+                data=b"[]",
+                headers={"Content-Type": "application/json", "X-Kobo-AIO": "1"},
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(req, timeout=5)
+            self.assertEqual(ctx.exception.code, 400)
+
+            req2 = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/plan",
+                data=json.dumps({"root": str(self.root)}).encode(),
+                headers={"Content-Type": "application/json", "X-Kobo-AIO": "1"},
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as ctx2:
+                urllib.request.urlopen(req2, timeout=5)
+            self.assertEqual(ctx2.exception.code, 409)
+        finally:
+            if old_env is not None:
+                os.environ["KOBO_AIO_ROOT"] = old_env
+            httpd.shutdown()
+            httpd.server_close()
+
+
+class AuditRegressionTests(TempKobo):
+    def test_txn_exists_does_not_read_bytes(self):
+        t = txnmod.Transaction(self.root, "S")
+        orig_read = t.read_bytes
+
+        def fail_read(rel):
+            raise AssertionError(f"exists() must not call read_bytes({rel})")
+
+        t.read_bytes = fail_read
+        try:
+            self.assertTrue(t.exists(".kobo/Kobo/Kobo eReader.conf"))
+            self.assertFalse(t.exists(".adds/does-not-exist"))
+            t.staged[".adds/new.txt"] = b"hi"
+            self.assertTrue(t.exists(".adds/new.txt"))
+            t.staged[".kobo/Kobo/Kobo eReader.conf"] = None
+            self.assertFalse(t.exists(".kobo/Kobo/Kobo eReader.conf"))
+        finally:
+            t.read_bytes = orig_read
+
+    def test_engine_uninstall_needs_reboot(self):
+        (self.root / ".adds" / "nickelhome").mkdir(parents=True)
+        dev = parse_version_file(self.root)
+        res = engine.apply(dev, {}, uninstall=["mod.nickelhome"])
+        self.assertTrue(res["needs_reboot"])
+
+    def test_nickelmenu_validates_nickel_extras(self):
+        self.assertIsNone(lint_line("menu_item :main :Sudoku :nickel_extras :sudoku"))
+        self.assertIsNotNone(lint_line("menu_item :main :Bad :nickel_extras :invalid_extra"))
+
+    def test_audiobooks_edge_cases(self):
+        from kobo_aio.audiobooks import build_id3, embedded_cover, strip_tags
+
+        self.assertEqual(strip_tags(b"short"), b"short")
+        self.assertEqual(strip_tags(b"ID3\x03\x00\x00\x00\x00\x00\x00" + b"ABC"), b"ABC")
+        tag = build_id3("Libro", "Autor", [(f"Cap {i}", i * 10, i * 10 + 5) for i in range(260)], None)
+        self.assertTrue(tag.startswith(b"ID3\x03\x00"))
+        self.assertIsNone(embedded_cover(b"ID3\x03\x00\x00\x00\x00\x00\x14APIC\x00\x00\x00\x0a\x00\x00\x00image/jpeg"))
+
+
 if __name__ == "__main__":
     unittest.main()

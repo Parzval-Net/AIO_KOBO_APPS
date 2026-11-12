@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
 import platform
 import subprocess
 import sys
@@ -257,10 +256,11 @@ def zip_members(data: bytes, prefix: str) -> list[tuple[str, bytes, int]]:
     res = []
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         for info in zf.infolist():
-            if info.is_dir() or not info.filename.startswith(prefix):
+            norm_name = info.filename.replace("\\", "/")
+            if info.is_dir() or not norm_name.startswith(prefix):
                 continue
-            rel = info.filename[len(prefix):]
-            if not rel or ".." in Path(rel).parts:
+            rel = norm_name[len(prefix):]
+            if not rel or rel.startswith("/") or ".." in rel.split("/"):
                 continue
             res.append((rel, zf.read(info), (info.external_attr >> 16) & 0o777))
     return res

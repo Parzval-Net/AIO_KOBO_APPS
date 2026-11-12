@@ -16,6 +16,7 @@ from .txn import is_appledouble
 CONF_REL = ".kobo/Kobo/Kobo eReader.conf"
 # Raw text as it must appear in the file (QSettings doubles every backslash).
 EXCLUDE_SYNC_RAW = r"(\\.(?!kobo|adobe).+|([^.][^/]*/)+\\..+)"
+EXCLUDE_SYNC_CALIBRE_RAW = r"(calibre|\\.(?!kobo|adobe|calibre).+|([^.][^/]*/)+\\..+)"
 BOOK_EXTS = {".epub", ".kepub", ".pdf", ".cbz", ".cbr", ".mobi", ".txt", ".rtf", ".html", ".htm", ".fb2", ".djvu"}
 SKIP_DIRS = {".Spotlight-V100", ".Trashes", ".TemporaryItems", ".fseventsd", "System Volume Information"}
 
@@ -78,7 +79,7 @@ def check_exclude_sync(ini: QtIni) -> Finding:
         return Finding("exclude_sync", "warn", "La biblioteca no está protegida",
                        "El Kobo podría mostrar como libros los archivos internos de tus mods (ROMs, scripts, imágenes).",
                        "conf.exclude_sync", tech="[FeatureSettings] ExcludeSyncFolders no está definido")
-    if raw == EXCLUDE_SYNC_RAW:
+    if raw in (EXCLUDE_SYNC_RAW, EXCLUDE_SYNC_CALIBRE_RAW):
         return Finding("exclude_sync", "ok", "Biblioteca protegida",
                        tech="ExcludeSyncFolders con el escape correcto de Qt")
     if "\\" not in raw or "\\\\" not in raw:
@@ -127,18 +128,22 @@ def check_database(root: Path, scan: dict) -> list[Finding]:
             src = db.with_name(db.name + suffix)
             if src.is_file():
                 shutil.copyfile(src, Path(tmp) / (db.name + suffix))
-        conn = sqlite3.connect(f"file:{Path(tmp) / db.name}?mode=ro", uri=True)
+        conn = None
         try:
-            integrity = conn.execute("PRAGMA quick_check").fetchone()[0]
-            sideloaded = conn.execute(
+            conn = sqlite3.connect(f"file:{Path(tmp) / db.name}?mode=ro", uri=True)
+            row_qc = conn.execute("PRAGMA quick_check").fetchone()
+            integrity = row_qc[0] if row_qc is not None else "error"
+            row_sl = conn.execute(
                 "SELECT count(*) FROM content WHERE ContentType=6 AND ContentID LIKE 'file:///mnt/onboard/%'"
-            ).fetchone()[0]
+            ).fetchone()
+            sideloaded = row_sl[0] if row_sl is not None else 0
         except sqlite3.DatabaseError as exc:
             return [Finding("db", "critical", "La base de datos del Kobo está dañada",
                             "Tu progreso de lectura y tus notas podrían perderse. Respalda antes de hacer cambios.",
                             tech=f"KoboReader.sqlite: {exc}")]
         finally:
-            conn.close()
+            if conn is not None:
+                conn.close()
     size_mb = db.stat().st_size / (1024 * 1024)
     out.append(Finding("db_integrity", "ok" if integrity == "ok" else "critical",
                        "Progreso y notas en buen estado" if integrity == "ok" else "La base de datos tiene errores",

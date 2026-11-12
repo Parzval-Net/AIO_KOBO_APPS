@@ -5,7 +5,7 @@ from __future__ import annotations
 import io
 import tarfile
 
-from ..core import PROJECT_ROOT, Artifact, Module, Option, register, zip_members
+from ..core import PROJECT_ROOT, AioError, Artifact, Module, Option, register, zip_members
 from ._util import ART, ONBOARD, extract_tree
 
 NM_DIR = ".adds/nm"
@@ -22,7 +22,7 @@ def _koreader_apply(mod, ctx, opts):
     data = ctx.fetch(ART["koreader"])
     members = zip_members(data, "koreader/")
     if not members:
-        raise RuntimeError("El paquete de KOReader no tiene la estructura esperada (koreader/)")
+        raise AioError("El paquete de KOReader no tiene la estructura esperada (koreader/)")
     # Keep the user's KOReader settings, history and plugins configuration across updates.
     keep = {"settings.reader.lua", "defaults.custom.lua"}
     members = [m for m in members if not (m[0] in keep and ctx.txn.exists(f".adds/koreader/{m[0]}"))]
@@ -109,7 +109,7 @@ def _inkboy_apply(mod, ctx, opts):
     binary = INKBOY_DIST / "inkboy" / "inkboy"
     launcher = INKBOY_DIST / "inkboy" / "inkboy.sh"
     if not binary.is_file() or not launcher.is_file():
-        raise RuntimeError("Falta el binario de Ink-boy: ejecuta 'make kobo' en el proyecto")
+        raise AioError("Falta el binario de Ink-boy: ejecuta 'make kobo' en el proyecto")
     ctx.txn.copy_file(binary, ".adds/inkboy/inkboy", note="binario ARM", mode=0o755)
     ctx.txn.copy_file(launcher, ".adds/inkboy/inkboy.sh", note="lanzador", mode=0o755)
     cfg = _inkboy_config(ctx.device, opts)
@@ -184,7 +184,7 @@ def _kop_apply(mod, ctx, opts):
         art, folder, _ = KOPLUGINS[key]
         members = zip_members(ctx.fetch(art), f"{folder}/")
         if not members:
-            raise RuntimeError(f"El paquete de {folder} no tiene la estructura esperada")
+            raise AioError(f"El paquete de {folder} no tiene la estructura esperada")
         extract_tree(ctx, members, f".adds/koreader/plugins/{folder}", folder)
         installed = ctx.state.setdefault("koreader_plugins", [])
         if key not in installed:

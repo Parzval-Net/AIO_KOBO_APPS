@@ -49,6 +49,7 @@ def _fonts_uninstall(mod, ctx):
         for f in root.iterdir():
             if f.is_file() and f.name.startswith("KF_") and any(f.name.startswith(_prefix(x)) for x in CORE + EXTRA):
                 ctx.txn.delete(f"fonts/{f.name}")
+    conf_edit(ctx, removes=[("Reading", "readingFontFamily")], note="restaurar fuente de lectura")
 
 
 def _fonts_status(mod, dev):

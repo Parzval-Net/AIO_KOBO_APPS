@@ -129,11 +129,18 @@ def candidate_mounts() -> list[Path]:
             continue
         try:
             entries = [base] if sysname == "Windows" else list(base.iterdir())
-            # Linux mounts live one level deeper (/media/<user>/KOBOeReader)
-            if sysname == "Linux":
-                entries = entries + [c for e in entries if e.is_dir() for c in e.iterdir()]
         except OSError:
             continue
+        # Linux mounts live one level deeper (/media/<user>/KOBOeReader)
+        if sysname == "Linux":
+            sub: list[Path] = []
+            for e in entries:
+                try:
+                    if e.is_dir():
+                        sub.extend(e.iterdir())
+                except OSError:
+                    continue
+            entries = entries + sub
         for e in entries:
             try:
                 if (e / ".kobo" / "version").is_file():
