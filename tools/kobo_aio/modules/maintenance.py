@@ -99,6 +99,7 @@ STOCK_MODS = [
     (".adds/nickel-mod-manager", ".adds/nickel-mod-manager/uninstall-now", ".adds/nickel-mod-manager/uninstall", True),
     (".adds/screensaver", ".adds/screensaver/uninstall.txt", None, True),                   # nickel-screensaver: flag
     (".adds/aio-audio", ".adds/aio-audio/uninstall", None, True),                           # AIO Audio: flag
+    (".adds/nickel-cover-fix", None, ".adds/nickel-cover-fix/uninstall", False),            # NickelCoverFix: xflag
 ]
 # Kobo eReader.conf keys that Kobo AIO (or the usual mod guides) set and stock firmware does not have.
 STOCK_CONF_KEYS = [("FeatureSettings", "ExcludeSyncFolders"), ("FeatureSettings", "Screenshots"),
@@ -151,6 +152,8 @@ def _stock_apply(mod, ctx, opts):
     if hidden:
         txn.note("Por si el Kobo ya se restableció antes y quedaron mods en el sistema, se dejan avisos de "
                  f"desinstalación para {', '.join(hidden)} (si no están instalados, no pasa nada).")
+    if "mod.nickelseries" in installed or ctx.state.get("mod.nickelseries"):
+        txn.write_text("ns_uninstall", "", note="NickelSeries se desinstala al reiniciar")
     keep = {flag for _, flag, _, _ in STOCK_MODS if flag}
     # NickelMenu entries and NickelModManager's kept copies (it can put mods back after a system update).
     for rel in _files_under(ctx, ".adds/nm", keep) + _files_under(ctx, ".adds/nickel-mod-manager", keep):

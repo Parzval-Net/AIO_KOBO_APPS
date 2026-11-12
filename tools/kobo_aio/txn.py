@@ -29,6 +29,7 @@ WRITE_ALLOWLIST = (
     ".kobo/custom-dict/",
     "fonts/",
     ".metadata_never_index",
+    "ns_uninstall",
 )
 # Paths that must never be written even if they match the allowlist by accident.
 WRITE_DENYLIST = (

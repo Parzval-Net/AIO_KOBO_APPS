@@ -239,3 +239,53 @@ register(Module(
              "https://github.com/pgaskin/NickelHook"], license="MIT",
     apply_fn=_aioaudio_apply, uninstall_fn=_aioaudio_uninstall, status_fn=_aioaudio_status,
 ))
+
+
+# -- NickelSeries --------------------------------------------------------------
+def _nickelseries_apply(mod, ctx, opts):
+    _stage_plugin(ctx, "nickelseries")
+    if ctx.txn.exists("ns_uninstall"):
+        ctx.txn.delete("ns_uninstall", note="quita la marca de desinstalación de NickelSeries")
+
+
+def _nickelseries_uninstall(mod, ctx):
+    # Verified from nickelseries.cc: nh_info.uninstall_flag = "/mnt/onboard/ns_uninstall"
+    ctx.txn.write_text("ns_uninstall", "", note="NickelSeries se desinstala en el próximo reinicio")
+
+
+def _nickelseries_status(mod, dev):
+    if (dev.root / "ns_uninstall").exists():
+        return "pendiente de quitar"
+    from ..core import load_state
+    return "instalado" if "mod.nickelseries" in load_state(dev.root).get("installed", {}) else "no instalado"
+
+
+register(Module(
+    id="mod.nickelseries", category="Lectura", title="Metadatos de series al instante (NickelSeries v5)",
+    description="Lee los metadatos de serie e índice directamente de EPUB y KEPUB al importar libros, sin "
+                "necesidad de volver a conectar el Kobo a Calibre.",
+    risk="bajo", recommended=True, reboot=True, min_fw=(4, 17), max_fw=(5,),
+    sources=["https://pgaskin.net/NickelSeries/", "https://github.com/pgaskin/NickelSeries"], license="MIT",
+    apply_fn=_nickelseries_apply, uninstall_fn=_nickelseries_uninstall, status_fn=_nickelseries_status,
+))
+
+
+# -- NickelCoverFix ------------------------------------------------------------
+def _coverfix_apply(mod, ctx, opts):
+    _stage_plugin(ctx, "nickelcoverfix", keep_onboard=(".adds/nickel-cover-fix/uninstall",))
+
+
+def _coverfix_uninstall(mod, ctx):
+    ctx.txn.delete(".adds/nickel-cover-fix/uninstall", note="NickelCoverFix se quita en el próximo reinicio")
+
+
+register(Module(
+    id="mod.nickelcoverfix", category="Lectura", title="Portadas siempre visibles (NickelCoverFix 0.2)",
+    description="Evita que desaparezcan las portadas de tus libros sideloaded y corrige portadas faltantes en la "
+                "biblioteca.",
+    risk="bajo", recommended=True, reboot=True, min_fw=(4, 21), max_fw=(5,),
+    sources=["https://github.com/nicoverbruggen/NickelCoverFix"], license="MIT",
+    apply_fn=_coverfix_apply, uninstall_fn=_coverfix_uninstall,
+    status_fn=_status_file(".adds/nickel-cover-fix/uninstall"),
+))
+

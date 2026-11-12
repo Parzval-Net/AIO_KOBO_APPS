@@ -1215,5 +1215,134 @@ class AuditRegressionTests(TempKobo):
         self.assertIsNone(embedded_cover(b"ID3\x03\x00\x00\x00\x00\x00\x14APIC\x00\x00\x00\x0a\x00\x00\x00image/jpeg"))
 
 
+class CommunityModsTests(TempKobo):
+    def setUp(self):
+        super().setUp()
+        from kobo_aio import core
+        from kobo_aio.modules import _util, apps
+        engine.catalog()
+        self.core, self.util, self.apps = core, _util, apps
+        self._saved_cache = core.CACHE_DIR
+        self._saved_art = dict(_util.ART)
+        self._saved_kop = dict(apps.KOPLUGINS)
+        core.CACHE_DIR = self.tmp / "cache"
+        core.CACHE_DIR.mkdir()
+
+    def tearDown(self):
+        self.core.CACHE_DIR = self._saved_cache
+        self.util.ART.clear()
+        self.util.ART.update(self._saved_art)
+        self.apps.KOPLUGINS.clear()
+        self.apps.KOPLUGINS.update(self._saved_kop)
+        super().tearDown()
+
+    def _pin_zip_koboroot(self, key: str, files: dict[str, bytes]):
+        inner = tgz(files)
+        zbuf = io.BytesIO()
+        with zipfile.ZipFile(zbuf, "w") as zf:
+            zf.writestr("KoboRoot.tgz", inner)
+        data = zbuf.getvalue()
+        old = self.util.ART[key]
+        art = self.core.Artifact(old.url, hashlib.sha256(data).hexdigest(), old.filename, len(data))
+        self.util.ART[key] = art
+        (self.core.CACHE_DIR / f"{art.sha256[:16]}-{art.filename}").write_bytes(data)
+
+    def _pin_tgz(self, key: str, files: dict[str, bytes]):
+        data = tgz(files)
+        old = self.util.ART[key]
+        art = self.core.Artifact(old.url, hashlib.sha256(data).hexdigest(), old.filename, len(data))
+        self.util.ART[key] = art
+        (self.core.CACHE_DIR / f"{art.sha256[:16]}-{art.filename}").write_bytes(data)
+
+    def test_nickelseries_apply_uninstall_and_stock(self):
+        from kobo_aio.core import REGISTRY
+        m = REGISTRY["mod.nickelseries"]
+        self.assertEqual((m.category, m.risk, m.recommended, m.reboot), ("Lectura", "bajo", True, True))
+        self.assertEqual((m.min_fw, m.max_fw), ((4, 17), (5,)))
+
+        self._pin_zip_koboroot("nickelseries", {"./usr/local/Kobo/imageformats/libns.so": b"\x7fELF"})
+        (self.root / "ns_uninstall").write_text("")
+        dev = parse_version_file(self.root)
+        res = engine.apply(dev, {"mod.nickelseries": {}}, offline=True)
+        self.assertTrue(res["needs_reboot"])
+        self.assertFalse((self.root / "ns_uninstall").exists())
+        self.assertEqual(m.status(dev), "instalado")
+        with tarfile.open(self.root / ".kobo/KoboRoot.tgz") as tf:
+            names = {member.name.lstrip("./") for member in tf.getmembers()}
+        self.assertIn("usr/local/Kobo/imageformats/libns.so", names)
+
+        engine.apply(dev, {}, ["mod.nickelseries"], offline=True)
+        self.assertTrue((self.root / "ns_uninstall").is_file())
+        self.assertEqual(m.status(dev), "pendiente de quitar")
+
+        # Back to stock writes ns_uninstall when mod.nickelseries is in state.json
+        (self.root / "ns_uninstall").unlink()
+        (self.root / ".adds/kobo-aio/state.json").write_text(json.dumps({"installed": {"mod.nickelseries": {}}}))
+        engine.apply(dev, {"maint.stock": {}}, offline=True)
+        self.assertTrue((self.root / "ns_uninstall").is_file())
+
+    def test_nickelcoverfix_apply_uninstall_and_stock(self):
+        from kobo_aio.core import REGISTRY
+        m = REGISTRY["mod.nickelcoverfix"]
+        self.assertEqual((m.category, m.risk, m.recommended, m.reboot), ("Lectura", "bajo", True, True))
+        self.assertEqual((m.min_fw, m.max_fw), ((4, 21), (5,)))
+
+        self._pin_tgz("nickelcoverfix", {
+            "./usr/local/Kobo/imageformats/libncf.so": b"\x7fELF",
+            "./mnt/onboard/.adds/nickel-cover-fix/uninstall": b"",
+        })
+        dev = parse_version_file(self.root)
+        res = engine.apply(dev, {"mod.nickelcoverfix": {}}, offline=True)
+        self.assertTrue(res["needs_reboot"])
+        with tarfile.open(self.root / ".kobo/KoboRoot.tgz") as tf:
+            names = {member.name.lstrip("./") for member in tf.getmembers()}
+        self.assertIn("usr/local/Kobo/imageformats/libncf.so", names)
+
+        # Simulate device having processed KoboRoot.tgz and extracted the uninstall marker
+        (self.root / ".adds/nickel-cover-fix").mkdir(parents=True)
+        (self.root / ".adds/nickel-cover-fix/uninstall").write_text("")
+        self.assertEqual(m.status(dev), "instalado")
+
+        engine.apply(dev, {}, ["mod.nickelcoverfix"], offline=True)
+        self.assertFalse((self.root / ".adds/nickel-cover-fix/uninstall").exists())
+        self.assertEqual(m.status(dev), "no instalado")
+
+        # Back to stock removes .adds/nickel-cover-fix/uninstall
+        (self.root / ".adds/nickel-cover-fix/uninstall").write_text("")
+        engine.apply(dev, {"maint.stock": {}}, offline=True)
+        self.assertFalse((self.root / ".adds/nickel-cover-fix/uninstall").exists())
+
+    def test_rakuyomi_in_koplugins(self):
+        from kobo_aio.core import REGISTRY
+        self.assertIn("rakuyomi", self.apps.KOPLUGINS)
+        art, folder, desc = self.apps.KOPLUGINS["rakuyomi"]
+        self.assertEqual(folder, "rakuyomi.koplugin")
+        self.assertEqual(art.sha256, "8c7b5fb24959718b55a27c1f00a0411a868940c6f48b1498be03ba48becfb54c")
+        self.assertEqual(art.size, 9113027)
+        self.assertIn("Rakuyomi", desc)
+        self.assertIn("https://github.com/hanatsumi/rakuyomi", REGISTRY["app.koreader_plugins"].sources)
+
+        zbuf = io.BytesIO()
+        with zipfile.ZipFile(zbuf, "w") as zf:
+            zf.writestr("rakuyomi.koplugin/main.lua", "-- rakuyomi")
+        zdata = zbuf.getvalue()
+        fake_art = self.core.Artifact(art.url, hashlib.sha256(zdata).hexdigest(), art.filename, len(zdata))
+        self.apps.KOPLUGINS["rakuyomi"] = (fake_art, folder, desc)
+        (self.core.CACHE_DIR / f"{fake_art.sha256[:16]}-{fake_art.filename}").write_bytes(zdata)
+
+        (self.root / ".adds/kobo-aio").mkdir(parents=True, exist_ok=True)
+        (self.root / ".adds/kobo-aio/state.json").write_text(
+            json.dumps({"installed": {"mod.nickelmenu": {}, "app.koreader": {}}}))
+        (self.root / ".adds/nm").mkdir(parents=True, exist_ok=True)
+        (self.root / ".adds/nm/doc").write_text("doc")
+        (self.root / ".adds/koreader").mkdir(parents=True, exist_ok=True)
+        (self.root / ".adds/koreader/koreader.sh").write_text("#!/bin/sh\n")
+        dev = parse_version_file(self.root)
+        engine.apply(dev, {"app.koreader_plugins": {"plugins": ["rakuyomi"]}}, offline=True)
+        self.assertTrue((self.root / ".adds/koreader/plugins/rakuyomi.koplugin/main.lua").is_file())
+        engine.apply(dev, {}, ["app.koreader_plugins"], offline=True)
+        self.assertFalse((self.root / ".adds/koreader/plugins/rakuyomi.koplugin/main.lua").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

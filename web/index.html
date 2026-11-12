@@ -467,7 +467,8 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <details><summary>¿Vas a vender o regalar tu Kobo?</summary><p class="muted">Usa «Dejar de fábrica»: quita todos los mods (también los que instalaste con otras herramientas), las apps, las fuentes y los ajustes de mods, con respaldo previo. Después haz el restablecimiento de fábrica del propio Kobo para borrar tu cuenta y tus libros del equipo. <button class="btn sm" data-stock style="margin-top:8px">Ver los pasos</button></p></details>
       <details><summary>¿Cómo deshago todo?</summary><p class="muted">En «Respaldos», elige la instalación y toca «Revertir». Para quitar un módulo, búscalo en «Todos los módulos» y marca «Desinstalar».</p></details>
       <details><summary>¿Qué cómics puedo convertir?</summary><p class="muted">CBZ, ZIP, CBR, RAR, CB7, 7Z, CBT, TAR, PDF, EPUB con imágenes y carpetas de imágenes (JPG, PNG, WebP, GIF, BMP, TIFF). Se ajustan a la resolución de tu Kobo y quedan como KEPUB (paso de página rápido en el lector de Kobo) o CBZ (para KOReader). Para CBR instala <code>unar</code> y para PDF instala <code>pymupdf</code>; Kobo AIO te avisa si falta algo.</p></details>
-      <details><summary>¿Funcionará si actualizo el firmware?</summary><p class="muted">Los mods se mantienen en las actualizaciones 4.x; los ajustes avanzados del sistema se pierden y hay que volver a aplicarlos. En firmware 5.x los mods del menú aún no funcionan y Kobo AIO los desactiva.</p></details>
+      <details><summary>¿Funcionará si actualizo el firmware?</summary><p class="muted">Los mods se mantienen en las actualizaciones 4.x; los ajustes avanzados del sistema se pierden y hay que volver a aplicarlos. En firmware 5.x y 6.x los mods del menú aún no funcionan y Kobo AIO los desactiva.</p></details>
+      <details><summary>¿Qué hago si no aparece el menú o el Kobo se queda congelado?</summary><p class="muted">Si el Kobo se congela al arrancar, mantén presionado el botón de encendido durante 15 segundos para apagarlo por completo y vuelve a encenderlo: NickelMenu incluye un sistema de seguridad (failsafe) que se desactiva solo si detecta un fallo al iniciar. También puedes conectarlo al computador y crear un archivo vacío llamado <code>uninstall</code> dentro de la carpeta <code>.adds/nm/</code>.</p></details>
       <details><summary>Audiolibros: ¿cómo funcionan en el lector stock?</summary><p class="muted">Kobo AIO usa el formato .mp3z que trae el propio lector y se escucha por Bluetooth (audífonos o parlante). Aparece en tu biblioteca con el nombre del libro; el reproductor muestra la portada y las partes numeradas. El lector recuerda en qué parte ibas, no el minuto exacto, por eso Kobo AIO divide el audio en partes de 10 minutos. No muestra autor ni portada en la biblioteca. Si prefieres posición exacta y nombres de capítulo, usa la opción KOReader.</p></details>
     </div>
     <div class="card" style="margin-top:14px">
@@ -692,6 +693,8 @@ const META = {
   "mod.nickelhome": ["Inicio sin publicidad", "home", "c3", "Oculta recomendaciones y promociones de la tienda"],
   "conf.sideloaded": ["Modo sin cuenta Kobo", "user", "c3", "Inicio centrado en tus libros, sin tienda"],
   "mod.nickeltypefix": ["Mejor tipografía", "type", "c4", "Kerning, ligaduras y justificado más parejo"],
+  "mod.nickelseries": ["Series al instante", "layers", "c4", "Importa serie y subtítulo de tus EPUB/KEPUB en la primera conexión USB"],
+  "mod.nickelcoverfix": ["Portadas siempre visibles", "image", "c4", "Evita que las portadas de reposo queden en blanco"],
   "fonts.ebook": ["Fuentes para leer", "type", "c4", "Familias pensadas para tinta electrónica"],
   "mod.nickelclock": ["Reloj y batería", "clock", "c4", "La hora y la carga mientras lees"],
   "mod.nickeldissolve": ["Animación al pasar página", "sparkle", "c4", "Transición suave entre páginas"],
@@ -716,7 +719,7 @@ const GROUPS = [
   ["Protección y respaldo", "shield", ["maint.backup", "conf.exclude_sync", "maint.clean_macos", "maint.no_spotlight", "mod.nickelmodmanager"]],
   ["Inicio y menú", "home", ["mod.nickelhome", "mod.nickelmenu", "nm.menu", "conf.preferences", "conf.sideloaded", "nm.owner"],
     "«Pestaña de atajos» agrega botones que tocas en el Kobo cuando los necesitas. «Ajustes ocultos» cambia opciones de Kobo una sola vez y no instala nada."],
-  ["Lectura", "book", ["mod.nickeltypefix", "fonts.ebook", "mod.nickelclock", "mod.nickeldissolve", "mod.aioaudio"]],
+  ["Lectura", "book", ["mod.nickeltypefix", "fonts.ebook", "mod.nickelclock", "mod.nickeldissolve", "mod.aioaudio", "mod.nickelseries", "mod.nickelcoverfix"]],
   ["Apps", "grid", ["app.koreader", "app.koreader_plugins", "app.cadmus", "app.audiobook"]],
   ["Juegos", "gamepad", ["games.kobo", "app.inkboy"],
     "Cada juego aparece como un botón en la Pestaña de atajos del Kobo. Actívalos o quítalos cuando quieras."],
@@ -727,9 +730,9 @@ const PROFILES = [
   { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad", "Pestaña de atajos", "Mejor tipografía y fuentes", "Respaldo y limpieza"], mods: BASE },
   { id: "minimal", name: "Lector minimalista", desc: "Solo tus libros, sin tienda.", items: ["Todo lo esencial", "Modo sin cuenta Kobo", "Pestañas simplificadas, sin Inicio repetido"], mods: [...BASE, "conf.sideloaded"],
     opts: { "nm.menu": { simple_tabs: true, hide_discover: true, hide_home: true } } },
-  { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock"],
+  { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock", "mod.nickelseries", "mod.nickelcoverfix"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
-  { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Juegos: Game Boy y los ocultos de Kobo", "Animación de página"], mods: [...BASE, "mod.nickelclock", "app.koreader", "app.koreader_plugins", "app.inkboy", "games.kobo", "mod.nickeldissolve"],
+  { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Juegos: Game Boy y los ocultos de Kobo", "Animación de página"], mods: [...BASE, "mod.nickelclock", "mod.nickelseries", "mod.nickelcoverfix", "app.koreader", "app.koreader_plugins", "app.inkboy", "games.kobo", "mod.nickeldissolve"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
   { id: "custom", name: "A mi manera", desc: "Empieza en blanco y elige tú.", items: ["Sin nada marcado", "Ideal si ya conoces los mods"], mods: [] },
 ];
@@ -1187,7 +1190,7 @@ function renderWizard() {
   }
   const nm = byId("mod.nickelmenu"), hiddenN = state.modules.filter(m => m.compatible === false && !m.id.startsWith("lib.")).length;
   const notice = nm && nm.compatible === false
-    ? `<div class="finding info" style="margin-top:14px">${icon("info")}<div class="body"><b>Tu ${esc(state.device ? state.device.name : "Kobo")} tiene ${hiddenN} opciones no disponibles</b><div class="small muted">${esc(nm.incompatible_reason)}. ${state.device && /^[5-9]\./.test(state.device.firmware || "") ? "Los mods del menú de Nickel aún no funcionan en firmware 5 o 6. Las herramientas de biblioteca (cómics, libros, fuentes, respaldo) sí están disponibles." : "Actualiza el firmware desde Ajustes > Información del dispositivo y vuelve a conectar el Kobo para habilitarlas."}</div></div></div>` : "";
+    ? `<div class="finding info" style="margin-top:14px">${icon("info")}<div class="body"><b>Tu ${esc(state.device ? state.device.name : "Kobo")} tiene ${hiddenN} opciones no disponibles</b><div class="small muted">${esc(nm.incompatible_reason)}. ${state.device && /^[5-9]\./.test(state.device.firmware || "") ? "Los mods del menú de Nickel aún no funcionan en firmware 5.x y 6.x. Las herramientas de biblioteca (cómics, libros, fuentes, respaldo) sí están disponibles." : "Actualiza el firmware desde Ajustes > Información del dispositivo y vuelve a conectar el Kobo para habilitarlas."}</div></div></div>` : "";
   if (state.step === 2) {
     $("#groups").innerHTML = notice + GROUPS.map(([title, ic, ids, note]) => {
       const mods = ids.map(byId).filter(m => m && (m.compatible !== false || needsDesktop(m))); if (!mods.length) return "";

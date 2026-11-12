@@ -176,6 +176,10 @@ KOPLUGINS = {
     "localsend": (Artifact("https://github.com/kaikozlov/localsend.koplugin/releases/download/v1.4.5/localsend-koplugin-armv7.zip",
                            "baf8f20cc54274a418b51b96a58fbbe6e8447d98b8cb909dbe2634826a0eaa9d", "localsend-armv7-1.4.5.zip"),
                   "localsend.koplugin", "LocalSend: envía libros por WiFi desde el celular, sin cables (MIT)"),
+    "rakuyomi": (Artifact("https://github.com/hanatsumi/rakuyomi/releases/download/v1.22.2/rakuyomi-kindlehf.zip",
+                          "8c7b5fb24959718b55a27c1f00a0411a868940c6f48b1498be03ba48becfb54c",
+                          "rakuyomi-kindlehf-v1.22.2.zip", 9113027),
+                 "rakuyomi.koplugin", "Rakuyomi: busca y descarga manga directo en KOReader (MIT)"),
 }
 
 
@@ -208,7 +212,7 @@ register(Module(
                     [(k, v[2]) for k, v in KOPLUGINS.items()])],
     sources=["https://github.com/joshuacant/ProjectTitle", "https://github.com/omer-faruq/appstore.koplugin",
              "https://github.com/OGKevin/kobo.koplugin", "https://github.com/Billiam/hardcoverapp.koplugin",
-             "https://github.com/kaikozlov/localsend.koplugin"],
+             "https://github.com/kaikozlov/localsend.koplugin", "https://github.com/hanatsumi/rakuyomi"],
     license="AGPL-3.0 / GPL-3.0 / MIT (por plugin)",
     apply_fn=_kop_apply, uninstall_fn=_kop_uninstall,
     status_fn=lambda m, d: (f"{len([p for p in KOPLUGINS.values() if (d.root / '.adds/koreader/plugins' / p[1]).is_dir()])} instalados"

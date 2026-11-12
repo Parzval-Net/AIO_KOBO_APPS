@@ -215,6 +215,10 @@
       {
        "value": "localsend",
        "label": "LocalSend: envía libros por WiFi desde el celular, sin cables (MIT)"
+      },
+      {
+       "value": "rakuyomi",
+       "label": "Rakuyomi: busca y descarga manga directo en KOReader (MIT)"
       }
      ],
      "help": ""
@@ -225,7 +229,8 @@
     "https://github.com/omer-faruq/appstore.koplugin",
     "https://github.com/OGKevin/kobo.koplugin",
     "https://github.com/Billiam/hardcoverapp.koplugin",
-    "https://github.com/kaikozlov/localsend.koplugin"
+    "https://github.com/kaikozlov/localsend.koplugin",
+    "https://github.com/hanatsumi/rakuyomi"
    ],
    "license": "AGPL-3.0 / GPL-3.0 / MIT (por plugin)",
    "reboot": false,
@@ -2051,6 +2056,41 @@
    "sources": [
     "https://github.com/Parzval-Net/AIO_KOBO_APPS/tree/main/mods/aio-audio",
     "https://github.com/pgaskin/NickelHook"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickelseries",
+   "category": "Lectura",
+   "title": "Metadatos de series al instante (NickelSeries v5)",
+   "description": "Lee los metadatos de serie e índice directamente de EPUB y KEPUB al importar libros, sin necesidad de volver a conectar el Kobo a Calibre.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [],
+   "sources": [
+    "https://pgaskin.net/NickelSeries/",
+    "https://github.com/pgaskin/NickelSeries"
+   ],
+   "license": "MIT",
+   "reboot": true,
+   "can_uninstall": true,
+   "persistent": true
+  },
+  {
+   "id": "mod.nickelcoverfix",
+   "category": "Lectura",
+   "title": "Portadas siempre visibles (NickelCoverFix 0.2)",
+   "description": "Evita que desaparezcan las portadas de tus libros sideloaded y corrige portadas faltantes en la biblioteca.",
+   "risk": "bajo",
+   "recommended": true,
+   "requires": [],
+   "options": [],
+   "sources": [
+    "https://github.com/nicoverbruggen/NickelCoverFix"
    ],
    "license": "MIT",
    "reboot": true,
