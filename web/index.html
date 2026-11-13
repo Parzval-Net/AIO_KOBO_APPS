@@ -289,6 +289,14 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
   .chip-st{padding:4px 9px;min-height:34px}#devTxt{max-width:92px;overflow:hidden;text-overflow:ellipsis}
   .actionbar .in{padding:10px 12px;gap:8px}.actionbar .btn{flex:1 1 0}
 }
+.tour-backdrop{position:fixed;inset:0;z-index:60;pointer-events:auto}
+.tour-spot{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(20,18,15,.56),0 0 0 3px var(--accent);pointer-events:none;transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
+.tour-card{position:fixed;z-index:61;width:min(360px,calc(100vw - 24px));background:var(--surface);color:var(--ink);border:1px solid var(--rule);border-radius:16px;padding:18px;box-shadow:0 24px 60px -20px rgba(0,0,0,.55);animation:dlgIn .16s ease-out}
+.tour-card h3{margin:4px 0 6px;font-size:18px}
+.tour-card p{margin:0 0 14px;font-size:14.5px;color:var(--ink2)}
+.tour-dots{display:flex;gap:5px;align-items:center}
+.tour-dots i{width:7px;height:7px;border-radius:50%;background:var(--rule2);display:block}
+.tour-dots i.on{width:18px;border-radius:999px;background:var(--accent)}
 </style>
 </head>
 <body>
@@ -478,7 +486,7 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <details><summary>Audiolibros: ¿cómo funcionan en el lector stock?</summary><p class="muted">Kobo AIO usa el formato .mp3z que trae el propio lector y se escucha por Bluetooth (audífonos o parlante). Aparece en tu biblioteca con el nombre del libro; el reproductor muestra la portada y las partes numeradas. El lector recuerda en qué parte ibas, no el minuto exacto, por eso Kobo AIO divide el audio en partes de 10 minutos. No muestra autor ni portada en la biblioteca. Si prefieres posición exacta y nombres de capítulo, usa la opción KOReader.</p></details>
     </div>
     <div class="card" style="margin-top:14px">
-      <h3>Créditos y licencias</h3>
+      <div class="row spread"><h3>Créditos y licencias</h3><button class="btn sm ghost" id="helpTourBtn" type="button">Ver recorrido guiado</button></div>
       <ul id="credits" class="muted small" style="columns:2 260px;margin:10px 0 0;padding-left:18px"></ul>
       <p class="tiny muted">Inspirado en <a href="https://kp.nicoverbruggen.be">KoboPatch Web UI</a> y <a href="https://github.com/Parzval-Net/NickelMenu-Builder">NickelMenu Builder</a>. Kobo es marca de Rakuten Kobo; este proyecto no está afiliado. Código: <a href="https://github.com/Parzval-Net/AIO_KOBO_APPS">GitHub</a>.</p>
     </div>
@@ -1604,6 +1612,99 @@ setInterval(() => {
     if (!same) refresh();
   }).catch(() => connect());
 }, 5000);
+
+function startTour(force = false) {
+  if (!force) {
+    if (new URLSearchParams(location.search).has("aiotest")) return;
+    try { if (localStorage.getItem("aio_tour_done")) return; } catch (_) {}
+  }
+  if (dlg.open || document.getElementById("tourOverlay")) return;
+  if (state.view !== "home") go("home");
+  const steps = [
+    { sel: () => $("#start")?.offsetParent ? "#start" : "#heroCta", title: "1. Conecta tu Kobo",
+      text: "Elige «Desde este navegador» (Chrome/Edge) o abre la app de escritorio. Nada se sube a internet." },
+    { sel: () => 'nav.main [data-go="wizard"]', title: "2. Mejorar mi Kobo",
+      text: "Asistente en 3 pasos para elegir un estilo (Esencial, Lectura cuidada…), ajustar opciones y ver cada cambio antes de escribir." },
+    { sel: () => 'nav.main [data-go="library"]', title: "3. Biblioteca",
+      text: "Envía libros, cómics, audiolibros, diccionarios o pantallas de reposo sin tocar tus lecturas ni tu progreso." },
+    { sel: () => 'nav.main [data-go="backups"]', title: "4. Respaldos y vuelta atrás",
+      text: "Cada instalación guarda una copia automática. Si algo no te convence, puedes revertirlo desde aquí." },
+  ];
+  let idx = 0;
+  const opener = document.activeElement;
+  const wrap = document.createElement("div");
+  wrap.id = "tourOverlay";
+  wrap.className = "tour-backdrop";
+  wrap.innerHTML = `<div class="tour-spot" aria-hidden="true"></div>
+    <div class="tour-card" role="dialog" aria-modal="true" aria-labelledby="tourTitle" tabindex="-1">
+      <div class="row spread"><span class="tiny muted" id="tourCount"></span><div class="tour-dots" id="tourDots"></div></div>
+      <h3 id="tourTitle"></h3>
+      <p id="tourText"></p>
+      <div class="row spread" style="gap:8px">
+        <button type="button" class="btn sm ghost" id="tourSkip">Saltar</button>
+        <div class="row" style="gap:8px">
+          <button type="button" class="btn sm" id="tourPrev">Atrás</button>
+          <button type="button" class="btn sm primary" id="tourNext">Siguiente</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.append(wrap);
+  const spot = $(".tour-spot", wrap), card = $(".tour-card", wrap);
+  const finish = () => {
+    try { localStorage.setItem("aio_tour_done", "1"); } catch (_) {}
+    window.removeEventListener("resize", place);
+    window.removeEventListener("keydown", onKey);
+    wrap.remove();
+    if (opener && opener.isConnected) opener.focus();
+  };
+  const place = () => {
+    const s = steps[idx], target = $(s.sel());
+    if (!target || !target.offsetParent) {
+      spot.style.cssText = "top:50%;left:50%;width:0;height:0";
+      card.style.left = `${Math.max(12, (innerWidth - card.offsetWidth) / 2)}px`;
+      card.style.top = `${Math.max(12, (innerHeight - card.offsetHeight) / 2)}px`;
+      return;
+    }
+    const r = target.getBoundingClientRect(), pad = 6;
+    spot.style.top = `${Math.max(4, r.top - pad)}px`;
+    spot.style.left = `${Math.max(4, r.left - pad)}px`;
+    spot.style.width = `${r.width + pad * 2}px`;
+    spot.style.height = `${r.height + pad * 2}px`;
+    const cw = card.offsetWidth || 340, ch = card.offsetHeight || 190;
+    const left = Math.min(Math.max(12, r.left), Math.max(12, innerWidth - cw - 12));
+    const below = r.bottom + 14 + ch <= innerHeight - 12;
+    const top = below ? r.bottom + 14 : Math.max(12, r.top - ch - 14);
+    card.style.left = `${left}px`;
+    card.style.top = `${top}px`;
+  };
+  const render = () => {
+    const s = steps[idx];
+    $("#tourCount", wrap).textContent = `Paso ${idx + 1} de ${steps.length}`;
+    $("#tourDots", wrap).innerHTML = steps.map((_, i) => `<i class="${i === idx ? "on" : ""}"></i>`).join("");
+    $("#tourTitle", wrap).textContent = s.title;
+    $("#tourText", wrap).textContent = s.text;
+    $("#tourPrev", wrap).classList.toggle("hidden", idx === 0);
+    $("#tourNext", wrap).textContent = idx === steps.length - 1 ? "¡Entendido!" : "Siguiente";
+    const target = $(s.sel());
+    if (target) target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setTimeout(place, 60);
+  };
+  const onKey = e => {
+    if (e.key === "Escape") finish();
+    else if (e.key === "ArrowRight" && idx < steps.length - 1) { idx++; render(); }
+    else if (e.key === "ArrowLeft" && idx > 0) { idx--; render(); }
+  };
+  $("#tourSkip", wrap).onclick = finish;
+  $("#tourPrev", wrap).onclick = () => { if (idx > 0) { idx--; render(); } };
+  $("#tourNext", wrap).onclick = () => { if (idx < steps.length - 1) { idx++; render(); } else finish(); };
+  wrap.onclick = e => { if (e.target === wrap) finish(); };
+  window.addEventListener("resize", place);
+  window.addEventListener("keydown", onKey);
+  render();
+  card.focus();
+}
+const htb = $("#helpTourBtn"); if (htb) htb.onclick = () => startTour(true);
+setTimeout(() => startTour(false), 850);
 </script>
 </body>
 </html>
