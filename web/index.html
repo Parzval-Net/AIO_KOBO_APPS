@@ -739,14 +739,14 @@ const GROUPS = [
     "Cada juego aparece como un botón en la Pestaña de atajos del Kobo. Actívalos o quítalos cuando quieras."],
   ["Avanzado", "cpu", ["fw.kobopatch"]],
 ];
-const BASE = ["maint.backup", "conf.exclude_sync", "mod.nickelmenu", "nm.menu", "mod.nickelhome", "mod.nickeltypefix", "fonts.ebook", "maint.clean_macos", "maint.no_spotlight"];
+const BASE = ["maint.backup", "conf.exclude_sync", "mod.nickelmenu", "nm.menu", "mod.nickelhome", "mod.nickeltypefix", "mod.nickelseries", "mod.nickelcoverfix", "fonts.ebook", "maint.clean_macos", "maint.no_spotlight"];
 const PROFILES = [
-  { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad", "Pestaña de atajos", "Mejor tipografía y fuentes", "Respaldo y limpieza"], mods: BASE },
+  { id: "essential", tag: "Recomendado", name: "Esencial", desc: "Lo mejor sin complicarse.", items: ["Inicio sin publicidad y atajos", "Tipografía, fuentes, series y portadas", "Respaldo y limpieza"], mods: BASE },
   { id: "minimal", name: "Lector minimalista", desc: "Solo tus libros, sin tienda.", items: ["Todo lo esencial", "Modo sin cuenta Kobo", "Pestañas simplificadas, sin Inicio repetido"], mods: [...BASE, "conf.sideloaded"],
     opts: { "nm.menu": { simple_tabs: true, hide_discover: true, hide_home: true } } },
-  { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock", "mod.nickelseries", "mod.nickelcoverfix"],
+  { id: "reader", name: "Lectura cuidada", desc: "Para quien lee mucho.", items: ["Todo lo esencial", "Reloj y batería al leer", "Literata, Readerly y Disleksio"], mods: [...BASE, "mod.nickelclock"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
-  { id: "full", name: "Todo incluido", desc: "Apps, juegos y animaciones.", items: ["Lectura cuidada", "KOReader con plugins", "Juegos: Game Boy y los ocultos de Kobo", "Animación de página"], mods: [...BASE, "mod.nickelclock", "mod.nickelseries", "mod.nickelcoverfix", "app.koreader", "app.koreader_plugins", "app.inkboy", "games.kobo", "mod.nickeldissolve"],
+  { id: "full", name: "Todo incluido", desc: "Apps, audio, juegos y animaciones.", items: ["Lectura cuidada", "KOReader + plugins y audiolibros", "Game Boy y juegos ocultos de Kobo", "Animación de página y gestor de mods"], mods: [...BASE, "mod.nickelclock", "mod.aioaudio", "mod.nickelmodmanager", "app.koreader", "app.koreader_plugins", "app.inkboy", "games.kobo", "mod.nickeldissolve"],
     opts: { "fonts.ebook": { extra: ["Literata", "Readerly", "Disleksio"] } } },
   { id: "custom", name: "A mi manera", desc: "Empieza en blanco y elige tú.", items: ["Sin nada marcado", "Ideal si ya conoces los mods"], mods: [] },
 ];
@@ -1192,7 +1192,7 @@ function renderWizard() {
   $$("[data-wstep]").forEach(s => s.classList.toggle("hidden", Number(s.dataset.wstep) !== state.step));
   if (state.step === 1) {
     $("#profiles").innerHTML = PROFILES.map(p => `<button class="profile" data-profile="${p.id}" aria-pressed="${state.profile === p.id}">
-      ${p.tag ? `<span class="pill info tag">${esc(p.tag)}</span>` : ""}${profileShot(p)}<h3>${esc(p.name)}</h3><span class="small muted">${esc(p.desc)}</span>
+      ${p.tag ? `<span class="pill info tag">${esc(p.tag)}</span>` : ""}${profileShot(p)}<div class="row spread" style="width:100%"><h3>${esc(p.name)}</h3><span class="pill">${p.mods.length ? `${p.mods.length} mejoras` : "Desde cero"}</span></div><span class="small muted">${esc(p.desc)}</span>
       <ul>${p.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></button>`).join("") +
       `<p class="tiny muted" style="grid-column:1/-1;margin:4px 0 0">Las opciones se ajustan a tu ${esc(state.device ? state.device.name : "Kobo")}: lo que tu modelo no soporta no aparece.</p>`;
     $$("[data-profile]").forEach(b => b.onclick = () => {
