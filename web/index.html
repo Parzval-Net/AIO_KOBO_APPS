@@ -301,6 +301,10 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
 :root[data-theme="dark"] .ereader,:root[data-theme="dark"] .mini{border:1px solid rgba(255,255,255,.12)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) dialog,:root:not([data-theme="light"]) .tour-card{border-color:var(--rule2)}}
 :root[data-theme="dark"] dialog,:root[data-theme="dark"] .tour-card{border-color:var(--rule2)}
+.spotlight{display:grid;grid-template-columns:1.15fr .85fr;gap:24px;align-items:center;margin-top:16px}
+.spotlight-shots{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center}
+.spotlight-shots img{width:100%;height:auto;border-radius:10px;border:1px solid var(--rule);background:#fff;box-shadow:0 8px 20px -12px rgba(0,0,0,.35)}
+@media (max-width:780px){.spotlight{grid-template-columns:1fr;gap:16px}}
 </style>
 </head>
 <body>
@@ -420,10 +424,32 @@ dialog .ft{padding:14px 22px;border-top:1px solid var(--rule);display:flex;gap:1
       <button class="tile primary" data-go="wizard"><span class="badge"><svg class="ic" aria-hidden="true"><use href="#i-upgrade"/></svg></span><b>Mejorar mi Kobo</b><span class="small muted">Asistente en 3 pasos con lo recomendado</span></button>
       <button class="tile" data-lib="lib.comics"><span class="badge" style="color:var(--c4)"><svg class="ic" aria-hidden="true"><use href="#i-layers"/></svg></span><b>Cómics y manga</b><span class="small muted">Convierte para tu pantalla</span></button>
       <button class="tile" data-lib="lib.books"><span class="badge" style="color:var(--c3)"><svg class="ic" aria-hidden="true"><use href="#i-book-plus"/></svg></span><b>Agregar libros</b><span class="small muted">EPUB a KEPUB, más rápido</span></button>
-      <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">En el lector stock, con portada</span></button>
+      <button class="tile" data-lib="lib.audiobooks"><span class="badge" style="color:var(--c5)"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg></span><b>Audiolibros</b><span class="small muted">Reproductor propio AIO Audio: portada y ±30 s</span></button>
       <button class="tile" data-lib="lib.dictionaries"><span class="badge" style="color:var(--c1)"><svg class="ic" aria-hidden="true"><use href="#i-dict"/></svg></span><b>Diccionarios</b><span class="small muted">Español e inglés gratis</span></button>
       <button class="tile" data-quick="maint.backup"><span class="badge" style="color:var(--c2)"><svg class="ic" aria-hidden="true"><use href="#i-archive"/></svg></span><b>Respaldar</b><span class="small muted">Libros y progreso al computador</span></button>
       <button class="tile" data-stock><span class="badge" style="color:var(--c6)"><svg class="ic" aria-hidden="true"><use href="#i-factory"/></svg></span><b>Dejar de fábrica</b><span class="small muted">Quita los mods para vender o regalar tu Kobo</span></button>
+    </div>
+
+    <div class="card spotlight" aria-labelledby="hAudioSpot">
+      <div>
+        <span class="pill info">Desarrollo propio · AIO Audio</span>
+        <h3 id="hAudioSpot" style="margin-top:8px;font-size:20px">Audiolibros en el lector stock, como debería ser</h3>
+        <p class="small muted" style="margin:8px 0 12px">Creamos un mod nativo para Kobo que transforma el reproductor integrado de audiolibros por Bluetooth sin instalar apps externas ni perder la integración con tu biblioteca.</p>
+        <ul class="small" style="margin:0 0 16px;padding-left:18px;color:var(--ink2)">
+          <li><b>Portada y capítulos reales</b> con lista navegable desde el reproductor</li>
+          <li><b>Controles completos:</b> salto ±30 s, velocidad (0.75× a 2×) y temporizador</li>
+          <li><b>Conversión automática:</b> convierte M4B o MP3 a <code>.mp3z</code> con un clic</li>
+        </ul>
+        <div class="row" style="gap:10px">
+          <button class="btn primary sm" type="button" data-preview="mod.aioaudio"><svg class="ic" aria-hidden="true"><use href="#i-eye"/></svg>Ver capturas reales</button>
+          <button class="btn sm" type="button" data-lib="lib.audiobooks"><svg class="ic" aria-hidden="true"><use href="#i-headphones"/></svg>Enviar audiolibros</button>
+          <button class="btn sm ghost" type="button" data-go="expert" onclick="state.filter='Lectura'">Configurar mod</button>
+        </div>
+      </div>
+      <div class="spotlight-shots">
+        <img src="shots/aio-audio-reproductor.png" alt="Captura real del reproductor AIO Audio en Kobo Libra Colour" loading="lazy">
+        <img src="shots/aio-audio-capitulos.png" alt="Lista de capítulos en AIO Audio" loading="lazy">
+      </div>
     </div>
     <div class="card hidden" id="reviewCard" style="margin-top:16px">
       <div class="row spread"><h3>Revisión del Kobo</h3><button class="btn sm ghost" id="recheckBtn"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg>Revisar de nuevo</button></div>
